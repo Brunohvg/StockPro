@@ -27,11 +27,20 @@ class Plan(models.Model):
         return self.display_name
 
 class Tenant(models.Model):
+    SUBSCRIPTION_STATUS = [
+        ('TRIAL', 'Em Teste'),
+        ('ACTIVE', 'Ativo'),
+        ('SUSPENDED', 'Suspenso'),
+        ('CANCELLED', 'Cancelado'),
+    ]
+
     name = models.CharField(max_length=100, verbose_name="Nome da Empresa/Unidade")
     cnpj = models.CharField(max_length=18, unique=True, blank=True, null=True, verbose_name="CNPJ", help_text="XX.XXX.XXX/XXXX-XX")
     slug = models.SlugField(max_length=100, unique=True, blank=True)
     subdomain = models.CharField(max_length=50, unique=True, blank=True, null=True)
     plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True, related_name='tenants')
+    subscription_status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS, default='TRIAL', verbose_name="Status da Assinatura")
+    trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="Fim do Período de Teste")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -42,10 +51,41 @@ class Tenant(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+        # Set trial end date on first save
+        if not self.pk and not self.trial_ends_at:
+            from django.utils import timezone
+            self.trial_ends_at = timezone.now() + timezone.timedelta(days=14)
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_trial_expired(self):
+        from django.utils import timezone
+        if self.subscription_status == 'TRIAL' and self.trial_ends_at:
+            return timezone.now() > self.trial_ends_at
+        return False
+
+    @property
+    def products_count(self):
+        return self.product_set.count()
+
+    @property
+    def users_count(self):
+        return self.userprofile_set.count()
+
+    @property
+    def products_limit_reached(self):
+        if self.plan and self.plan.max_products:
+            return self.products_count >= self.plan.max_products
+        return False
+
+    @property
+    def users_limit_reached(self):
+        if self.plan and self.plan.max_users:
+            return self.users_count >= self.plan.max_users
+        return False
 
 class TenantMixin(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, verbose_name="Tenant", null=True, blank=True)

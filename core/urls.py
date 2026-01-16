@@ -50,4 +50,12 @@ urlpatterns = [
     # BI & Business Intelligence
     path('reports/', views.inventory_reports, name='inventory_reports'),
     path('settings/', views.system_settings, name='system_settings'),
+
+    # Billing & Plan Management
+    path('billing/', views.billing_view, name='billing'),
+    path('billing/upgrade/<int:plan_id>/', views.billing_upgrade, name='billing_upgrade'),
+
+    # Admin Panel (Superuser Only)
+    path('admin-panel/', views.admin_panel_view, name='admin_panel'),
+    path('admin-panel/tenant/update/', views.admin_tenant_update, name='admin_tenant_update'),
 ]

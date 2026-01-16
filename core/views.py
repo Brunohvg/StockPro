@@ -453,3 +453,103 @@ def system_settings(request):
         form = SystemSettingForm(instance=settings_obj)
 
     return render(request, 'core/settings_form.html', {'form': form, 'settings': settings_obj})
+
+
+# ===========================================
+# BILLING & PLAN MANAGEMENT
+# ===========================================
+
+@login_required
+def billing_view(request):
+    """View current plan and upgrade options"""
+    tenant = request.tenant
+    plans = Plan.objects.all().order_by('price')
+    current_plan = tenant.plan if tenant else None
+
+    return render(request, 'core/billing.html', {
+        'tenant': tenant,
+        'current_plan': current_plan,
+        'plans': plans,
+    })
+
+
+@login_required
+def billing_upgrade(request, plan_id):
+    """Upgrade tenant to a new plan"""
+    if request.method == 'POST':
+        tenant = request.tenant
+        new_plan = get_object_or_404(Plan, pk=plan_id)
+
+        # Update tenant plan
+        tenant.plan = new_plan
+        tenant.subscription_status = 'ACTIVE'
+        tenant.save()
+
+        messages.success(request, f"Plano atualizado para {new_plan.display_name}!")
+        return redirect('billing')
+
+    return redirect('billing')
+
+
+# ===========================================
+# ADMIN PANEL (Superuser Only)
+# ===========================================
+
+@login_required
+def admin_panel_view(request):
+    """Admin panel for managing all tenants - superuser only"""
+    if not request.user.is_superuser:
+        messages.error(request, "Acesso restrito a administradores.")
+        return redirect('dashboard')
+
+    tenants = Tenant.objects.select_related('plan').order_by('-created_at')
+    plans = Plan.objects.all().order_by('price')
+
+    # Filters
+    q = request.GET.get('q', '')
+    status = request.GET.get('status', '')
+    plan_filter = request.GET.get('plan', '')
+
+    if q:
+        tenants = tenants.filter(Q(name__icontains=q) | Q(cnpj__icontains=q))
+    if status:
+        tenants = tenants.filter(subscription_status=status)
+    if plan_filter:
+        tenants = tenants.filter(plan_id=plan_filter)
+
+    # Stats
+    active_count = Tenant.objects.filter(subscription_status='ACTIVE').count()
+    trial_count = Tenant.objects.filter(subscription_status='TRIAL').count()
+
+    return render(request, 'core/admin_panel.html', {
+        'tenants': tenants,
+        'plans': plans,
+        'active_count': active_count,
+        'trial_count': trial_count,
+    })
+
+
+@login_required
+def admin_tenant_update(request):
+    """Update tenant plan and status - superuser only"""
+    if not request.user.is_superuser:
+        messages.error(request, "Acesso restrito a administradores.")
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        tenant_id = request.POST.get('tenant_id')
+        plan_id = request.POST.get('plan_id')
+        subscription_status = request.POST.get('subscription_status')
+        is_active = request.POST.get('is_active') == 'on'
+
+        tenant = get_object_or_404(Tenant, pk=tenant_id)
+
+        if plan_id:
+            tenant.plan = get_object_or_404(Plan, pk=plan_id)
+        tenant.subscription_status = subscription_status
+        tenant.is_active = is_active
+        tenant.save()
+
+        messages.success(request, f"Empresa '{tenant.name}' atualizada com sucesso!")
+
+    return redirect('admin_panel')
