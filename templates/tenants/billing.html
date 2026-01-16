@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Meu Plano - StockPro{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Meu Plano</h1>
+            <p class="text-gray-500">Gerencie sua assinatura e faça upgrade quando precisar.</p>
+        </div>
+    </div>
+
+    <!-- Current Plan Card -->
+    <div class="bg-gradient-to-br from-slate-900 to-indigo-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-8 relative z-10">
+            <div>
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="inline-flex items-center px-3 py-1 bg-white/10 backdrop-blur-sm border border-white/10 rounded-full text-xs font-bold uppercase tracking-wider">
+                        {% if tenant.subscription_status == 'TRIAL' %}🧪 Em Teste{% elif tenant.subscription_status == 'ACTIVE' %}✅ Ativo{% elif tenant.subscription_status == 'SUSPENDED' %}⚠️ Suspenso{% else %}❌ Cancelado{% endif %}
+                    </span>
+                    {% if tenant.is_trial_expired %}
+                    <span class="inline-flex items-center px-3 py-1 bg-rose-500/20 border border-rose-500/50 text-rose-300 rounded-full text-xs font-bold uppercase tracking-wider">
+                        Expirado
+                    </span>
+                    {% endif %}
+                </div>
+                <h2 class="text-4xl font-black tracking-tight mb-2">{{ current_plan.display_name|default:"Plano Free" }}</h2>
+                <div class="text-indigo-200 font-medium">
+                    {% if tenant.subscription_status == 'TRIAL' and tenant.trial_ends_at %}
+                        Seu período de teste termina em <span class="text-white font-bold">{{ tenant.trial_ends_at|date:"d/m/Y" }}</span>
+                    {% else %}
+                        Sua empresa está evoluindo com o plano {{ current_plan.display_name|default:"Free" }}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="flex flex-col items-end">
+                <div class="flex items-baseline gap-1">
+                    <span class="text-sm font-medium text-indigo-300">R$</span>
+                    <span class="text-5xl font-black tracking-tight">{{ current_plan.price|floatformat:0|default:"0" }}</span>
+                    <span class="text-sm font-medium text-indigo-300">/mês</span>
+                </div>
+                <div class="text-xs text-indigo-400 mt-2 font-medium">Próxima fatura em {{ tenant.trial_ends_at|date:"d/m" }}</div>
+            </div>
+        </div>
+
+        <!-- Usage Stats Grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mt-12 pt-8 border-t border-white/10">
+            <!-- Products Stat -->
+            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Produtos</span>
+                    <i data-lucide="package" class="w-4 h-4 text-indigo-400"></i>
+                </div>
+                <div class="text-2xl font-black mb-1">{{ tenant.products_count }}</div>
+                <div class="text-xs text-indigo-200 mb-3">de {{ current_plan.max_products|default:"∞" }} permitidos</div>
+                <div class="w-full bg-black/20 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-indigo-400 h-full rounded-full transition-all duration-500" style="width: {% widthratio tenant.products_count current_plan.max_products 100 %}%"></div>
+                </div>
+            </div>
+
+            <!-- Users Stat -->
+            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Usuários</span>
+                    <i data-lucide="users" class="w-4 h-4 text-indigo-400"></i>
+                </div>
+                <div class="text-2xl font-black mb-1">{{ tenant.users_count }}</div>
+                <div class="text-xs text-indigo-200 mb-3">de {{ current_plan.max_users|default:"∞" }} permitidos</div>
+                <div class="w-full bg-black/20 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-indigo-400 h-full rounded-full transition-all duration-500" style="width: {% widthratio tenant.users_count current_plan.max_users 100 %}%"></div>
+                </div>
+            </div>
+
+            <!-- Client Since -->
+            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Cliente Desde</span>
+                    <i data-lucide="calendar" class="w-4 h-4 text-indigo-400"></i>
+                </div>
+                <div class="text-xl font-bold mb-1">{{ tenant.created_at|date:"d M Y" }}</div>
+                <div class="text-xs text-indigo-200">Fidelidade Valorizada</div>
+            </div>
+
+            <!-- CNPJ -->
+            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">CNPJ</span>
+                    <i data-lucide="building" class="w-4 h-4 text-indigo-400"></i>
+                </div>
+                <div class="text-lg font-mono font-bold mb-1">{{ tenant.cnpj|default:"Não informado" }}</div>
+                <div class="text-xs text-indigo-200">{{ tenant.name }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Plans -->
+    <div>
+        <h3 class="text-xl font-bold text-gray-900 mb-6">Planos Disponíveis</h3>
+        <div class="grid md:grid-cols-4 gap-6">
+            {% for plan in plans %}
+            <div class="relative bg-white border-2 {% if plan.pk == current_plan.pk %}border-indigo-500 ring-2 ring-indigo-200{% else %}border-gray-200{% endif %} rounded-2xl p-6 flex flex-col hover:shadow-lg transition-all">
+                {% if plan.pk == current_plan.pk %}
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold">Atual</div>
+                {% endif %}
+                <h4 class="text-xl font-bold text-gray-900">{{ plan.display_name }}</h4>
+                <div class="flex items-baseline gap-1 mt-2 mb-4">
+                    <span class="text-3xl font-black text-gray-900">R$ {{ plan.price|floatformat:0 }}</span>
+                    <span class="text-gray-500">/mês</span>
+                </div>
+                <ul class="space-y-3 mb-6 flex-grow">
+                    <li class="flex items-center gap-2 text-sm text-gray-600">
+                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Até {{ plan.max_products }} produtos
+                    </li>
+                    <li class="flex items-center gap-2 text-sm text-gray-600">
+                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Até {{ plan.max_users }} usuários
+                    </li>
+                    {% if plan.features %}
+                    {% for feat in plan.features.split %}
+                    <li class="flex items-center gap-2 text-sm text-gray-600">
+                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        {{ feat }}
+                    </li>
+                    {% endfor %}
+                    {% endif %}
+                </ul>
+                {% if plan.pk == current_plan.pk %}
+                <button disabled class="w-full py-3 bg-gray-200 text-gray-500 rounded-xl font-semibold cursor-not-allowed">Plano Atual</button>
+                {% elif plan.price > current_plan.price %}
+                <form method="post" action="{% url 'tenants:billing_upgrade' plan.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors">
+                        Fazer Upgrade
+                    </button>
+                </form>
+                {% else %}
+                <button disabled class="w-full py-3 bg-gray-100 text-gray-400 rounded-xl font-semibold cursor-not-allowed">Downgrade indisponível</button>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Contact Section -->
+    <div class="bg-gray-50 rounded-2xl p-8 text-center">
+        <h3 class="text-xl font-bold text-gray-900 mb-2">Precisa de um Plano Personalizado?</h3>
+        <p class="text-gray-600 mb-4">Entre em contato para soluções Enterprise sob medida.</p>
+        <a href="mailto:contato@stockpro.com.br" class="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            Falar com Comercial
+        </a>
+    </div>
+</div>
+{% endblock %}

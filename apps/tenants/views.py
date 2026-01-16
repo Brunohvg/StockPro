@@ -32,7 +32,7 @@ def landing_page(request):
 def signup_view(request):
     """Self-service signup that creates Tenant + User"""
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect('reports:dashboard')
 
     if request.method == 'POST':
         company_name = request.POST.get('company_name', '').strip()
@@ -70,7 +70,7 @@ def signup_view(request):
 
         login(request, user)
         messages.success(request, f"Bem-vindo ao StockPro, {first_name}! Sua empresa '{company_name}' está pronta.")
-        return redirect('dashboard')
+        return redirect('reports:dashboard')
 
     return render(request, 'registration/signup.html', {})
 
@@ -99,8 +99,8 @@ def billing_upgrade(request, plan_id):
         tenant.subscription_status = 'ACTIVE'
         tenant.save()
         messages.success(request, f"Plano atualizado para {new_plan.display_name}!")
-        return redirect('billing')
-    return redirect('billing')
+        return redirect('tenants:billing')
+    return redirect('tenants:billing')
 
 
 @login_required
@@ -108,7 +108,7 @@ def admin_panel_view(request):
     """Admin panel for managing all tenants - superuser only"""
     if not request.user.is_superuser:
         messages.error(request, "Acesso restrito a administradores.")
-        return redirect('dashboard')
+        return redirect('reports:dashboard')
 
     tenants = Tenant.objects.select_related('plan').order_by('-created_at')
     plans = Plan.objects.all().order_by('price')
@@ -140,7 +140,7 @@ def admin_tenant_update(request):
     """Update tenant plan and status - superuser only"""
     if not request.user.is_superuser:
         messages.error(request, "Acesso restrito a administradores.")
-        return redirect('dashboard')
+        return redirect('reports:dashboard')
 
     if request.method == 'POST':
         tenant_id = request.POST.get('tenant_id')
@@ -158,4 +158,4 @@ def admin_tenant_update(request):
 
         messages.success(request, f"Empresa '{tenant.name}' atualizada com sucesso!")
 
-    return redirect('admin_panel')
+    return redirect('tenants:admin_panel')

@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-md mx-auto space-y-4 pb-20">
+
+    <!-- Header Mobile (More Compact) -->
+    <div class="text-center px-4">
+        <h1 class="text-xl font-black text-slate-900 tracking-tight">Operação Mobile</h1>
+        <p class="text-xs text-slate-500 font-medium">Lançamento rápido e escaneamento.</p>
+    </div>
+
+    <!-- Scanner Section (Compact) -->
+    <div class="bg-indigo-600 rounded-[1.5rem] p-4 text-white shadow-lg shadow-indigo-600/20 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+                <i data-lucide="scan-barcode" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-bold">Leitor Ativo</h3>
+                <p class="text-indigo-100/70 text-[10px]">Aproxime o código</p>
+            </div>
+        </div>
+        <button onclick="document.getElementById('scanner-modal').classList.remove('hidden')" class="px-4 py-2 bg-white text-indigo-600 text-xs font-black rounded-lg shadow-sm active:scale-95 transition-all">
+            ABRIR
+        </button>
+    </div>
+
+    <!-- Manual Form (Less padding) -->
+    <form method="post" class="space-y-4 px-2">
+        {% csrf_token %}
+
+        <div class="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-sm space-y-4">
+
+            <!-- Type Selection (Horizontal & Sleek) -->
+            <div class="grid grid-cols-2 gap-3">
+                <label class="relative cursor-pointer">
+                    <input type="radio" name="type" value="IN" checked class="peer sr-only">
+                    <div class="py-3 px-4 rounded-xl border-2 border-slate-50 flex items-center justify-center gap-2 peer-checked:border-emerald-500 peer-checked:bg-emerald-50 transition-all">
+                        <i data-lucide="arrow-down-circle" class="w-4 h-4 text-slate-300 peer-checked:text-emerald-600"></i>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 peer-checked:text-emerald-700">Entrada</span>
+                    </div>
+                </label>
+                <label class="relative cursor-pointer">
+                    <input type="radio" name="type" value="OUT" class="peer sr-only">
+                    <div class="py-3 px-4 rounded-xl border-2 border-slate-50 flex items-center justify-center gap-2 peer-checked:border-rose-500 peer-checked:bg-rose-50 transition-all">
+                        <i data-lucide="arrow-up-circle" class="w-4 h-4 text-slate-300 peer-checked:text-rose-600"></i>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 peer-checked:text-rose-700">Saída</span>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Product Selection -->
+            <div class="space-y-1">
+                <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] px-1">Produto</label>
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-3 top-3 w-4 h-4 text-slate-400"></i>
+                    <input type="text" id="product_search"
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-0 rounded-xl text-sm text-slate-900 font-bold focus:ring-2 focus:ring-indigo-600 placeholder:text-slate-300"
+                           placeholder="Buscar SKU ou Nome..."
+                           hx-get="{% url 'products:product_list' %}"
+                           hx-trigger="keyup changed delay:300ms"
+                           hx-target="#search_results"
+                           hx-vals='{"htmx": "true", "mobile": "true"}'
+                    >
+                </div>
+                <input type="hidden" name="product" id="selected_sku">
+                <div id="search_results" class="mt-2 space-y-1"></div>
+            </div>
+
+            <!-- Quantity with big controls -->
+            <div class="space-y-1">
+                <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] text-center block">Quantidade</label>
+                <div class="flex items-center justify-center gap-6 py-2">
+                    <button type="button" onclick="adjustQty(-1)" class="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-xl font-black text-slate-400 border border-slate-100">-</button>
+                    <input type="number" name="quantity" id="qty_input" value="1"
+                           class="w-20 text-center text-3xl font-black bg-transparent border-0 focus:ring-0 text-slate-900">
+                    <button type="button" onclick="adjustQty(1)" class="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-xl font-black text-white shadow-md shadow-indigo-600/20">+</button>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-slate-900 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm">
+                CONFIRMAR REGISTRO
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+            </button>
+
+        </div>
+    </form>
+</div>
+
+<!-- Modal Scanner (Cleaner) -->
+<div id="scanner-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+    <div class="absolute top-4 right-4 z-10">
+        <button onclick="document.getElementById('scanner-modal').classList.add('hidden')" class="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+    </div>
+    <div class="w-full max-w-sm flex flex-col items-center gap-6">
+        <div id="reader" class="w-full aspect-square overflow-hidden rounded-3xl border-2 border-indigo-500 shadow-2xl"></div>
+        <p class="text-white/60 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse">Aponte para o código</p>
+    </div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+    function adjustQty(val) {
+        const input = document.getElementById('qty_input');
+        input.value = Math.max(1, parseInt(input.value) + val);
+    }
+
+    // HTMX handle selection
+    document.body.addEventListener('click', function(e) {
+        const item = e.target.closest('.search-item');
+        if (item) {
+            document.getElementById('product_search').value = item.dataset.name;
+            document.getElementById('selected_sku').value = item.dataset.sku;
+            document.getElementById('search_results').innerHTML = '';
+        }
+    });
+
+    // Scanner Init
+    const scanner = new Html5Qrcode("reader");
+    const scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    const onScanSuccess = (decodedText) => {
+        scanner.stop();
+        document.getElementById('product_search').value = "Buscando SKU: " + decodedText;
+        document.getElementById('selected_sku').value = decodedText;
+        document.getElementById('scanner-modal').classList.add('hidden');
+
+        // Auto-search or trigger something?
+        alert("Produto Identificado: " + decodedText);
+    };
+
+    document.querySelector('[onclick*="scanner-modal"]').addEventListener('click', () => {
+        scanner.start({ facingMode: "environment" }, scanConfig, onScanSuccess);
+    });
+</script>
+
+<style>
+    /* Styling search results to look like cards */
+    .search-item {
+        @apply p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 cursor-pointer hover:bg-indigo-50;
+    }
+</style>
+{% endblock %}

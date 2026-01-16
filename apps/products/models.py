@@ -42,6 +42,7 @@ class Product(TenantMixin):
     sku = models.CharField(max_length=50)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='products', null=True, blank=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     uom = models.CharField(max_length=10, default='UN', verbose_name="Unidade")
