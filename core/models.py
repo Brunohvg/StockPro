@@ -73,7 +73,7 @@ class Tenant(models.Model):
 
     @property
     def users_count(self):
-        return self.userprofile_set.count()
+        return self.users.count()
 
     @property
     def products_limit_reached(self):
