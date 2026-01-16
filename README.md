@@ -1,4 +1,4 @@
-# 📦 StockPro V11 - Sistema de Gestão de Estoque Multi-tenant
+# 📦 StockPro V1 - Sistema de Gestão de Estoque Multi-tenant
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![Django](https://img.shields.io/badge/Django-5.2-green.svg)
@@ -9,7 +9,7 @@ Sistema completo de gestão de estoque SaaS B2B multi-tenant, com produtos simpl
 
 ---
 
-## 🆕 Novidades V11
+## 🆕 Novidades V1
 
 ### Smart Auth & Multi-Empresa
 - ✅ **TenantMembership**: Usuário pode pertencer a múltiplas empresas
@@ -40,7 +40,7 @@ Sistema completo de gestão de estoque SaaS B2B multi-tenant, com produtos simpl
 | **Import XML** | NF-e (Nota Fiscal Eletrônica) |
 | **Export** | CSV, Excel, JSON |
 
-### Autenticação V11
+### Autenticação V1
 | Feature | Descrição |
 |---------|-----------|
 | **Multi-empresa** | Usuário vinculado a N empresas |
@@ -227,7 +227,7 @@ nano .env  # Editar configurações
 
 ## 📊 Modelo de Dados
 
-### Autenticação V11
+### Autenticação V1
 
 ```
 User ─────┬───── TenantMembership ─────┬───── Tenant
@@ -297,7 +297,7 @@ def billing_view(request):
 
 ## 📋 Changelog
 
-### V11 (atual)
+### V1 (atual)
 - Smart Auth com multi-empresa
 - TenantMembership (substitui UserProfile)
 - SmartLoginView com detecção de empresa

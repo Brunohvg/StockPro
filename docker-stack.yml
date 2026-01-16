@@ -5,7 +5,7 @@ services:
   # MIGRATE - Executa uma vez para setup inicial
   # ===========================================
   migrate:
-    image: brunobh51/stockpro:v11
+    image: brunobh51/stockpro:v1
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
@@ -76,7 +76,7 @@ else:
   # STOCKPRO - Aplicação Principal (Gunicorn)
   # ===========================================
   stockpro:
-    image: brunobh51/stockpro:v11
+    image: brunobh51/stockpro:v1
     command: >
       gunicorn stock_control.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -
     environment:
@@ -120,7 +120,7 @@ else:
   # WORKER - Celery Worker para Tasks
   # ===========================================
   worker:
-    image: brunobh51/stockpro:v11
+    image: brunobh51/stockpro:v1
     command: celery -A stock_control worker -l info -Q default --concurrency=2
     environment:
       TZ: America/Sao_Paulo
@@ -149,7 +149,7 @@ else:
   # BEAT - Celery Beat para Tarefas Agendadas
   # ===========================================
   beat:
-    image: brunobh51/stockpro:v11
+    image: brunobh51/stockpro:v1
     user: root
     command: celery -A stock_control beat -l info --schedule=/data/celerybeat-schedule
     environment:
