@@ -1,5 +1,5 @@
 """
-Inventory App Views - Stock movements and imports
+Inventory App Views - Stock movements and imports (V10)
 """
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -8,98 +8,192 @@ from django.db.models import Q
 
 from .models import StockMovement, ImportBatch
 from .forms import ImportBatchForm
-from apps.products.models import Product
+from apps.products.models import Product, ProductVariant, ProductType
 from apps.core.services import StockService
+from apps.tenants.middleware import trial_allows_read
 
 
 @login_required
 def movement_list(request):
     tenant = request.tenant
-    movements = StockMovement.objects.filter(tenant=tenant).select_related('product', 'user').order_by('-created_at')
+    movements = StockMovement.objects.filter(tenant=tenant).select_related(
+        'product', 'variant', 'variant__product', 'user'
+    ).order_by('-created_at')
 
     query = request.GET.get('q', '')
     if query:
         movements = movements.filter(
             Q(product__sku__icontains=query) |
             Q(product__name__icontains=query) |
+            Q(variant__sku__icontains=query) |
+            Q(variant__product__name__icontains=query) |
             Q(user__username__icontains=query) |
             Q(reason__icontains=query)
         )
 
-    return render(request, 'inventory/movement_list.html', {'movements': movements[:100], 'search_query': query})
+    return render(request, 'inventory/movement_list.html', {
+        'movements': movements[:100],
+        'search_query': query
+    })
 
 
 @login_required
+@trial_allows_read
 def create_movement(request):
     tenant = request.tenant
-    products = Product.objects.filter(tenant=tenant, is_active=True).order_by('name')
+
+    # Pre-fetch products for datalist
+    simple_products = Product.objects.filter(
+        tenant=tenant,
+        product_type=ProductType.SIMPLE,
+        is_active=True
+    ).order_by('name')
+
+    variants = ProductVariant.objects.filter(
+        tenant=tenant,
+        is_active=True
+    ).select_related('product').order_by('product__name')
 
     if request.method == 'POST':
-        product_id = request.POST.get('product')
+        product_identifier = request.POST.get('product_identifier', '').strip()
         movement_type = request.POST.get('type')
         quantity = int(request.POST.get('quantity', 0))
         reason = request.POST.get('reason', '')
         unit_cost = request.POST.get('unit_cost')
 
         try:
-            product = Product.objects.get(pk=product_id, tenant=tenant)
+            # Try to find by SKU (variant first, then simple product)
+            variant = ProductVariant.objects.filter(
+                Q(sku=product_identifier) | Q(barcode=product_identifier),
+                tenant=tenant
+            ).first()
+
+            product = None
+            if not variant:
+                product = Product.objects.filter(
+                    Q(sku=product_identifier) | Q(barcode=product_identifier),
+                    tenant=tenant,
+                    product_type=ProductType.SIMPLE
+                ).first()
+
+            if not variant and not product:
+                # Try by name
+                variant = ProductVariant.objects.filter(
+                    product__name__icontains=product_identifier,
+                    tenant=tenant
+                ).first()
+                if not variant:
+                    product = Product.objects.filter(
+                        name__icontains=product_identifier,
+                        tenant=tenant,
+                        product_type=ProductType.SIMPLE
+                    ).first()
+
+            if not variant and not product:
+                raise Exception(f"Produto/variação '{product_identifier}' não encontrado.")
+
             StockService.create_movement(
                 tenant=tenant,
                 user=request.user,
-                product_sku=product.sku,
                 movement_type=movement_type,
                 quantity=quantity,
+                product=product,
+                variant=variant,
                 reason=reason,
                 unit_cost=float(unit_cost) if unit_cost else None
             )
-            messages.success(request, f"Movimentação de {quantity} unidades registrada!")
+
+            target_name = variant.display_name if variant else product.name
+            messages.success(request, f"Movimentação de {quantity} unidades registrada para {target_name}!")
             return redirect('inventory:movement_list')
         except Exception as e:
             messages.error(request, f"Erro: {str(e)}")
 
-    return render(request, 'inventory/movement_form.html', {'products': products})
+    return render(request, 'inventory/movement_form.html', {
+        'simple_products': simple_products,
+        'variants': variants
+    })
 
 
 @login_required
+@trial_allows_read
 def create_movement_mobile(request):
     tenant = request.tenant
 
+    # Pre-fetch for autocomplete
+    simple_products = Product.objects.filter(
+        tenant=tenant,
+        product_type=ProductType.SIMPLE,
+        is_active=True
+    ).order_by('name')[:50]
+
+    variants = ProductVariant.objects.filter(
+        tenant=tenant,
+        is_active=True
+    ).select_related('product').order_by('product__name')[:50]
+
     if request.method == 'POST':
-        sku = request.POST.get('sku', '').strip()
+        # Accept both 'sku' and 'product' field names for flexibility
+        sku = request.POST.get('sku', '') or request.POST.get('product', '')
+        sku = sku.strip()
         movement_type = request.POST.get('type', 'IN')
         quantity = int(request.POST.get('quantity', 1))
         reason = request.POST.get('reason', '')
 
         try:
-            product = Product.objects.get(tenant=tenant, sku=sku)
+            if not sku:
+                raise Exception("Nenhum produto selecionado.")
+
+            # Try variant first
+            variant = ProductVariant.objects.filter(
+                Q(sku=sku) | Q(barcode=sku),
+                tenant=tenant
+            ).first()
+
+            product = None
+            if not variant:
+                product = Product.objects.filter(
+                    Q(sku=sku) | Q(barcode=sku),
+                    tenant=tenant,
+                    product_type=ProductType.SIMPLE
+                ).first()
+
+            # If not found by exact SKU, try by name
+            if not variant and not product:
+                variant = ProductVariant.objects.filter(
+                    Q(product__name__icontains=sku) | Q(name__icontains=sku),
+                    tenant=tenant
+                ).first()
+                if not variant:
+                    product = Product.objects.filter(
+                        name__icontains=sku,
+                        tenant=tenant,
+                        product_type=ProductType.SIMPLE
+                    ).first()
+
+            if not variant and not product:
+                raise Exception(f"Produto/variação '{sku}' não encontrado.")
+
             StockService.create_movement(
                 tenant=tenant,
                 user=request.user,
-                product_sku=sku,
                 movement_type=movement_type,
                 quantity=quantity,
-                reason=reason or f"Movimentação mobile por {request.user.username}"
+                product=product,
+                variant=variant,
+                reason=reason or f"Mobile por {request.user.username}"
             )
-            if request.headers.get('HX-Request'):
-                return render(request, 'inventory/partials/mobile_search_results.html', {
-                    'success': True,
-                    'message': f"{movement_type} de {quantity}x {product.name} registrada!",
-                    'product': product
-                })
-            messages.success(request, f"Movimentação registrada para {product.name}!")
-            return redirect('inventory:create_movement_mobile')
-        except Product.DoesNotExist:
-            error_msg = f"Produto com SKU '{sku}' não encontrado."
-            if request.headers.get('HX-Request'):
-                return render(request, 'inventory/partials/mobile_search_results.html', {'error': error_msg})
-            messages.error(request, error_msg)
-        except Exception as e:
-            error_msg = str(e)
-            if request.headers.get('HX-Request'):
-                return render(request, 'inventory/partials/mobile_search_results.html', {'error': error_msg})
-            messages.error(request, error_msg)
 
-    return render(request, 'inventory/movement_mobile.html')
+            target_name = variant.display_name if variant else product.name
+            messages.success(request, f"✓ {movement_type}: {quantity}x {target_name}")
+            return redirect('inventory:create_movement_mobile')
+        except Exception as e:
+            messages.error(request, str(e))
+
+    return render(request, 'inventory/movement_mobile.html', {
+        'simple_products': simple_products,
+        'variants': variants
+    })
 
 
 @login_required
@@ -108,7 +202,11 @@ def import_list(request):
     imports = ImportBatch.objects.filter(tenant=tenant).order_by('-created_at')
     completed_count = imports.filter(status='COMPLETED').count()
     error_count = imports.filter(status='ERROR').count()
-    return render(request, 'inventory/import_list.html', {'imports': imports, 'completed_count': completed_count, 'error_count': error_count})
+    return render(request, 'inventory/import_list.html', {
+        'imports': imports,
+        'completed_count': completed_count,
+        'error_count': error_count
+    })
 
 
 @login_required
@@ -121,7 +219,7 @@ def import_create(request):
             batch.tenant = request.tenant
             batch.save()
             from .tasks import process_import_task
-            process_import_task.delay(batch.id)
+            process_import_task.delay(str(batch.id))
             messages.info(request, "Arquivo enviado! O processamento iniciará em segundo plano.")
             return redirect('inventory:import_list')
     else:

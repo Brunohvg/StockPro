@@ -71,11 +71,14 @@ class Tenant(models.Model):
 
     @property
     def products_count(self):
-        return self.products.count()
+        """Count products for this tenant"""
+        from apps.products.models import Product
+        return Product.objects.filter(tenant=self).count()
 
     @property
     def users_count(self):
-        return self.users.count()
+        """Count active members for this tenant"""
+        return self.memberships.filter(is_active=True).count()
 
     @property
     def products_limit_reached(self):

@@ -90,8 +90,15 @@
                                 </span>
                             </td>
                             <td class="px-8 py-6">
+                                {% if mov.variant %}
+                                <div class="text-sm font-bold text-slate-900">{{ mov.variant.display_name }}</div>
+                                <div class="text-[10px] font-mono text-slate-400 uppercase"><span class="text-purple-500">VAR</span> {{ mov.variant.sku }}</div>
+                                {% elif mov.product %}
                                 <div class="text-sm font-bold text-slate-900">{{ mov.product.name }}</div>
                                 <div class="text-[10px] font-mono text-slate-400 uppercase">{{ mov.product.sku }}</div>
+                                {% else %}
+                                <span class="text-slate-400">(Removido)</span>
+                                {% endif %}
                             </td>
                             <td class="px-8 py-6 text-right">
                                 <span class="text-sm font-black {% if mov.type == 'OUT' %}text-rose-600{% else %}text-emerald-600{% endif %}">

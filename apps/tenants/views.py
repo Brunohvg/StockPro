@@ -10,7 +10,6 @@ from django.db import transaction
 from django.db.models import Q
 
 from .models import Plan, Tenant
-from apps.accounts.models import UserProfile
 from apps.core.models import SystemSetting
 
 
@@ -30,7 +29,7 @@ def landing_page(request):
 
 @transaction.atomic
 def signup_view(request):
-    """Self-service signup that creates Tenant + User"""
+    """Self-service signup that creates Tenant + User + Membership"""
     if request.user.is_authenticated:
         return redirect('reports:dashboard')
 
@@ -52,27 +51,41 @@ def signup_view(request):
         if len(password) < 6:
             errors['password'] = 'Senha deve ter pelo menos 6 caracteres.'
 
+        # Check for duplicate CNPJ
+        cnpj = request.POST.get('cnpj', '').strip() or None
+        if cnpj and Tenant.objects.filter(cnpj=cnpj).exists():
+            errors['cnpj'] = 'Já existe uma empresa com este CNPJ.'
+
         if errors:
             return render(request, 'registration/signup.html', {'form': {'errors': errors}})
 
-        plan, _ = Plan.objects.get_or_create(name=plan_name, defaults={'display_name': plan_name.title(), 'price': 0})
-        cnpj = request.POST.get('cnpj', '').strip() or None
+        # Get or create plan (only use existing plans, don't auto-create)
+        plan = Plan.objects.filter(name=plan_name).first()
+        if not plan:
+            plan = Plan.objects.filter(name='FREE').first()
+        if not plan:
+            plan = Plan.objects.create(name='FREE', display_name='Gratuito', price=0, max_products=50, max_users=3)
 
-        tenant = Tenant.objects.create(name=company_name, cnpj=cnpj, plan=plan)
+        tenant = Tenant.objects.create(name=company_name, cnpj=cnpj, plan=plan, subscription_status='TRIAL')
 
         username = email.split('@')[0][:30]
         if User.objects.filter(username=username).exists():
             username = f"{username}_{tenant.pk}"
-        user = User.objects.create_user(username=username, email=email, password=password, first_name=first_name, last_name=last_name, is_staff=True)
+        user = User.objects.create_user(username=username, email=email, password=password, first_name=first_name, last_name=last_name)
 
-        UserProfile.objects.create(user=user, tenant=tenant)
+        # Create membership as OWNER (V11)
+        from apps.accounts.models import TenantMembership, MembershipRole
+        TenantMembership.objects.create(user=user, tenant=tenant, role=MembershipRole.OWNER)
+
         SystemSetting.objects.create(tenant=tenant, company_name=company_name)
 
         login(request, user)
+        request.session['active_tenant_id'] = tenant.id  # Set active tenant
         messages.success(request, f"Bem-vindo ao StockPro, {first_name}! Sua empresa '{company_name}' está pronta.")
         return redirect('reports:dashboard')
 
     return render(request, 'registration/signup.html', {})
+
 
 
 @login_required

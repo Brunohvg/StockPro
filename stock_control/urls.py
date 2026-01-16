@@ -9,7 +9,10 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # Authentication
+    # Custom Authentication (V11 - Smart Login)
+    path('accounts/', include('apps.accounts.urls')),
+
+    # Django Auth (password reset, logout, etc.)
     path('accounts/', include('django.contrib.auth.urls')),
 
     # Public pages (landing, signup)

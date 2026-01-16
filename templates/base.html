@@ -127,6 +127,11 @@
                                 <i data-lucide="layers" class="mr-3 flex-shrink-0 h-5 w-5"></i>
                                 Taxonomia
                             </a>
+
+                            <a href="{% url 'reports:export_page' %}" class="group flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all {% if 'export' in request.path %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/20{% else %}text-slate-400 hover:bg-slate-800 hover:text-white{% endif %}">
+                                <i data-lucide="download" class="mr-3 flex-shrink-0 h-5 w-5"></i>
+                                Exportar Dados
+                            </a>
                             {% endif %}
 
                              <a href="{% url 'core:system_settings' %}" class="group flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all {% if request.resolver_match.url_name == 'system_settings' %}bg-rose-600 text-white shadow-lg shadow-rose-600/20{% else %}text-slate-400 hover:bg-slate-800 hover:text-white{% endif %}">
@@ -149,10 +154,22 @@
                                         {{ user.username|slice:":1"|upper }}
                                     </div>
                                 </div>
-                                <div class="ml-3">
+                                <div class="ml-3 flex-1 min-w-0">
                                     <p class="text-xs font-semibold text-white truncate">{{ user.get_full_name|default:user.username }}</p>
-                                    <a href="{% url 'logout' %}" class="text-[10px] font-bold text-slate-400 hover:text-indigo-300 block">SAIR DO SISTEMA</a>
+                                    {% if request.tenant %}
+                                    <p class="text-[10px] text-slate-400 truncate">{{ request.tenant.name }}</p>
+                                    {% endif %}
                                 </div>
+                            </div>
+                            <div class="flex gap-2 mt-3">
+                                {% if request.membership %}
+                                <a href="{% url 'accounts:select_company' %}" class="flex-1 text-center text-[10px] font-bold text-slate-400 hover:text-indigo-300 py-1.5 px-2 bg-slate-700/50 rounded-lg transition-colors">
+                                    <i data-lucide="building-2" class="w-3 h-3 inline"></i> TROCAR
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'logout' %}" class="flex-1 text-center text-[10px] font-bold text-slate-400 hover:text-rose-300 py-1.5 px-2 bg-slate-700/50 rounded-lg transition-colors">
+                                    <i data-lucide="log-out" class="w-3 h-3 inline"></i> SAIR
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -178,6 +195,35 @@
 
             <!-- Main Scrollable Section -->
             <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none bg-slate-50">
+
+                <!-- Trial/Subscription Status Banners -->
+                {% if request.trial_expired %}
+                <div class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-3">
+                    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                            <span class="font-medium">Seu período de teste expirou. Operações de escrita estão bloqueadas.</span>
+                        </div>
+                        <a href="{% url 'tenants:billing' %}" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg font-bold text-sm transition-all">
+                            Fazer Upgrade →
+                        </a>
+                    </div>
+                </div>
+                {% elif request.tenant and request.tenant.subscription_status == 'TRIAL' %}
+                <div class="bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-4 py-2">
+                    <div class="max-w-7xl mx-auto flex items-center justify-center gap-3 text-sm">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        <span>
+                            Período de teste:
+                            {% if request.tenant.trial_ends_at %}
+                            <strong>{{ request.tenant.trial_ends_at|date:"d/m/Y" }}</strong>
+                            {% endif %}
+                        </span>
+                        <a href="{% url 'tenants:billing' %}" class="underline font-medium hover:no-underline ml-2">Ver planos</a>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="py-6">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 

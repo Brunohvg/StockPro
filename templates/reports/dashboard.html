@@ -109,8 +109,15 @@
                                     </div>
                                 </td>
                                 <td class="px-6 py-4">
+                                    {% if movement.variant %}
+                                    <div class="text-sm font-bold text-slate-900">{{ movement.variant.display_name }}</div>
+                                    <div class="text-[10px] text-slate-400 font-mono"><span class="text-purple-500">VAR</span> {{ movement.variant.sku }}</div>
+                                    {% elif movement.product %}
                                     <div class="text-sm font-bold text-slate-900">{{ movement.product.name }}</div>
                                     <div class="text-[10px] text-slate-400 font-mono">{{ movement.product.sku }}</div>
+                                    {% else %}
+                                    <span class="text-slate-400">(Removido)</span>
+                                    {% endif %}
                                 </td>
                                 <td class="px-6 py-4">
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight

@@ -6,7 +6,9 @@
     <div class="mb-10 flex items-center justify-between">
         <div class="space-y-1">
             <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ title|default:"Cadastro de Produto" }}</h1>
-            <p class="text-slate-500 font-medium text-sm">Defina as especificações e parâmetros técnicos do item.</p>
+            <p class="text-slate-500 font-medium text-sm">
+                {% if is_edit %}Atualize as informações do produto.{% else %}Defina as especificações do novo item.{% endif %}
+            </p>
         </div>
         <a href="{% url 'products:product_list' %}" class="w-10 h-10 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm group">
             <i data-lucide="x" class="w-5 h-5 text-slate-400 group-hover:text-rose-500 transition-colors"></i>
@@ -14,7 +16,7 @@
     </div>
 
     <div class="bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-900/5 border border-slate-100 overflow-hidden">
-        <form method="post" class="space-y-0">
+        <form method="post" enctype="multipart/form-data" class="space-y-0">
             {% csrf_token %}
 
             <!-- Section 1: Basic Info -->
@@ -25,86 +27,132 @@
                         <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Identificação do Produto</h3>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="md:col-span-1 space-y-2 group">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">SKU / Código Único</label>
-                            <div class="relative">
-                                <i data-lucide="hash" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
-                                <input type="text" name="sku" value="{{ form.sku.value|default:'' }}" required placeholder="Ex: SKU-001"
-                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all outline-none">
-                            </div>
+                    <!-- Photo Upload & Name -->
+                    <div class="flex items-start gap-6">
+                        <div class="shrink-0 group relative">
+                            <label for="id_photo" class="block w-32 h-32 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 hover:border-indigo-500 hover:bg-indigo-50 transition-all cursor-pointer flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 overflow-hidden">
+                                {% if product.photo %}
+                                <img src="{{ product.photo.url }}" class="w-full h-full object-cover">
+                                {% else %}
+                                <i data-lucide="image-plus" class="w-8 h-8 mb-2"></i>
+                                <span class="text-[10px] font-bold uppercase">Foto</span>
+                                {% endif %}
+                                <input type="file" name="photo" id="id_photo" class="hidden" accept="image/*">
+                            </label>
                         </div>
-                        <div class="md:col-span-2 space-y-2 group">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome Comercial</label>
-                            <div class="relative">
-                                <i data-lucide="package" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
-                                <input type="text" name="name" value="{{ form.name.value|default:'' }}" required placeholder="Nome descritivo do produto"
-                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all outline-none">
+                        <div class="flex-1 space-y-6">
+                            <div class="space-y-2 group">
+                                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome do Produto *</label>
+                                <div class="relative">
+                                    <i data-lucide="package" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
+                                    <input type="text" name="name" value="{{ form.name.value|default:'' }}" required placeholder="Nome descritivo do produto"
+                                        class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all outline-none">
+                                </div>
+                            </div>
+
+                            <!-- Product Type -->
+                            <div class="space-y-3">
+                                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tipo de Produto *</label>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <label class="relative flex items-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all border-slate-100 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 group">
+                                        <input type="radio" name="product_type" value="SIMPLE" {% if not form.product_type.value or form.product_type.value == 'SIMPLE' %}checked{% endif %} class="hidden">
+                                        <div class="flex items-center gap-3">
+                                            <i data-lucide="box" class="w-6 h-6 text-slate-400 group-has-[:checked]:text-indigo-600 transition-colors"></i>
+                                            <div>
+                                                <span class="text-sm font-bold text-slate-900">Produto Simples</span>
+                                                <p class="text-[10px] text-slate-500">Item único, sem variações</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                    <label class="relative flex items-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all border-slate-100 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-50 group">
+                                        <input type="radio" name="product_type" value="VARIABLE" {% if form.product_type.value == 'VARIABLE' %}checked{% endif %} class="hidden">
+                                        <div class="flex items-center gap-3">
+                                            <i data-lucide="layers" class="w-6 h-6 text-slate-400 group-has-[:checked]:text-purple-600 transition-colors"></i>
+                                            <div>
+                                                <span class="text-sm font-bold text-slate-900">Produto Variável</span>
+                                                <p class="text-[10px] text-slate-500">Cores, tamanhos, etc.</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- SKU, Barcode, Category, Brand -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div class="space-y-2 group">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Categoria</label>
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">SKU (Opcional)</label>
                             <div class="relative">
-                                <i data-lucide="tag" class="absolute left-4 top-4 w-5 h-5 text-slate-300 pointer-events-none"></i>
-                                <select name="category"
-                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none appearance-none">
-                                    <option value="">Selecione...</option>
-                                    {% for cat in form.fields.category.queryset %}
-                                        <option value="{{ cat.id }}" {% if form.category.value|stringformat:"s" == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="space-y-2 group">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Marca</label>
-                            <div class="relative">
-                                <i data-lucide="award" class="absolute left-4 top-4 w-5 h-5 text-slate-300 pointer-events-none"></i>
-                                <select name="brand"
-                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none appearance-none">
-                                    <option value="">Selecione...</option>
-                                    {% for br in form.fields.brand.queryset %}
-                                        <option value="{{ br.id }}" {% if form.brand.value|stringformat:"s" == br.id|stringformat:"s" %}selected{% endif %}>{{ br.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="space-y-2 group">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Medida (UOM)</label>
-                            <div class="relative">
-                                <i data-lucide="layers" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
-                                <input type="text" name="uom" value="{{ form.uom.value|default:'' }}" required placeholder="Ex: UN, KG, LT"
+                                <i data-lucide="hash" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
+                                <input type="text" name="sku" value="{{ form.sku.value|default:'' }}" placeholder="Auto se vazio"
                                     class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none">
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Section 2: Metrics -->
-                <div class="space-y-6">
-                    <div class="flex items-center gap-2 pb-2 border-b border-slate-50">
-                        <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-500"></i>
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Métricas e Controle</h3>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div class="space-y-2 group">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Estoque Mínimo de Segurança</label>
+                        <div class="space-y-2 group" id="barcode-field">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Código de Barras</label>
                             <div class="relative">
-                                <i data-lucide="alert-circle" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-rose-500 transition-colors"></i>
-                                <input type="number" name="minimum_stock" value="{{ form.minimum_stock.value|default:0 }}" required
-                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-black focus:bg-white focus:border-rose-600 transition-all outline-none">
+                                <i data-lucide="scan-barcode" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
+                                <input type="text" name="barcode" value="{{ form.barcode.value|default:'' }}" placeholder="EAN/GTIN"
+                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none">
                             </div>
                         </div>
                         <div class="space-y-2 group">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Custo Médio de Aquisição (R$)</label>
-                            <div class="relative">
-                                <i data-lucide="dollar-sign" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-emerald-500 transition-colors"></i>
-                                <input type="number" step="0.01" name="avg_unit_cost" value="{{ form.avg_unit_cost.value|default:0.00 }}"
-                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-black focus:bg-white focus:border-emerald-600 transition-all outline-none">
-                            </div>
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Categoria</label>
+                            <select name="category" class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none appearance-none">
+                                <option value="">Selecione...</option>
+                                {% for cat in form.fields.category.queryset %}
+                                <option value="{{ cat.id }}" {% if form.category.value|stringformat:"s" == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="space-y-2 group">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Marca</label>
+                            <select name="brand" class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none appearance-none">
+                                <option value="">Selecione...</option>
+                                {% for br in form.fields.brand.queryset %}
+                                <option value="{{ br.id }}" {% if form.brand.value|stringformat:"s" == br.id|stringformat:"s" %}selected{% endif %}>{{ br.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Descrição</label>
+                        <textarea name="description" rows="3" placeholder="Detalhes do produto..."
+                            class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-medium focus:bg-white focus:border-indigo-600 transition-all outline-none">{{ form.description.value|default:'' }}</textarea>
+                    </div>
+                </div>
+
+                <!-- Section 2: Stock (only for SIMPLE) -->
+                <div id="simple-fields" class="space-y-6">
+                    <div class="flex items-center gap-2 pb-2 border-b border-slate-50">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-500"></i>
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Controle de Estoque</h3>
+                        <span class="text-[10px] text-slate-400">(apenas produto simples)</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="space-y-2 group">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Unidade</label>
+                            <input type="text" name="uom" value="{{ form.uom.value|default:'UN' }}"
+                                class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none">
+                        </div>
+                        <div class="space-y-2 group">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Estoque Inicial</label>
+                            <input type="number" name="current_stock" value="{{ form.current_stock.value|default:0 }}" min="0"
+                                class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-black focus:bg-white focus:border-indigo-600 transition-all outline-none">
+                        </div>
+                        <div class="space-y-2 group">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Estoque Mínimo</label>
+                            <input type="number" name="minimum_stock" value="{{ form.minimum_stock.value|default:0 }}" min="0"
+                                class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-black focus:bg-white focus:border-rose-500 transition-all outline-none">
+                        </div>
+                        <div class="space-y-2 group">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Custo Médio (R$)</label>
+                            <input type="number" step="0.01" name="avg_unit_cost" value="{{ form.avg_unit_cost.value|default:'' }}"
+                                class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-black focus:bg-white focus:border-emerald-600 transition-all outline-none">
                         </div>
                     </div>
                 </div>
@@ -113,18 +161,44 @@
             <!-- Footer Action -->
             <div class="p-8 lg:p-12 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                 <label class="relative flex items-center cursor-pointer group">
-                    <input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %} class="sr-only peer">
+                    <input type="checkbox" name="is_active" {% if form.is_active.value or not is_edit %}checked{% endif %} class="sr-only peer">
                     <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                    <span class="ml-3 text-sm font-bold text-slate-600 group-hover:text-slate-900 transition-colors">Produto Disponível</span>
+                    <span class="ml-3 text-sm font-bold text-slate-600 group-hover:text-slate-900 transition-colors">Produto Ativo</span>
                 </label>
 
                 <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-black px-12 py-5 rounded-2xl transition-all shadow-xl shadow-slate-900/20 active:scale-95 flex items-center gap-3">
                     <i data-lucide="save" class="w-6 h-6 text-indigo-400"></i>
-                    GARANTIR REGISTRO
+                    {% if is_edit %}SALVAR ALTERAÇÕES{% else %}CRIAR PRODUTO{% endif %}
                 </button>
             </div>
 
         </form>
     </div>
 </div>
+
+<script>
+    lucide.createIcons();
+
+    // Toggle stock fields based on product type
+    document.querySelectorAll('input[name="product_type"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const simpleFields = document.getElementById('simple-fields');
+            const barcodeField = document.getElementById('barcode-field');
+            if (this.value === 'VARIABLE') {
+                simpleFields.style.display = 'none';
+                barcodeField.style.display = 'none';
+            } else {
+                simpleFields.style.display = 'block';
+                barcodeField.style.display = 'block';
+            }
+        });
+    });
+
+    // Init on load
+    const checkedType = document.querySelector('input[name="product_type"]:checked');
+    if (checkedType && checkedType.value === 'VARIABLE') {
+        document.getElementById('simple-fields').style.display = 'none';
+        document.getElementById('barcode-field').style.display = 'none';
+    }
+</script>
 {% endblock %}
