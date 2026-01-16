@@ -1,0 +1,177 @@
+version: "3.8"
+
+services:
+  migrate:
+    image: brunobh51/stockpro:latest
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             python manage.py shell -c \"
+from django.contrib.auth import get_user_model
+from core.models import Tenant, UserProfile, Plan
+import os
+
+User = get_user_model()
+email = os.getenv('DJANGO_SUPERUSER_EMAIL')
+password = os.getenv('DJANGO_SUPERUSER_PASSWORD')
+
+if email and password and not User.objects.filter(email=email).exists():
+    # Create default plan
+    plan, _ = Plan.objects.get_or_create(name='ENTERPRISE', defaults={'display_name': 'Enterprise', 'price': 0, 'max_products': 9999, 'max_users': 100})
+    # Create default tenant
+    tenant, _ = Tenant.objects.get_or_create(name='Administração', defaults={'plan': plan})
+    # Create superuser
+    user = User.objects.create_superuser(username=email.split('@')[0], email=email, password=password)
+    # Link user to tenant
+    UserProfile.objects.create(user=user, tenant=tenant)
+    print('Superuser created successfully!')
+else:
+    print('Superuser already exists or credentials not provided')
+\""
+    environment:
+      TZ: America/Sao_Paulo
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG:-False}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD}
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    networks:
+      - app_network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  stockpro:
+    image: brunobh51/stockpro:latest
+    command: >
+      gunicorn stock_control.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -
+    environment:
+      TZ: America/Sao_Paulo
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG:-False}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS}
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - imports_volume:/app/imports
+    networks:
+      - traefik_public
+      - app_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik_public
+        - traefik.http.routers.stockpro.rule=Host(`${DOMAIN}`)
+        - traefik.http.routers.stockpro.entrypoints=websecure
+        - traefik.http.routers.stockpro.tls.certresolver=le
+        - traefik.http.services.stockpro.loadbalancer.server.port=8000
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  worker:
+    image: brunobh51/stockpro:latest
+    command: celery -A stock_control worker -l info -Q default --concurrency=2
+    environment:
+      TZ: America/Sao_Paulo
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG:-False}
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    volumes:
+      - media_volume:/app/media
+      - imports_volume:/app/imports
+    networks:
+      - app_network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+  beat:
+    image: brunobh51/stockpro:latest
+    user: root
+    command: celery -A stock_control beat -l info --schedule=/data/celerybeat-schedule
+    environment:
+      TZ: America/Sao_Paulo
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG:-False}
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    volumes:
+      - celerybeat_data:/data
+    networks:
+      - app_network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      TZ: America/Sao_Paulo
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  static_volume:
+  media_volume:
+  imports_volume:
+  redis_data:
+  celerybeat_data:
+
+networks:
+  traefik_public:
+    external: true
+  app_network:
+    external: true

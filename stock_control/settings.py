@@ -67,13 +67,43 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'stock_control.wsgi.application'
 
-import dj_database_url
+# Database Configuration
+# Supports both SQLite (development) and PostgreSQL (production)
+import os
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL', default='sqlite:///db.sqlite3')
-    )
-}
+DB_HOST = config('DB_HOST', default='')
+
+if DB_HOST:
+    # PostgreSQL (Production)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME', default='stockpro_db'),
+            'USER': config('DB_USER', default='stockpro_user'),
+            'PASSWORD': config('DB_PASSWORD', default=''),
+            'HOST': DB_HOST,
+            'PORT': config('DB_PORT', default='5432'),
+            'CONN_MAX_AGE': 60,
+            'OPTIONS': {
+                'connect_timeout': 10,
+            }
+        }
+    }
+else:
+    # SQLite (Development)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+
+# CSRF Trusted Origins for production
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv()) if not DEBUG else []
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
