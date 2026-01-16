@@ -20,7 +20,7 @@ This document provides a comprehensive overview of the **StockPro** system archi
 
 | Component | Technology | Description |
 |-----------|------------|-------------|
-| **Backend** | Django 5.2 (Monolith) | Core business logic and web server. |
+| **Backend** | Django 5.2 (Modular Monolith) | Core business logic decoupled into independent apps (`accounts`, `products`, `inventory`, etc.). |
 | **Frontend** | Django Templates + HTMX + Tailwind | Server-side rendering with reactive UI pieces. |
 | **Multi-tenancy** | Middleware + Session | Multi-company isolation within a single database. |
 | **Logic Layer** | Service Layer (`services.py`) | All domain logic resides in dedicated service classes. |
