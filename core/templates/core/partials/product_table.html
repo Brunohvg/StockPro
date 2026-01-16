@@ -1,0 +1,87 @@
+<div class="overflow-hidden">
+    <table class="min-w-full divide-y divide-slate-200">
+        <thead class="bg-slate-50">
+            <tr>
+                <th scope="col" class="px-6 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Produto</th>
+                <th scope="col" class="px-6 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Categoria</th>
+                <th scope="col" class="px-6 py-4 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                <th scope="col" class="px-6 py-4 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo Físico</th>
+                <th scope="col" class="px-6 py-4 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Custo Médio</th>
+                <th scope="col" class="px-6 py-4 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest">Ações</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-slate-100">
+            {% for product in products %}
+            <tr class="group hover:bg-indigo-50/30 transition-all duration-200">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="h-10 w-10 flex-shrink-0 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors font-bold">
+                            {{ product.sku|slice:":1"|upper }}
+                        </div>
+                        <div class="ml-4">
+                            <a href="{% url 'product_detail' product.pk %}" class="block group/link">
+                                <div class="text-sm font-bold text-slate-900 group-hover/link:text-indigo-600 transition-colors">{{ product.name }}</div>
+                                <div class="text-[10px] font-mono text-slate-400">{{ product.sku }}</div>
+                            </a>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex flex-col gap-1">
+                        <span class="inline-flex items-center w-fit px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            {{ product.category.name|default:"Sem Categoria" }}
+                        </span>
+                        {% if product.brand %}
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter px-1">
+                            {{ product.brand.name }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                    {% if product.is_active %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold text-emerald-600">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                            Ativo
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold text-slate-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-slate-300 mr-1.5"></span>
+                            Inativo
+                        </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right">
+                    <div class="text-sm font-black {% if product.current_stock <= product.minimum_stock %}text-rose-600{% else %}text-slate-900{% endif %}">
+                        {{ product.current_stock }}
+                    </div>
+                    <div class="text-[10px] text-slate-400">Mín: {{ product.minimum_stock }} {{ product.uom }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right">
+                    <div class="text-sm font-bold text-slate-700">R$ {{ product.avg_unit_cost|default:"0.00"|floatformat:2 }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                    <div class="flex justify-center gap-2">
+                        <a href="{% url 'product_edit' product.pk %}" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Editar">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </a>
+                        <a href="{% url 'product_detail' product.pk %}" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Ver Histórico">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="px-6 py-20 text-center">
+                    <i data-lucide="inbox" class="w-12 h-12 text-slate-200 mx-auto mb-4"></i>
+                    <p class="text-slate-500 font-medium">Nenhum item encontrado nesta categoria.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script>
+    lucide.createIcons();
+</script>

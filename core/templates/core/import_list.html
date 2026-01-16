@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="space-y-8">
+
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+        <div>
+            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Painel de Importações</h1>
+            <p class="text-slate-500 font-medium">Processamento de dados em larga escala (Bling Standard).</p>
+        </div>
+        <a href="{% url 'import_create' %}" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all active:scale-95">
+            <i data-lucide="upload-cloud" class="w-4 h-4"></i> Iniciar Nova Carga
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-xl shadow-indigo-600/10">
+            <div class="flex items-center gap-3 opacity-80 mb-2">
+                <i data-lucide="database" class="w-4 h-4"></i>
+                <span class="text-[10px] font-black uppercase tracking-widest">Total de Lotes</span>
+            </div>
+            <h3 class="text-3xl font-black">{{ imports|length }}</h3>
+        </div>
+
+        <div class="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
+            <div class="flex items-center gap-3 text-emerald-600 mb-2">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+                <span class="text-[10px] font-black uppercase tracking-widest">Processados</span>
+            </div>
+            <h3 class="text-3xl font-black text-emerald-900">{{ completed_count }}</h3>
+        </div>
+        <div class="bg-rose-50 p-6 rounded-[2rem] border border-rose-100">
+            <div class="flex items-center gap-3 text-rose-600 mb-2">
+                <i data-lucide="x-circle" class="w-4 h-4"></i>
+                <span class="text-[10px] font-black uppercase tracking-widest">Erros</span>
+            </div>
+            <h3 class="text-3xl font-black text-rose-900">{{ error_count }}</h3>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-50 border-b border-slate-100">
+                <tr>
+                    <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Aquivo / Lote</th>
+                    <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>
+                    <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                    <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
+                     <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Log</th>
+                     <th class="px-8 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
+                 </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+                {% for imp in imports %}
+                <tr class="group hover:bg-slate-50 transition-all duration-200" hx-get="." hx-trigger="every 10s" hx-select="#import-table-row-{{ imp.id }}" hx-swap="outerHTML" id="import-table-row-{{ imp.id }}">
+                    <td class="px-8 py-6">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="file-text" class="w-5 h-5 text-slate-300"></i>
+                            <span class="text-sm font-bold text-slate-900">{{ imp.file.name|truncatechars:30 }}</span>
+                        </div>
+                    </td>
+                    <td class="px-8 py-6">
+                        <span class="text-xs font-bold text-slate-500">{{ imp.get_type_display }}</span>
+                    </td>
+                    <td class="px-8 py-6">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter
+                            {% if imp.status == 'COMPLETED' %}bg-emerald-50 text-emerald-700
+                            {% elif imp.status == 'PROCESSING' %}bg-indigo-50 text-indigo-700
+                            {% elif imp.status == 'ERROR' %}bg-rose-50 text-rose-700
+                            {% else %}bg-amber-50 text-amber-700{% endif %}">
+                            {% if imp.status == 'PROCESSING' %}<span class="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2 animate-ping"></span>{% endif %}
+                            {{ imp.get_status_display }}
+                        </span>
+                    </td>
+                    <td class="px-8 py-6 text-xs text-slate-400 font-medium">
+                        {{ imp.created_at|date:"d/m/Y H:i" }}
+                    </td>
+                    <td class="px-8 py-6">
+                        <a href="{% url 'import_detail' imp.id %}" class="text-[10px] font-mono text-slate-500 bg-slate-100 p-2 rounded-lg max-w-xs truncate hover:underline" title="{{ imp.log }}">
+                            {{ imp.log|default:"Aguardando processamento..." }}
+                        </a>
+                    </td>
+                    <td class="px-8 py-6 text-right">
+                        <form action="{% url 'delete_import' imp.id %}" method="post" class="inline" onsubmit="return confirm('Tem certeza que deseja apagar este registro de importação?');">
+                            {% csrf_token %}
+                            <button type="submit" class="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Excluir Lote">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-8 py-20 text-center">
+                        <div class="max-w-xs mx-auto">
+                            <i data-lucide="cloud-off" class="w-12 h-12 text-slate-200 mx-auto mb-4"></i>
+                            <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Nenhuma importação registrada</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
