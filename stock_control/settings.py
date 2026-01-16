@@ -1,5 +1,6 @@
 from pathlib import Path
 from decouple import config, Csv
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,8 +29,13 @@ INSTALLED_APPS = [
     'django_htmx',
     'corsheaders',
 
-    # Local
-    'core',
+    # Local Apps
+    'apps.tenants',
+    'apps.accounts',
+    'apps.products',
+    'apps.inventory',
+    'apps.reports',
+    'apps.core',
 ]
 
 MIDDLEWARE = [
@@ -43,7 +49,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
-    'core.middleware.TenantMiddleware',
+    'apps.tenants.middleware.TenantMiddleware',
 ]
 
 ROOT_URLCONF = 'stock_control.urls'
@@ -59,7 +65,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'core.context_processors.global_settings',
+                'apps.core.context_processors.global_settings',
             ],
         },
     },
@@ -68,13 +74,9 @@ TEMPLATES = [
 WSGI_APPLICATION = 'stock_control.wsgi.application'
 
 # Database Configuration
-# Supports both SQLite (development) and PostgreSQL (production)
-import os
-
 DB_HOST = config('DB_HOST', default='')
 
 if DB_HOST:
-    # PostgreSQL (Production)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -90,7 +92,6 @@ if DB_HOST:
         }
     }
 else:
-    # SQLite (Development)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -98,10 +99,8 @@ else:
         }
     }
 
-# CSRF Trusted Origins for production
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv()) if not DEBUG else []
 
-# Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -118,7 +117,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / 'core/static']
+STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Celery
@@ -130,7 +129,6 @@ CELERY_RESULT_SERIALIZER = 'json'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Celery / Redis Optimization (V5 refined)
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_REDIS_BACKEND_USE_SSL = False
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
