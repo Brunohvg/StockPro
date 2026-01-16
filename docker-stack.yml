@@ -1,61 +1,49 @@
 version: "3.8"
 
 services:
-  # ===========================================
-  # MIGRATE - Executa uma vez para setup inicial
-  # ===========================================
+
   migrate:
     image: brunobh51/stockpro:v1
     command: >
       sh -c "python manage.py migrate --noinput &&
-             python manage.py collectstatic --noinput &&
-             python manage.py shell -c \"
-from django.contrib.auth import get_user_model
-from apps.tenants.models import Tenant, Plan
-from apps.accounts.models import TenantMembership, MembershipRole
-from apps.core.models import SystemSetting
-import os
+      python manage.py collectstatic --noinput &&
+      python manage.py shell -c \"from django.contrib.auth import get_user_model;
+      from apps.tenants.models import Tenant,Plan;
+      from apps.accounts.models import TenantMembership,MembershipRole;
+      from apps.core.models import SystemSetting;
+      import os;
+      User=get_user_model();
+      u=os.getenv('DJANGO_SUPERUSER_USERNAME');
+      e=os.getenv('DJANGO_SUPERUSER_EMAIL');
+      p=os.getenv('DJANGO_SUPERUSER_PASSWORD');
+      plans=[{'name':'FREE','display_name':'Gratuito','price':0,'max_products':50,'max_users':3},
+      {'name':'STARTER','display_name':'Starter','price':29.9,'max_products':500,'max_users':5},
+      {'name':'PRO','display_name':'Pro','price':59.9,'max_products':2000,'max_users':15},
+      {'name':'ENTERPRISE','display_name':'Enterprise','price':199.9,'max_products':10000,'max_users':50}];
+      [Plan.objects.update_or_create(name=x['name'],defaults=x) for x in plans];
+      plan=Plan.objects.get(name='ENTERPRISE');
+      tenant,_=Tenant.objects.get_or_create(name='Administracao',defaults={'plan':plan,'subscription_status':'ACTIVE'});
+      SystemSetting.get_settings(tenant);
+      user,_=User.objects.get_or_create(username=u,defaults={'email':e});
+      user.set_password(p);
+      user.is_staff=True;
+      user.is_superuser=True;
+      user.save();
+      TenantMembership.objects.get_or_create(user=user,tenant=tenant,defaults={'role':MembershipRole.OWNER});
+      print('Bootstrap OK');\""
 
-User = get_user_model()
-email = os.getenv('DJANGO_SUPERUSER_EMAIL')
-password = os.getenv('DJANGO_SUPERUSER_PASSWORD')
-
-if email and password:
-    # Create default plans
-    for plan_data in [
-        {'name': 'FREE', 'display_name': 'Gratuito', 'price': 0, 'max_products': 50, 'max_users': 3},
-        {'name': 'STARTER', 'display_name': 'Starter', 'price': 29.90, 'max_products': 500, 'max_users': 5},
-        {'name': 'PRO', 'display_name': 'Pro', 'price': 59.90, 'max_products': 2000, 'max_users': 15},
-        {'name': 'ENTERPRISE', 'display_name': 'Enterprise', 'price': 199.90, 'max_products': 10000, 'max_users': 50},
-    ]:
-        Plan.objects.update_or_create(name=plan_data['name'], defaults=plan_data)
-
-    plan = Plan.objects.get(name='ENTERPRISE')
-    tenant, _ = Tenant.objects.get_or_create(name='Administracao', defaults={'plan': plan, 'subscription_status': 'ACTIVE'})
-    SystemSetting.get_settings(tenant)
-
-    if not User.objects.filter(email=email).exists():
-        user = User.objects.create_superuser(username=email.split('@')[0], email=email, password=password)
-        TenantMembership.objects.create(user=user, tenant=tenant, role=MembershipRole.OWNER)
-        print('Superuser created successfully!')
-    else:
-        user = User.objects.get(email=email)
-        TenantMembership.objects.get_or_create(user=user, tenant=tenant, defaults={'role': MembershipRole.OWNER})
-        print('Superuser already exists. Ensured membership.')
-else:
-    print('No superuser credentials provided')
-\""
     environment:
       TZ: America/Sao_Paulo
       SECRET_KEY: ${SECRET_KEY}
-      DEBUG: ${DEBUG:-False}
+      DEBUG: ${DEBUG}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
       DB_HOST: ${DB_HOST}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
+      DB_PORT: ${DB_PORT}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME}
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL}
       DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD}
     volumes:
@@ -67,29 +55,21 @@ else:
       replicas: 1
       restart_policy:
         condition: none
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
 
-  # ===========================================
-  # STOCKPRO - Aplicação Principal (Gunicorn)
-  # ===========================================
   stockpro:
     image: brunobh51/stockpro:v1
-    command: >
-      gunicorn stock_control.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -
+    command: gunicorn stock_control.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60
     environment:
       TZ: America/Sao_Paulo
       SECRET_KEY: ${SECRET_KEY}
-      DEBUG: ${DEBUG:-False}
+      DEBUG: ${DEBUG}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS}
       DB_HOST: ${DB_HOST}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
+      DB_PORT: ${DB_PORT}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
     volumes:
@@ -101,101 +81,59 @@ else:
       - app_network
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
+
       labels:
         - traefik.enable=true
         - traefik.docker.network=traefik_public
-        - traefik.http.routers.stockpro.rule=Host(`${DOMAIN}`)
+        - traefik.http.routers.stockpro.rule=Host(`stockpro.lojabibelo.com.br`)
         - traefik.http.routers.stockpro.entrypoints=websecure
         - traefik.http.routers.stockpro.tls.certresolver=le
         - traefik.http.services.stockpro.loadbalancer.server.port=8000
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 768M
 
-  # ===========================================
-  # WORKER - Celery Worker para Tasks
-  # ===========================================
   worker:
     image: brunobh51/stockpro:v1
     command: celery -A stock_control worker -l info -Q default --concurrency=2
     environment:
       TZ: America/Sao_Paulo
       SECRET_KEY: ${SECRET_KEY}
-      DEBUG: ${DEBUG:-False}
+      DEBUG: ${DEBUG}
       DB_HOST: ${DB_HOST}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
+      DB_PORT: ${DB_PORT}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
-    volumes:
-      - media_volume:/app/media
-      - imports_volume:/app/imports
     networks:
       - app_network
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          cpus: "1"
-          memory: 1024M
 
-  # ===========================================
-  # BEAT - Celery Beat para Tarefas Agendadas
-  # ===========================================
   beat:
     image: brunobh51/stockpro:v1
-    user: root
     command: celery -A stock_control beat -l info --schedule=/data/celerybeat-schedule
     environment:
       TZ: America/Sao_Paulo
       SECRET_KEY: ${SECRET_KEY}
-      DEBUG: ${DEBUG:-False}
+      DEBUG: ${DEBUG}
       DB_HOST: ${DB_HOST}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
+      DB_PORT: ${DB_PORT}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
     volumes:
       - celerybeat_data:/data
     networks:
       - app_network
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
 
-  # ===========================================
-  # REDIS - Broker para Celery
-  # ===========================================
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy allkeys-lru
-    environment:
-      TZ: America/Sao_Paulo
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     networks:
       - app_network
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
 
-# ===========================================
-# VOLUMES
-# ===========================================
 volumes:
   static_volume:
   media_volume:
@@ -203,9 +141,6 @@ volumes:
   redis_data:
   celerybeat_data:
 
-# ===========================================
-# NETWORKS
-# ===========================================
 networks:
   traefik_public:
     external: true
