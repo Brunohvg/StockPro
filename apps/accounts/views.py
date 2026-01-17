@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from .models import TenantMembership, TenantInvite, MembershipRole
 from apps.tenants.models import Tenant, Plan
+from apps.tenants.middleware import plan_limit_required
 from apps.core.models import SystemSetting
 
 
@@ -202,6 +203,7 @@ def create_company(request):
 # ============ INVITE SYSTEM ============
 
 @login_required
+@plan_limit_required('users')
 def invite_user(request):
     """Invite a new user to the current tenant"""
     if not request.membership or not request.membership.can_manage_users:

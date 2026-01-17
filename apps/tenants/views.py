@@ -15,6 +15,9 @@ from apps.core.models import SystemSetting
 
 def landing_page(request):
     """Public landing page with plans and features"""
+    if request.user.is_authenticated:
+        return redirect('reports:dashboard')
+
     plans = Plan.objects.all().order_by('price')
     features = [
         {'icon': 'smartphone', 'title': 'Operação Mobile', 'description': 'Escaneie códigos de barras direto do celular para entradas e saídas.'},

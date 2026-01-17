@@ -40,19 +40,23 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . /app/
 
 # ===========================================
-# Runtime directories
+# Runtime directories & Permissions
 # ===========================================
-RUN mkdir -p \
-    /app/static \
-    /app/staticfiles \
-    /app/media \
-    /app/imports \
-    /data
+RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data && \
+    adduser --disabled-password --gecos "" appuser && \
+    chown -R appuser:appuser /app /data && \
+    chmod -R 755 /app /data
 
 # ===========================================
-# Permissions
+# Security: Run as non-root
 # ===========================================
-RUN chmod -R 755 /app
+USER appuser
+
+# ===========================================
+# Healthcheck
+# ===========================================
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
 
 # ===========================================
 # Expose
@@ -60,6 +64,6 @@ RUN chmod -R 755 /app
 EXPOSE 8000
 
 # ===========================================
-# Default command
+# Default command (Production Optimized)
 # ===========================================
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "60", "stock_control.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "stock_control.wsgi:application"]

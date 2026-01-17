@@ -12,7 +12,7 @@ import re
 
 from .models import Product, ProductVariant, Category, Brand, AttributeType, VariantAttributeValue, ProductType
 from .forms import ProductForm, ProductVariantForm, QuickVariantForm, AttributeTypeForm
-from apps.tenants.middleware import trial_allows_read
+from apps.tenants.middleware import trial_allows_read, plan_limit_required
 
 ITEMS_PER_PAGE = 24  # Grid friendly (divisible by 2, 3, 4)
 
@@ -78,6 +78,7 @@ def product_list(request):
 
 @login_required
 @trial_allows_read
+@plan_limit_required('products')
 def product_create(request):
     """Criar novo produto (simples ou variável)"""
     tenant = request.tenant

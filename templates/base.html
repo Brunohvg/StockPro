@@ -177,9 +177,12 @@
                                     <i data-lucide="building-2" class="w-3 h-3 inline"></i> TROCAR
                                 </a>
                                 {% endif %}
-                                <a href="{% url 'logout' %}" class="flex-1 text-center text-[10px] font-bold text-slate-400 hover:text-rose-300 py-1.5 px-2 bg-slate-700/50 rounded-lg transition-colors">
-                                    <i data-lucide="log-out" class="w-3 h-3 inline"></i> SAIR
-                                </a>
+                                <form action="{% url 'logout' %}" method="post" class="flex-1">
+                                    {% csrf_token %}
+                                    <button type="submit" class="w-full text-center text-[10px] font-bold text-slate-400 hover:text-rose-300 py-1.5 px-2 bg-slate-700/50 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+                                        <i data-lucide="log-out" class="w-3 h-3"></i> SAIR
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>

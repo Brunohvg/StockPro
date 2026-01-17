@@ -8,7 +8,7 @@ from django.db.models import Q
 import csv
 from django.http import HttpResponse
 
-from .models import StockMovement, ImportBatch
+from .models import StockMovement, ImportBatch, ImportLog
 from .models_v2 import Location
 from .forms import ImportBatchForm, LocationForm
 from apps.products.models import Product, ProductVariant, ProductType
@@ -281,6 +281,29 @@ def delete_import(request, pk):
     if request.method == 'POST':
         batch.delete()
         messages.success(request, "Importação removida.")
+    return redirect('inventory:import_list')
+
+
+@login_required
+@admin_required
+def bulk_delete_imports(request):
+    """Exclusão em massa de lotes de importação selecionados"""
+    if request.method != 'POST':
+        return redirect('inventory:import_list')
+
+    import_ids = request.POST.getlist('import_ids')
+
+    if not import_ids:
+        messages.warning(request, "Nenhum lote selecionado.")
+        return redirect('inventory:import_list')
+
+    batches = ImportBatch.objects.filter(tenant=request.tenant, pk__in=import_ids)
+    count = batches.count()
+
+    if count > 0:
+        batches.delete()
+        messages.success(request, f"✅ {count} lote(s) de importação excluído(s)!")
+
     return redirect('inventory:import_list')
 @login_required
 @admin_required

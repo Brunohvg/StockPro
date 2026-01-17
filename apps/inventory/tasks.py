@@ -181,6 +181,13 @@ def process_csv_v10(batch):
 
         try:
             product_type, parent_sku = detect_product_type(row)
+            sku = str(row['sku']).strip()
+
+            if product_type != 'VARIANT' and tenant.products_limit_reached:
+                # Se for um novo produto (não existe), bloqueia
+                if not Product.objects.filter(tenant=tenant, sku=sku).exists():
+                    stats['errors'].append(f"Linha {idx+2}: Limite de produtos atingido ({tenant.plan.max_products}).")
+                    continue
 
             if product_type == 'VARIANT':
                 continue  # Process variants in second pass

@@ -42,7 +42,10 @@
         </form>
 
         <div class="mt-8 pt-6 border-t border-slate-100 text-center">
-            <a href="{% url 'logout' %}" class="text-sm text-slate-500 hover:text-slate-700">Sair do sistema</a>
+            <form action="{% url 'logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="text-sm text-slate-500 hover:text-slate-700">Sair do sistema</button>
+            </form>
         </div>
     </div>
 </div>

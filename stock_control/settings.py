@@ -14,6 +14,11 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/app/'
 LOGOUT_REDIRECT_URL = '/'
 
+# Admin Configuration
+ADMIN_URL = config('ADMIN_URL', default='admin/')
+if not ADMIN_URL.endswith('/'):
+    ADMIN_URL += '/'
+
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 INSTALLED_APPS = [
