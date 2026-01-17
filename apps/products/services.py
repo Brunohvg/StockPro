@@ -26,6 +26,11 @@ class ConsolidationService:
         (r'\s*TAMANHO\s+(.+)$', 'Tamanho'),
         (r'\s*(.+)\s+VOLTS?$', 'Voltagem'),
         (r'\s*(\d+V)$', 'Voltagem'),
+        # Suffixes with codes before technical specs (common in textiles)
+        (r'\s+([A-Z0-9]+)\s+L\.\s?\d+', 'Variação'),
+        (r'\s+([A-Z0-9]+)\s+MTS?', 'Variação'),
+        # Trailing codes
+        (r'\s*-\s*([A-Z0-9]+)$', 'Código'),
     ]
 
     def __init__(self, tenant):
@@ -52,8 +57,9 @@ class ConsolidationService:
             is_active=True
         ).order_by('name')
 
-        # Group products by base name
+        # Group products by base name (Regex first)
         groups = defaultdict(list)
+        unmatched_products = []
 
         for product in simple_products:
             parsed = self._parse_product_name(product.name)
@@ -63,6 +69,44 @@ class ConsolidationService:
                     'product': product,
                     'attr_value': attr_value
                 })
+            else:
+                unmatched_products.append(product)
+
+        # Fallback: Group by Longest Common Prefix (Useful for any product type)
+        # We look for products that share the first 70%+ of their name
+        if unmatched_products:
+            processed_pks = set()
+            for i, p1 in enumerate(unmatched_products):
+                if p1.pk in processed_pks: continue
+
+                group_pks = {p1.pk}
+                p1_name = p1.name.upper()
+
+                for j in range(i + 1, len(unmatched_products)):
+                    p2 = unmatched_products[j]
+                    if p2.pk in processed_pks: continue
+
+                    p2_name = p2.name.upper()
+                    # Encontra prefixo comum
+                    prefix = ""
+                    for char1, char2 in zip(p1_name, p2_name):
+                        if char1 == char2: prefix += char1
+                        else: break
+
+                    # Se o prefixo for longo o suficiente (ex: 10 chars ou 50% do nome)
+                    if len(prefix) >= 10:
+                        group_pks.add(p2.pk)
+
+                if len(group_pks) >= 2:
+                    current_group = [p for p in unmatched_products if p.pk in group_pks]
+                    # Tenta descobrir o atributo via IA para este cluster específico
+                    base_name = self._find_common_prefix([p.name for p in current_group])
+
+                    groups[(base_name, 'Variação')].extend([
+                        {'product': p, 'attr_value': p.name[len(base_name):].strip() or 'Padrão'}
+                        for p in current_group
+                    ])
+                    processed_pks.update(group_pks)
 
         # Filter to groups with 2+ products
         candidates = []
@@ -101,6 +145,16 @@ class ConsolidationService:
 
         return None
 
+    def _find_common_prefix(self, names):
+        """Calcula o prefixo comum entre uma lista de nomes"""
+        if not names: return ""
+        s1 = min(names)
+        s2 = max(names)
+        for i, c in enumerate(s1):
+            if c != s2[i]:
+                return s1[:i].strip()
+        return s1
+
     @transaction.atomic
     def consolidate(self, parent_name, attribute_name, product_ids):
         """
@@ -135,7 +189,7 @@ class ConsolidationService:
             tenant=self.tenant,
             name=parent_name,
             product_type=ProductType.VARIABLE,
-            sku=f"VAR-{parent_name[:20].replace(' ', '-').upper()}",
+            sku=None,  # Deixa o save() gerar o VAR-CAT-ID padronizado
             category=first_product.category,
             brand=first_product.brand,
             default_supplier=first_product.default_supplier,
@@ -148,11 +202,18 @@ class ConsolidationService:
             parsed = self._parse_product_name(product.name)
             attr_value = parsed[2] if parsed else product.name
 
+            # Determina se mantém SKU antigo ou gera novo
+            # Se o SKU antigo for o padrão PROD-..., forçamos a geração do novo padrão [PAI]-[ATTR]
+            old_sku = product.sku
+            new_sku = old_sku
+            if old_sku.startswith('PROD-') or '-' not in old_sku:
+                new_sku = None # Força o save() do ProductVariant a gerar o padrão baseado no PAI
+
             # Create variant
             variant = ProductVariant.objects.create(
                 tenant=self.tenant,
                 product=parent,
-                sku=product.sku,
+                sku=new_sku,
                 name=product.name,
                 barcode=product.barcode,
                 current_stock=product.current_stock,

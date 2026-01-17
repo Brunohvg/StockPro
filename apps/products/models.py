@@ -113,11 +113,23 @@ class Product(TenantMixin):
         unique_together = ['tenant', 'sku']
         ordering = ['name']
 
+    def generate_sku(self):
+        """Gera SKU padronizado: [TIPO]-[CAT]-[ID]"""
+        prefix = "VAR" if self.is_variable else "SIM"
+
+        # Pega as primeiras 3 letras da categoria ou 'GER'
+        cat_code = "GER"
+        if self.category:
+            cat_code = "".join(filter(str.isalnum, self.category.name)).upper()[:3]
+
+        return f"{prefix}-{cat_code}-{self.id:04d}"
+
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         super().save(*args, **kwargs)
-        if is_new and not self.sku:
-            self.sku = f"PROD-{self.id:06d}"
+        if (is_new and not self.sku) or (self.sku and (self.sku.startswith('PROD-') or '-' not in self.sku)):
+            # Se for novo ou tiver o padrão antigo 'PROD-...'
+            self.sku = self.generate_sku()
             Product.objects.filter(pk=self.pk).update(sku=self.sku)
 
     def __str__(self):
@@ -196,7 +208,7 @@ class ProductVariant(TenantMixin):
         related_name='variants',
         limit_choices_to={'product_type': ProductType.VARIABLE}
     )
-    sku = models.CharField(max_length=50, verbose_name="SKU Variação")
+    sku = models.CharField(max_length=50, null=True, blank=True, verbose_name="SKU Variação")
     name = models.CharField(max_length=255, blank=True, verbose_name="Nome da Variação")
     barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")
     photo = models.ImageField(upload_to='products/variants/', blank=True, null=True)
@@ -215,14 +227,29 @@ class ProductVariant(TenantMixin):
         unique_together = ['tenant', 'sku']
         ordering = ['product', 'name']
 
+    def generate_sku(self):
+        """Gera SKU padronizado: [SKU_PAI]-[ATTR_VALS]"""
+        parent_sku = self.product.sku
+        attrs = self.attribute_values.all()
+        if not attrs:
+            return f"{parent_sku}-{self.id}"
+
+        # Pega as primeiras 2 letras de cada valor de atributo
+        attr_slugs = []
+        for a in attrs:
+            val = "".join(filter(str.isalnum, a.value)).upper()
+            attr_slugs.append(val[:2] if len(val) > 2 else val)
+
+        return f"{parent_sku}-{''.join(attr_slugs)}"
+
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         # Inherit tenant from parent product
         if self.product_id and not self.tenant_id:
             self.tenant = self.product.tenant
         super().save(*args, **kwargs)
-        if is_new and not self.sku:
-            self.sku = f"VAR-{self.id:06d}"
+        if (is_new and not self.sku) or (self.sku and self.sku.startswith('VAR-') and '-' not in self.sku[4:]):
+            self.sku = self.generate_sku()
             ProductVariant.objects.filter(pk=self.pk).update(sku=self.sku)
 
     def __str__(self):

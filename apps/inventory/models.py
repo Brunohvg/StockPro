@@ -89,8 +89,9 @@ class StockMovement(TenantMixin):
 class ImportBatch(TenantMixin):
     """Batch import record for CSV/XML files"""
     IMPORT_TYPES = [
-        ('CSV_PRODUCTS', 'CSV de Produtos'),
-        ('CSV_VARIANTS', 'CSV de Variações'),
+        ('CSV_PRODUCTS', 'CSV de Produtos (Soma)'),
+        ('CSV_VARIANTS', 'CSV de Variações (Soma)'),
+        ('CSV_INVENTORY', 'CSV de Inventário (Sobrescreve)'),
         ('XML_NFE', 'XML de NF-e'),
     ]
     STATUS_CHOICES = [

@@ -62,7 +62,18 @@
                             </div>
                         </label>
 
-                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-amber-50 transition-all border-slate-100 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 group">
+                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-emerald-50 transition-all border-slate-100 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/50 group border-dashed">
+                            <input type="radio" name="type" value="CSV_INVENTORY" class="hidden" onchange="toggleTemplateLink(this.value)">
+                            <div class="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-has-[:checked]:text-emerald-600 group-has-[:checked]:border-emerald-200 group-hover:scale-110 transition-all shadow-sm">
+                                <i data-lucide="clipboard-check" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <span class="block text-sm font-black text-slate-900 leading-tight">Modo Inventário</span>
+                                <span class="block text-[10px] text-emerald-500 font-black uppercase tracking-tight italic">Sobrescreve Estoque</span>
+                            </div>
+                        </label>
+
+                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-amber-50 transition-all border-slate-100 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 group md:col-span-2">
                             <input type="radio" name="type" value="XML_NFE" class="hidden" onchange="toggleTemplateLink(this.value)">
                             <div class="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-has-[:checked]:text-amber-600 group-has-[:checked]:border-amber-200 group-hover:scale-110 transition-all shadow-sm">
                                 <i data-lucide="file-code" class="w-6 h-6"></i>
@@ -72,6 +83,21 @@
                                 <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-tight">Importação de NF-e</span>
                             </div>
                         </label>
+                    </div>
+
+                    <div id="inventory-alert" class="hidden mt-6 p-6 bg-emerald-50 border border-emerald-100 rounded-[2rem] border-dashed animate-in zoom-in duration-300">
+                        <div class="flex gap-4">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                                <i data-lucide="zap" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-emerald-900 mb-1 tracking-tight">MODO INVENTÁRIO ATIVADO</h4>
+                                <p class="text-[11px] text-emerald-700/80 font-bold leading-relaxed">
+                                    Atenção: Os valores desta planilha **substituirão** o saldo atual.
+                                    O sistema ajustará as diferenças automaticamente para bater com seu arquivo.
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="template-link-container" class="mt-4 flex animate-in fade-in duration-500">
@@ -166,12 +192,20 @@
 
     function toggleTemplateLink(value) {
         const container = document.getElementById('template-link-container');
-        if (value === 'CSV_PRODUCTS') {
+        const alert = document.getElementById('inventory-alert');
+
+        if (value === 'CSV_PRODUCTS' || value === 'CSV_INVENTORY') {
             container.classList.remove('hidden');
             container.classList.add('flex');
         } else {
             container.classList.add('hidden');
             container.classList.remove('flex');
+        }
+
+        if (value === 'CSV_INVENTORY') {
+            alert.classList.remove('hidden');
+        } else {
+            alert.classList.add('hidden');
         }
     }
 

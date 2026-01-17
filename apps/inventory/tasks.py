@@ -215,16 +215,33 @@ def process_csv_v10(batch):
                         defaults=product_defaults
                     )
 
-                    if initial_stock > 0:
-                        StockService.create_movement(
-                            tenant=tenant,
-                            user=batch.user,
-                            product=product,
-                            movement_type='IN',
-                            quantity=initial_stock,
-                            reason="Carga inicial via CSV",
-                            unit_cost=product.avg_unit_cost
-                        )
+                    if initial_stock > 0 or batch.type == 'CSV_INVENTORY':
+                        # Se for Modo Inventário, o ajuste deve ser ABSOLUTO
+                        if batch.type == 'CSV_INVENTORY':
+                            # No Modo Inventário, ignoramos se o stock na planilha é 0 ou nulo de propósito (pode ser contagem literal 0)
+                            stock_to_set = int(row.get('stock', 0)) if pd.notna(row.get('stock')) else 0
+
+                            # Só cria movimento se o estoque for diferente do atual para evitar logs inúteis
+                            if product.current_stock != stock_to_set:
+                                StockService.create_movement(
+                                    tenant=tenant,
+                                    user=batch.user,
+                                    product=product,
+                                    movement_type='ADJ',
+                                    quantity=stock_to_set, # ADJ no StockService é absoluto
+                                    reason="Ajuste via Inventário (Planilha)",
+                                    unit_cost=product.avg_unit_cost
+                                )
+                        elif initial_stock > 0:
+                            StockService.create_movement(
+                                tenant=tenant,
+                                user=batch.user,
+                                product=product,
+                                movement_type='IN',
+                                quantity=initial_stock,
+                                reason="Carga inicial via CSV",
+                                unit_cost=product.avg_unit_cost
+                            )
 
                     stats['simple'] += 1
                 else:
@@ -287,16 +304,29 @@ def process_csv_v10(batch):
 
                 # Set stock
                 initial_stock = int(row.get('stock', 0)) if pd.notna(row.get('stock')) else 0
-                if initial_stock > 0:
-                    StockService.create_movement(
-                        tenant=tenant,
-                        user=batch.user,
-                        variant=variant,
-                        movement_type='IN',
-                        quantity=initial_stock,
-                        reason="Carga inicial via CSV",
-                        unit_cost=variant.avg_unit_cost
-                    )
+                if initial_stock > 0 or batch.type == 'CSV_INVENTORY':
+                    if batch.type == 'CSV_INVENTORY':
+                        stock_to_set = initial_stock
+                        if variant.current_stock != stock_to_set:
+                            StockService.create_movement(
+                                tenant=tenant,
+                                user=batch.user,
+                                variant=variant,
+                                movement_type='ADJ',
+                                quantity=stock_to_set,
+                                reason="Ajuste via Inventário (Planilha)",
+                                unit_cost=variant.avg_unit_cost
+                            )
+                    elif initial_stock > 0:
+                        StockService.create_movement(
+                            tenant=tenant,
+                            user=batch.user,
+                            variant=variant,
+                            movement_type='IN',
+                            quantity=initial_stock,
+                            reason="Carga inicial via CSV",
+                            unit_cost=variant.avg_unit_cost
+                        )
 
                 stats['variant'] += 1
 
