@@ -1,3 +1,4 @@
+# apps/core/management/commands/seed_db.py
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from apps.tenants.models import Tenant, Plan
@@ -6,11 +7,9 @@ from apps.core.models import SystemSetting
 from decouple import config
 
 class Command(BaseCommand):
-    help = 'Inicializa Planos, Tenant do Sistema e Superusuário'
+    help = 'Popula o banco de dados com dados iniciais (Planos, Tenant e Superuser)'
 
     def handle(self, *args, **options):
-        self.stdout.write('🔄 Iniciando seed_db...')
-
         # 1. Criar Planos
         plans = [
             {'name': 'GRATUITO', 'display_name': 'Plano Gratuito', 'price': 0, 'max_products': 50, 'max_users': 2},
@@ -19,18 +18,20 @@ class Command(BaseCommand):
             {'name': 'PREMIUM', 'display_name': 'Plano Premium', 'price': 197.00, 'max_products': 10000, 'max_users': 50}
         ]
 
-        for p in plans:
-            Plan.objects.get_or_create(name=p['name'], defaults=p)
+        for p_data in plans:
+            Plan.objects.get_or_create(name=p_data['name'], defaults=p_data)
+        self.stdout.write(self.style.SUCCESS('✅ Planos criados/atualizados.'))
 
-        # 2. Criar Tenant do Admin
+        # 2. Criar Tenant "Sistema Gestor" (para o Admin)
         plan_premium = Plan.objects.get(name='PREMIUM')
         tenant, _ = Tenant.objects.get_or_create(
             name='Sistema Gestor',
             defaults={'plan': plan_premium, 'subscription_status': 'ACTIVE'}
         )
-        SystemSetting.get_settings(tenant)
+        SystemSetting.get_settings(tenant) # Garante settings
+        self.stdout.write(self.style.SUCCESS(f'✅ Tenant "{tenant.name}" verificado.'))
 
-        # 3. Criar Superusuário (Lendo do .env)
+        # 3. Criar Superusuário (pegando do .env)
         User = get_user_model()
         u = config('DJANGO_SUPERUSER_USERNAME', default='admin')
         e = config('DJANGO_SUPERUSER_EMAIL', default='admin@example.com')
@@ -38,9 +39,12 @@ class Command(BaseCommand):
 
         if not User.objects.filter(username=u).exists():
             user = User.objects.create_superuser(u, e, p)
+            # Vincula o superuser ao tenant do sistema
             TenantMembership.objects.create(
-                user=user, tenant=tenant, role=MembershipRole.OWNER
+                user=user,
+                tenant=tenant,
+                role=MembershipRole.OWNER
             )
             self.stdout.write(self.style.SUCCESS(f'✅ Superuser "{u}" criado com sucesso!'))
         else:
-            self.stdout.write(self.style.WARNING(f'ℹ️ Superuser "{u}" já existe.'))
+            self.stdout.write(self.style.WARNING(f'⚠️ Superuser "{u}" já existe.'))

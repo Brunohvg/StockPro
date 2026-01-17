@@ -14,6 +14,11 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/app/'
 LOGOUT_REDIRECT_URL = '/'
 
+AUTHENTICATION_BACKENDS = [
+    'apps.accounts.backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 # Admin Configuration
 ADMIN_URL = config('ADMIN_URL', default='admin/')
 ADMIN_URL = ADMIN_URL.strip('/')
@@ -151,7 +156,9 @@ USE_X_FORWARDED_PORT = True
 
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_REDIS_BACKEND_USE_SSL = False
-CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'socket_timeout': 30,
+    'socket_connect_timeout': 30,
     'retry_policy': {
         'timeout': 5.0,
         'max_retries': 3,

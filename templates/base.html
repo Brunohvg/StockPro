@@ -148,6 +148,13 @@
                                 Locais de Estoque
                             </a>
 
+                            {% if request.membership.role == 'OWNER' %}
+                            <a href="{% url 'tenants:billing' %}" class="group flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all {% if request.resolver_match.url_name == 'billing' %}bg-indigo-600 text-white shadow-lg shadow-indigo-600/20{% else %}text-slate-400 hover:bg-slate-800 hover:text-white{% endif %}">
+                                <i data-lucide="credit-card" class="mr-3 flex-shrink-0 h-5 w-5"></i>
+                                Plano e Faturamento
+                            </a>
+                            {% endif %}
+
                              <a href="{% url 'core:system_settings' %}" class="group flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all {% if request.resolver_match.url_name == 'system_settings' %}bg-rose-600 text-white shadow-lg shadow-rose-600/20{% else %}text-slate-400 hover:bg-slate-800 hover:text-white{% endif %}">
                                 <i data-lucide="settings" class="mr-3 flex-shrink-0 h-5 w-5"></i>
                                 Configurações
