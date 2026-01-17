@@ -1,39 +1,71 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block content %}
-<div class="space-y-8 pb-20">
-    <div class="flex items-center justify-between border-b border-slate-100 pb-6">
-        <div>
-            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Business Intelligence</h1>
-            <p class="text-slate-500 font-medium">Insights estratégicos e análise de performance do inventário.</p>
-        </div>
-        <div class="flex items-center gap-3">
-            <button onclick="window.print()" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm">
-                <i data-lucide="printer" class="w-4 h-4 text-slate-400"></i> Exportar Dados
-            </button>
+<div class="space-y-8 pb-12">
+
+    <!-- Hero Header -->
+    <div class="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 p-8 md:p-12 text-white">
+        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"100\" height=\"100\" viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cpath d=\"M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z\" fill=\"%23ffffff\" fill-opacity=\"0.03\" fill-rule=\"evenodd\"/%3E%3C/svg%3E')]"></div>
+        <div class="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-purple-500/20 to-transparent rounded-full blur-3xl"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-indigo-500/20 to-transparent rounded-full blur-3xl"></div>
+
+        <div class="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-12 h-12 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                        <i data-lucide="bar-chart-3" class="w-6 h-6 text-indigo-300"></i>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 uppercase tracking-widest border border-emerald-500/20">
+                        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block mr-1 animate-pulse"></span>
+                        Ao Vivo
+                    </span>
+                </div>
+                <h1 class="text-3xl md:text-4xl font-black tracking-tight">Business Intelligence</h1>
+                <p class="mt-2 text-white/50 font-medium">Análise estratégica e insights do seu inventário.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button hx-get="." hx-target="main" hx-select="main > div" hx-swap="innerHTML" class="px-5 py-3 bg-white/10 backdrop-blur-sm rounded-xl hover:bg-white/20 transition-all font-bold text-sm flex items-center gap-2 border border-white/10">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    Atualizar
+                </button>
+                <button onclick="window.print()" class="px-5 py-3 bg-white text-slate-900 rounded-xl hover:bg-white/90 transition-all font-bold text-sm flex items-center gap-2 shadow-lg">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    Exportar
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- AI Insights Section -->
     {% if ai_insights %}
-    <div class="bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 rounded-[2rem] p-8 text-white shadow-2xl shadow-indigo-500/30 relative overflow-hidden">
-        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.03\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50"></div>
-        <div class="relative">
-            <div class="flex items-center gap-3 mb-6">
-                <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                    <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i>
+    <div class="bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500 rounded-[2rem] p-1 shadow-2xl shadow-indigo-500/20">
+        <div class="bg-slate-950/90 backdrop-blur-xl rounded-[1.85rem] p-6 md:p-8">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/30">
+                        <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-white font-black">Insights da IA</h2>
+                        <p class="text-white/40 text-xs">Análise inteligente em tempo real</p>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-lg font-black">Insights da IA</h2>
-                    <p class="text-white/60 text-xs">Análise inteligente do seu estoque</p>
-                </div>
+                <button hx-get="." hx-target="main" hx-select="main > div" hx-swap="innerHTML" class="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/60 hover:text-white text-xs font-bold transition-all flex items-center gap-1 border border-white/10">
+                    <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                    Regenerar
+                </button>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {% for insight in ai_insights %}
-                <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:bg-white/15 transition-all">
-                    <div class="text-2xl mb-2">{{ insight.icon }}</div>
-                    <h4 class="font-bold text-sm mb-1">{{ insight.title }}</h4>
-                    <p class="text-white/70 text-xs leading-relaxed">{{ insight.text }}</p>
+                <div class="group relative overflow-hidden rounded-xl p-5 border transition-all hover:scale-[1.02]
+                    {% if insight.type == 'success' %}bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40
+                    {% elif insight.type == 'warning' %}bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40
+                    {% elif insight.type == 'danger' %}bg-rose-500/10 border-rose-500/20 hover:border-rose-500/40
+                    {% else %}bg-white/5 border-white/10 hover:border-white/20{% endif %}">
+                    <div class="text-3xl mb-3">{{ insight.icon }}</div>
+                    <h4 class="font-bold text-white text-sm mb-1">{{ insight.title }}</h4>
+                    <p class="text-white/60 text-xs leading-relaxed">{{ insight.text }}</p>
                 </div>
                 {% endfor %}
             </div>
@@ -41,90 +73,149 @@
     </div>
     {% endif %}
 
-    <!-- Quick Stats -->
+    <!-- Quick Stats with Animations -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <div class="text-2xl font-black text-slate-900">R$ {{ total_value|floatformat:0 }}</div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Valor em Estoque</div>
+        <div class="group bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 transition-all relative overflow-hidden">
+            <div class="absolute -right-6 -top-6 w-20 h-20 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
+            <div class="relative">
+                <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-emerald-500/30">
+                    <i data-lucide="wallet" class="w-5 h-5 text-white"></i>
+                </div>
+                <div class="text-2xl font-black text-slate-900">R$ {{ total_value|floatformat:2|intcomma }}</div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Valor em Estoque</div>
+            </div>
         </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <div class="text-2xl font-black {% if low_stock_count > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ low_stock_count }}</div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Estoque Crítico</div>
+
+        <div class="group bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/10 transition-all relative overflow-hidden {% if low_stock_count > 0 %}border-rose-200{% endif %}">
+            <div class="absolute -right-6 -top-6 w-20 h-20 bg-gradient-to-br from-rose-100 to-pink-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
+            <div class="relative">
+                <div class="w-10 h-10 bg-gradient-to-br {% if low_stock_count > 0 %}from-rose-500 to-pink-600{% else %}from-emerald-500 to-teal-600{% endif %} rounded-xl flex items-center justify-center mb-3 shadow-lg {% if low_stock_count > 0 %}shadow-rose-500/30{% else %}shadow-emerald-500/30{% endif %}">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-white"></i>
+                </div>
+                <div class="text-2xl font-black {% if low_stock_count > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ low_stock_count }}</div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Estoque Crítico</div>
+            </div>
         </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <div class="text-2xl font-black text-emerald-600">+{{ entries_week }}</div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Entradas (7d)</div>
+
+        <div class="group bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 transition-all relative overflow-hidden">
+            <div class="absolute -right-6 -top-6 w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
+            <div class="relative">
+                <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-indigo-500/30">
+                    <i data-lucide="arrow-up-circle" class="w-5 h-5 text-white"></i>
+                </div>
+                <div class="text-2xl font-black text-emerald-600">+{{ entries_week|intcomma }}</div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Entradas (7 dias)</div>
+            </div>
         </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <div class="text-2xl font-black text-rose-600">-{{ exits_week }}</div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Saídas (7d)</div>
+
+        <div class="group bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 transition-all relative overflow-hidden">
+            <div class="absolute -right-6 -top-6 w-20 h-20 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
+            <div class="relative">
+                <div class="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-amber-500/30">
+                    <i data-lucide="arrow-down-circle" class="w-5 h-5 text-white"></i>
+                </div>
+                <div class="text-2xl font-black text-rose-600">-{{ exits_week|intcomma }}</div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Saídas (7 dias)</div>
+            </div>
         </div>
     </div>
 
-    <!-- Charts Row 1 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <!-- Composition by Category -->
-        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-            <div class="flex items-center justify-between">
-                <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest">Valor por Categoria</h3>
-                <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-500"></i>
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Category Chart -->
+        <div class="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                        <i data-lucide="pie-chart" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-slate-900">Valor por Categoria</h3>
+                        <p class="text-xs text-slate-400">Distribuição do capital em estoque</p>
+                    </div>
+                </div>
             </div>
-            <div class="h-[300px] flex items-center justify-center">
+            <div class="h-[280px] flex items-center justify-center">
                 <canvas id="categoryChart"></canvas>
             </div>
         </div>
 
-        <!-- Movement Trend -->
-        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-            <div class="flex items-center justify-between">
-                <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest">Tendência de Movimentação (15d)</h3>
-                <i data-lucide="trending-up" class="w-5 h-5 text-emerald-500"></i>
+        <!-- Trend Chart -->
+        <div class="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                        <i data-lucide="trending-up" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-slate-900">Tendência de Giro</h3>
+                        <p class="text-xs text-slate-400">Últimos 15 dias</p>
+                    </div>
+                </div>
             </div>
-            <div class="h-[300px]">
+            <div class="h-[280px]">
                 <canvas id="trendChart"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- ABC Analysis Table -->
-    <div class="bg-slate-900 rounded-[2.5rem] p-8 lg:p-12 text-white shadow-2xl relative overflow-hidden">
-        <div class="absolute -right-20 -top-20 w-80 h-80 bg-white/5 rounded-full"></div>
-        <div class="relative z-10 space-y-8">
-            <div class="flex items-center gap-4 border-b border-white/10 pb-6">
-                <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                    <i data-lucide="crown" class="w-6 h-6 text-amber-400"></i>
+    <!-- ABC Analysis -->
+    <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[2rem] p-8 lg:p-10 text-white shadow-2xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-purple-500/10 via-transparent to-transparent rounded-full"></div>
+        <div class="absolute bottom-0 left-0 w-[300px] h-[300px] bg-gradient-to-tr from-indigo-500/10 via-transparent to-transparent rounded-full"></div>
+
+        <div class="relative">
+            <div class="flex items-center gap-4 mb-8">
+                <div class="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/30">
+                    <i data-lucide="crown" class="w-6 h-6 text-white"></i>
                 </div>
                 <div>
-                    <h3 class="text-xl font-bold">Análise Curva ABC (Top 10 Valor)</h3>
-                    <p class="text-sm text-white/50">Produtos com maior capital imobilizado no estoque.</p>
+                    <h3 class="text-xl font-black">Curva ABC - Top 10</h3>
+                    <p class="text-sm text-white/40">Produtos com maior capital imobilizado</p>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-4">
+            <div class="space-y-3">
                 {% for product in top_products %}
-                <div class="flex items-center justify-between bg-white/5 p-5 rounded-2xl hover:bg-white/10 transition-all group">
-                    <div class="flex items-center gap-4">
-                        <div class="text-lg font-black text-white/20 group-hover:text-white/40 transition-colors">#{{ forloop.counter }}</div>
-                        <div>
-                            <div class="text-sm font-bold">{{ product.name }}</div>
-                            <div class="text-[10px] font-mono text-white/40">{{ product.sku }}</div>
-                        </div>
+                <div class="flex items-center gap-4 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all group">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-xl
+                        {% if forloop.counter == 1 %}bg-gradient-to-br from-amber-400 to-yellow-500 shadow-lg shadow-amber-500/30
+                        {% elif forloop.counter == 2 %}bg-gradient-to-br from-slate-300 to-slate-400 shadow-lg shadow-slate-400/30
+                        {% elif forloop.counter == 3 %}bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/30
+                        {% else %}bg-white/10{% endif %}">
+                        {% if forloop.counter <= 3 %}
+                        <span class="text-lg">{% if forloop.counter == 1 %}🥇{% elif forloop.counter == 2 %}🥈{% else %}🥉{% endif %}</span>
+                        {% else %}
+                        <span class="text-sm font-black text-white/40">#{{ forloop.counter }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-sm truncate group-hover:text-indigo-300 transition-colors">{{ product.name }}</div>
+                        <div class="text-[10px] font-mono text-white/30">{{ product.sku }}</div>
                     </div>
                     <div class="text-right">
-                        <div class="text-sm font-black text-emerald-400">R$ {{ product.stock_value|floatformat:2 }}</div>
-                        <div class="text-[10px] font-bold text-white/40 uppercase">{{ product.current_stock }} {{ product.uom }} em estoque</div>
+                        <div class="font-black text-emerald-400">R$ {{ product.stock_value|floatformat:2|intcomma }}</div>
+                        <div class="text-[10px] text-white/30">{{ product.current_stock|intcomma }} un</div>
                     </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-12 text-white/40">
+                    <i data-lucide="package-x" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                    <p>Nenhum produto cadastrado ainda.</p>
                 </div>
                 {% endfor %}
             </div>
         </div>
     </div>
+
 </div>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // 1. Category Chart
+    lucide.createIcons();
+
+    // Category Doughnut Chart
     const ctxCategory = document.getElementById('categoryChart').getContext('2d');
     new Chart(ctxCategory, {
         type: 'doughnut',
@@ -133,26 +224,35 @@
             datasets: [{
                 data: {{ category_values|safe }},
                 backgroundColor: [
-                    '#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'
+                    '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
                 ],
                 borderWidth: 0,
-                cutout: '70%'
+                cutout: '75%',
+                borderRadius: 8,
+                spacing: 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom', labels: { usePointStyle: true, font: { weight: 'bold', size: 10 } } }
+                legend: {
+                    position: 'right',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 15,
+                        font: { weight: 'bold', size: 11 }
+                    }
+                }
             }
         }
     });
 
-    // 2. Trend Chart
+    // Trend Line Chart
     const ctxTrend = document.getElementById('trendChart').getContext('2d');
     const trendData = {{ movements_trend|safe }};
 
-    // Group by date
     const labels = [...new Set(trendData.map(d => d.created_at__date))].sort();
     const inData = labels.map(l => {
         const found = trendData.find(d => d.created_at__date === l && d.type === 'IN');
@@ -166,7 +266,7 @@
     new Chart(ctxTrend, {
         type: 'line',
         data: {
-            labels: labels,
+            labels: labels.map(l => l.split('-').slice(1).join('/')),
             datasets: [
                 {
                     label: 'Entradas',
@@ -174,7 +274,10 @@
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#10b981'
                 },
                 {
                     label: 'Saídas',
@@ -182,19 +285,27 @@
                     borderColor: '#ef4444',
                     backgroundColor: 'rgba(239, 68, 68, 0.1)',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#ef4444'
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             scales: {
-                y: { beginAtZero: true, grid: { display: false } },
-                x: { grid: { display: false } }
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { weight: 'bold' } } },
+                x: { grid: { display: false }, ticks: { font: { weight: 'bold' } } }
             },
             plugins: {
-                legend: { position: 'top', labels: { usePointStyle: true, font: { weight: 'bold', size: 10 } } }
+                legend: {
+                    position: 'top',
+                    align: 'end',
+                    labels: { usePointStyle: true, font: { weight: 'bold', size: 11 } }
+                }
             }
         }
     });

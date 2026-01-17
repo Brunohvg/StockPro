@@ -101,10 +101,33 @@ def inventory_reports(request):
     from apps.products.models import ProductVariant, ProductType
     from decimal import Decimal
 
-    # Category breakdown
-    category_qs = Category.objects.filter(tenant=tenant).annotate(
-        total_value=Sum(F('products__current_stock') * F('products__avg_unit_cost'), output_field=models.DecimalField())
-    ).values('name', 'total_value').order_by('-total_value')
+    # Category breakdown (include variants for VARIABLE products)
+    categories = Category.objects.filter(tenant=tenant)
+    category_data = []
+    for cat in categories:
+        # Stock value from SIMPLE products
+        simple_val = Product.objects.filter(
+            category=cat,
+            product_type=ProductType.SIMPLE,
+            is_active=True
+        ).aggregate(total=Sum(F('current_stock') * F('avg_unit_cost')))['total'] or 0
+
+        # Stock value from VARIANTS of VARIABLE products
+        variant_val = ProductVariant.objects.filter(
+            product__category=cat,
+            is_active=True
+        ).aggregate(total=Sum(F('current_stock') * F('avg_unit_cost')))['total'] or 0
+
+        total_cat_value = simple_val + variant_val
+        if total_cat_value > 0:
+            category_data.append({
+                'name': cat.name,
+                'total_value': float(total_cat_value)
+            })
+
+    category_data.sort(key=lambda x: x['total_value'], reverse=True)
+    category_labels = [c['name'] for c in category_data]
+    category_values = [c['total_value'] for c in category_data]
 
     end_date = timezone.now().date()
     start_date = end_date - timezone.timedelta(days=14)
@@ -116,9 +139,22 @@ def inventory_reports(request):
         total_qty=Sum('quantity')
     ).order_by('created_at__date'))
 
-    top_products = Product.objects.filter(tenant=tenant).annotate(
-        stock_value=F('current_stock') * F('avg_unit_cost')
-    ).order_by('-stock_value')[:10]
+    # Top products by stock value (include variants for VARIABLE products)
+    all_products = Product.objects.filter(tenant=tenant, is_active=True).prefetch_related('variants')
+    products_with_value = []
+    for p in all_products:
+        value = p.total_stock_value  # This property handles both SIMPLE and VARIABLE
+        if value and value > 0:
+            products_with_value.append({
+                'product': p,
+                'stock_value': value,
+                'name': p.name,
+                'sku': p.sku,
+                'current_stock': p.total_stock,
+                'uom': p.uom,
+            })
+    products_with_value.sort(key=lambda x: x['stock_value'], reverse=True)
+    top_products = products_with_value[:10]
 
     # Collect data for AI insights
     products = Product.objects.filter(tenant=tenant, is_active=True)
@@ -157,12 +193,12 @@ def inventory_reports(request):
         'low_stock_count': low_stock_count,
         'entries_week': entries_week,
         'exits_week': exits_week,
-        'category_data': list(category_qs[:5]),
+        'category_data': category_data[:5],
     })
 
     return render(request, 'reports/reports.html', {
-        'category_labels': [c['name'] for c in category_qs if c['total_value']],
-        'category_values': [float(c['total_value'] or 0) for c in category_qs if c['total_value']],
+        'category_labels': category_labels,
+        'category_values': category_values,
         'top_products': top_products,
         'movements_trend': movements_trend,
         'ai_insights': ai_insights,
