@@ -16,7 +16,8 @@ LOGOUT_REDIRECT_URL = '/'
 
 # Admin Configuration
 ADMIN_URL = config('ADMIN_URL', default='admin/')
-if not ADMIN_URL.endswith('/'):
+ADMIN_URL = ADMIN_URL.strip('/')
+if ADMIN_URL:
     ADMIN_URL += '/'
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
@@ -130,7 +131,7 @@ THOUSAND_SEPARATOR = '.'
 DECIMAL_SEPARATOR = ','
 NUMBER_GROUPING = 3
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
@@ -159,6 +160,15 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
         'interval_max': 0.5,
     }
 }
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-expired-trials-daily': {
+        'task': 'apps.tenants.tasks.cleanup_expired_trials',
+        'schedule': crontab(hour=3, minute=0),
+    },
+}
+
 # AI Integration (Grok / X.AI)
 XAI_API_KEY = config('XAI_API_KEY', default='')
 XAI_MODEL = 'grok-2-latest'
