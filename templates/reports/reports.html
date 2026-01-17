@@ -14,6 +14,53 @@
         </div>
     </div>
 
+    <!-- AI Insights Section -->
+    {% if ai_insights %}
+    <div class="bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 rounded-[2rem] p-8 text-white shadow-2xl shadow-indigo-500/30 relative overflow-hidden">
+        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.03\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50"></div>
+        <div class="relative">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black">Insights da IA</h2>
+                    <p class="text-white/60 text-xs">Análise inteligente do seu estoque</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {% for insight in ai_insights %}
+                <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:bg-white/15 transition-all">
+                    <div class="text-2xl mb-2">{{ insight.icon }}</div>
+                    <h4 class="font-bold text-sm mb-1">{{ insight.title }}</h4>
+                    <p class="text-white/70 text-xs leading-relaxed">{{ insight.text }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <div class="text-2xl font-black text-slate-900">R$ {{ total_value|floatformat:0 }}</div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Valor em Estoque</div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <div class="text-2xl font-black {% if low_stock_count > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ low_stock_count }}</div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Estoque Crítico</div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <div class="text-2xl font-black text-emerald-600">+{{ entries_week }}</div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Entradas (7d)</div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <div class="text-2xl font-black text-rose-600">-{{ exits_week }}</div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Saídas (7d)</div>
+        </div>
+    </div>
+
     <!-- Charts Row 1 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <!-- Composition by Category -->

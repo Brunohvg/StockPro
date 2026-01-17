@@ -38,6 +38,7 @@
                     <tr>
                         <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
                         <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Produto/Variação</th>
+                        <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Local</th>
                         <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>
                         <th class="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Qtd</th>
                         <th class="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo</th>
@@ -69,6 +70,12 @@
                             {% else %}
                             <span class="text-slate-400">(Removido)</span>
                             {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                                <i data-lucide="map-pin" class="w-3 h-3 text-slate-400"></i>
+                                {{ mov.location.name|default:'Global' }}
+                            </span>
                         </td>
                         <td class="px-6 py-4">
                              <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight

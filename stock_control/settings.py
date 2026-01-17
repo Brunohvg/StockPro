@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.products',
     'apps.inventory',
+    'apps.partners',  # V2: Fornecedores e Mapeamento de Produtos
     'apps.reports',
     'apps.core',
 ]
@@ -140,3 +141,6 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
         'interval_max': 0.5,
     }
 }
+# AI Integration (Grok / X.AI)
+XAI_API_KEY = config('XAI_API_KEY', default='')
+XAI_MODEL = 'grok-2-latest'

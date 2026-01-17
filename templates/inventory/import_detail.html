@@ -25,9 +25,14 @@
                     <span class="text-sm font-black text-rose-700">Erro Fatal</span>
                 {% else %}
                     <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                    <span class="text-sm font-black text-amber-700">Processando...</span>
+                    <span class="text-sm font-black text-amber-700">Processando... ({{ batch.progress_percent }}%)</span>
                 {% endif %}
             </div>
+            {% if batch.status == 'PROCESSING' %}
+            <div class="mt-4 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-indigo-500" style="width: {{ batch.progress_percent }}%"></div>
+            </div>
+            {% endif %}
         </div>
         <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
             <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Data de Início</p>

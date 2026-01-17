@@ -75,9 +75,27 @@ class Product(TenantMixin):
     )
     photo = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="Foto")
     description = models.TextField(blank=True, verbose_name="Descrição")
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    brand = models.ForeignKey('Brand', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     uom = models.CharField(max_length=10, default='UN', verbose_name="Unidade")
+
+    # Novas Atribuições V2
+    default_supplier = models.ForeignKey(
+        'partners.Supplier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='default_products',
+        verbose_name="Fornecedor Padrão"
+    )
+    default_location = models.ForeignKey(
+        'inventory.Location',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='default_products',
+        verbose_name="Local de Estoque Padrão"
+    )
 
     # Campos para SIMPLE - ignorados se VARIABLE
     barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")
@@ -136,6 +154,34 @@ class Product(TenantMixin):
         if self.is_variable:
             return any(v.is_low_stock for v in self.variants.all())
         return self.current_stock <= self.minimum_stock
+
+    @property
+    def can_be_safely_deleted(self):
+        """
+        Produto pode ser excluído com segurança se:
+        - Não possui movimentações de SAÍDA (OUT)
+        - Apenas entradas (IN) ou ajustes (ADJ)
+
+        Isso permite desfazer imports errados sem corromper histórico de vendas.
+        """
+        from apps.inventory.models import StockMovement
+
+        if self.is_variable:
+            # Para VARIABLE, verificar todas as variantes
+            for variant in self.variants.all():
+                if StockMovement.objects.filter(variant=variant, type='OUT').exists():
+                    return False
+            return True
+        else:
+            # Para SIMPLE, verificar movimentações do próprio produto
+            return not StockMovement.objects.filter(product=self, type='OUT').exists()
+
+    @property
+    def delete_block_reason(self):
+        """Retorna o motivo pelo qual não pode ser excluído, ou None se pode."""
+        if self.can_be_safely_deleted:
+            return None
+        return "Este produto possui movimentações de saída e não pode ser excluído."
 
 
 class ProductVariant(TenantMixin):
@@ -201,6 +247,12 @@ class ProductVariant(TenantMixin):
             attr_str = " / ".join([f"{a.value}" for a in attrs])
             return f"{self.product.name} - {attr_str}"
         return self.name or self.sku
+
+    @property
+    def can_be_safely_deleted(self):
+        """Variante pode ser excluída se não possui saídas (OUT)."""
+        from apps.inventory.models import StockMovement
+        return not StockMovement.objects.filter(variant=self, type='OUT').exists()
 
 
 class VariantAttributeValue(models.Model):

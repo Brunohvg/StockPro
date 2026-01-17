@@ -8,16 +8,21 @@ from django.utils.text import slugify
 class Plan(models.Model):
     """Subscription plans with limits"""
     PLAN_TYPES = [
-        ('FREE', 'Free'),
-        ('STARTER', 'Starter'),
-        ('PRO', 'Pro'),
-        ('ENTERPRISE', 'Enterprise'),
+        ('GRATUITO', 'Gratuito'),
+        ('INICIAL', 'Inicial'),
+        ('PROFISSIONAL', 'Profissional'),
+        ('CORPORATIVO', 'Corporativo'),
     ]
     name = models.CharField(max_length=50, choices=PLAN_TYPES, unique=True)
     display_name = models.CharField(max_length=100, default="Plano")
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     max_products = models.PositiveIntegerField(default=50, help_text="Limite de produtos cadastrados")
     max_users = models.PositiveIntegerField(default=3, help_text="Limite de usuários na empresa")
+
+    # AI Features
+    has_ai_matching = models.BooleanField(default=False, help_text="Habilita match inteligente de produtos via IA")
+    has_ai_reconciliation = models.BooleanField(default=False, help_text="Habilita conciliação automática via IA")
+
     features = models.TextField(blank=True, help_text="Lista de features separadas por vírgula")
 
     class Meta:

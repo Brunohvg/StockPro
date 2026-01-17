@@ -11,4 +11,11 @@ urlpatterns = [
     path('imports/new/', views.import_create, name='import_create'),
     path('imports/<uuid:pk>/', views.import_detail, name='import_detail'),
     path('imports/<uuid:pk>/delete/', views.delete_import, name='delete_import'),
+    path('imports/template/', views.download_csv_template, name='download_csv_template'),
+    path('imports/<uuid:pk>/reprocess/', views.import_reprocess, name='import_reprocess'),
+
+    # Locations (V2)
+    path('locations/', views.location_list, name='location_list'),
+    path('locations/add/', views.location_create, name='location_create'),
+    path('locations/<int:pk>/edit/', views.location_edit, name='location_edit'),
 ]

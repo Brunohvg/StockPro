@@ -3,8 +3,125 @@ Stock Service - Business logic for inventory operations (V10)
 Suporta Product (SIMPLE) e ProductVariant (para VARIABLE)
 """
 from django.db import transaction
+from django.conf import settings
+import requests
+import json
+import re
+from decouple import config
 from apps.products.models import Product, ProductVariant, ProductType
 from apps.inventory.models import StockMovement
+
+
+class AIService:
+    """Serviço unificado de IA com suporte a múltiplos provedores (V2+)"""
+
+    @staticmethod
+    def get_providers():
+        return {
+            'groq': config('GROQ_API_KEY', default=''),
+            'gemini': config('GEMINI_API_KEY', default=''),
+            'openai': config('OPENAI_API_KEY', default=''),
+            'xai': config('XAI_API_KEY', default=''),
+        }
+
+    @classmethod
+    def call_ai(cls, prompt: str, schema: str = "json", max_tokens: int = None) -> Optional[str]:
+        """Tenta chamar provedores de IA em ordem de prioridade com FAILOVER real"""
+        keys = cls.get_providers()
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Lista de tentativas na ordem de prioridade
+        attempts = [
+            ('groq', keys['groq'], cls._call_groq),
+            ('gemini', keys['gemini'], cls._call_gemini),
+            ('openai', keys['openai'], cls._call_openai),
+            ('xai', keys['xai'], cls._call_xai),
+        ]
+
+        for name, key, func in attempts:
+            if not key or 'chave' in key: # Pula se vazio ou se for o placeholder "sua_chave..."
+                continue
+
+            try:
+                logger.info(f"Tentando IA: {name}")
+                result = func(key, prompt, schema, max_tokens)
+                if result:
+                    return result
+                logger.warning(f"Provedor {name} retornou vazio. Tentando próximo...")
+            except Exception as e:
+                logger.error(f"Erro no provedor {name}: {str(e)}")
+
+        return None
+
+    @staticmethod
+    def _call_groq(api_key, prompt, schema, max_tokens=None):
+        model = config('GROQ_MODEL', default='llama-3.1-8b-instant')
+        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        response = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": tk,
+                "response_format": {"type": "json_object"} if schema == "json" else None
+            }, timeout=7)
+        if response.status_code == 200:
+            return response.json()['choices'][0]['message']['content']
+
+        import logging
+        logging.getLogger(__name__).error(f"Groq Error {response.status_code}: {response.text}")
+        return None
+
+    @staticmethod
+    def _call_gemini(api_key, prompt, schema, max_tokens=None):
+        model = config('GEMINI_MODEL', default='gemini-1.5-flash')
+        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        response = requests.post(url, json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.1,
+                "max_output_tokens": tk,
+                "response_mime_type": "application/json" if schema == "json" else "text/plain"
+            }
+        }, timeout=10)
+        if response.status_code == 200:
+            return response.json()['candidates'][0]['content']['parts'][0]['text']
+
+        import logging
+        logging.getLogger(__name__).error(f"Gemini Error {response.status_code}: {response.text}")
+        return None
+
+    @staticmethod
+    def _call_openai(api_key, prompt, schema, max_tokens=None):
+        model = config('OPENAI_MODEL', default='gpt-4o-mini')
+        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        response = requests.post("https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": tk,
+                "response_format": {"type": "json_object"} if schema == "json" else None
+            }, timeout=10)
+        return response.json()['choices'][0]['message']['content'] if response.status_code == 200 else None
+
+    @staticmethod
+    def _call_xai(api_key, prompt, schema, max_tokens=None):
+        model = config('XAI_MODEL', default='grok-2-latest')
+        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        response = requests.post("https://api.x.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": tk
+            }, timeout=10)
+        return response.json()['choices'][0]['message']['content'] if response.status_code == 200 else None
 
 
 class StockService:
@@ -21,16 +138,15 @@ class StockService:
         reason='',
         source='MANUAL',
         unit_cost=None,
-        source_doc=None
+        source_doc=None,
+        location_id=None
     ):
         """
         Create a stock movement and update stock.
-
-        Args:
-            product: Product instance (for SIMPLE products)
-            variant: ProductVariant instance (for VARIABLE products)
-            product_sku: SKU string (auto-resolves to product or variant)
         """
+        from decimal import Decimal
+        if unit_cost is not None:
+            unit_cost = Decimal(str(unit_cost))
         # Resolve by SKU if no direct reference
         if product_sku and not product and not variant:
             # Try variant first (more specific)
@@ -54,10 +170,22 @@ class StockService:
             raise ValueError("Deve especificar product, variant ou product_sku.")
 
         # Lock for update
-        if target_type == 'variant':
-            target = ProductVariant.objects.select_for_update().get(pk=target.pk)
-        else:
+        if target_type == 'product':
             target = Product.objects.select_for_update().get(pk=target.pk)
+        else:
+            target = ProductVariant.objects.select_for_update().get(pk=target.pk)
+
+        # Fallback for location_id
+        if not location_id:
+            from apps.inventory.models_v2 import Location
+            if target_type == 'product' and target.default_location_id:
+                location_id = target.default_location_id
+            elif target_type == 'variant' and target.product.default_location_id:
+                location_id = target.product.default_location_id
+            else:
+                default_loc = Location.get_default_for_tenant(tenant)
+                if default_loc:
+                    location_id = default_loc.id
 
         # Calculate new stock
         if movement_type == 'IN':
@@ -91,6 +219,7 @@ class StockService:
             'source': source,
             'unit_cost': unit_cost,
             'source_doc': source_doc,
+            'location_id': location_id,
         }
 
         if target_type == 'variant':

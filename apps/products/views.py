@@ -7,6 +7,8 @@ from django.contrib import messages
 from django.db.models import Q, Sum, Count
 from django.http import JsonResponse
 from django.core.paginator import Paginator
+import json
+import re
 
 from .models import Product, ProductVariant, Category, Brand, AttributeType, VariantAttributeValue, ProductType
 from .forms import ProductForm, ProductVariantForm, QuickVariantForm, AttributeTypeForm
@@ -25,7 +27,7 @@ def product_list(request):
     category = request.GET.get('category', '')
     product_type = request.GET.get('type', '')
     stock_filter = request.GET.get('stock', '')
-    view_mode = request.GET.get('view', 'grid')  # grid or table
+    view_mode = request.GET.get('view', 'table')  # table or grid
 
     if query:
         products = products.filter(
@@ -80,7 +82,7 @@ def product_create(request):
     """Criar novo produto (simples ou variável)"""
     tenant = request.tenant
     if request.method == 'POST':
-        form = ProductForm(request.POST, request.FILES)
+        form = ProductForm(request.POST, request.FILES, tenant=tenant)
         if form.is_valid():
             product = form.save(commit=False)
             product.tenant = tenant
@@ -92,7 +94,7 @@ def product_create(request):
                 return redirect('products:product_detail', pk=product.pk)
             return redirect('products:product_list')
     else:
-        form = ProductForm()
+        form = ProductForm(tenant=tenant)
 
     return render(request, 'products/product_form.html', {
         'form': form,
@@ -107,13 +109,13 @@ def product_edit(request, pk):
     """Editar produto existente"""
     product = get_object_or_404(Product, pk=pk, tenant=request.tenant)
     if request.method == 'POST':
-        form = ProductForm(request.POST, request.FILES, instance=product)
+        form = ProductForm(request.POST, request.FILES, instance=product, tenant=request.tenant)
         if form.is_valid():
             form.save()
             messages.success(request, f"Produto '{product.name}' atualizado!")
             return redirect('products:product_detail', pk=product.pk)
     else:
-        form = ProductForm(instance=product)
+        form = ProductForm(instance=product, tenant=request.tenant)
 
     return render(request, 'products/product_form.html', {
         'form': form,
@@ -171,7 +173,7 @@ def variant_create(request, product_pk):
     attribute_types = AttributeType.objects.filter(tenant=request.tenant)
 
     if request.method == 'POST':
-        form = ProductVariantForm(request.POST, request.FILES)
+        form = ProductVariantForm(request.POST, request.FILES, tenant=request.tenant)
         if form.is_valid():
             variant = form.save(commit=False)
             variant.product = product
@@ -191,7 +193,7 @@ def variant_create(request, product_pk):
             messages.success(request, f"Variação '{variant.display_name}' adicionada!")
             return redirect('products:product_detail', pk=product.pk)
     else:
-        form = ProductVariantForm(initial={
+        form = ProductVariantForm(tenant=request.tenant, initial={
             'name': f"{product.name} - ",
             'avg_unit_cost': product.avg_unit_cost
         })
@@ -212,7 +214,7 @@ def variant_edit(request, pk):
     attribute_types = AttributeType.objects.filter(tenant=request.tenant)
 
     if request.method == 'POST':
-        form = ProductVariantForm(request.POST, request.FILES, instance=variant)
+        form = ProductVariantForm(request.POST, request.FILES, instance=variant, tenant=request.tenant)
         if form.is_valid():
             form.save()
 
@@ -231,7 +233,7 @@ def variant_edit(request, pk):
             messages.success(request, f"Variação atualizada!")
             return redirect('products:product_detail', pk=variant.product.pk)
     else:
-        form = ProductVariantForm(instance=variant)
+        form = ProductVariantForm(instance=variant, tenant=request.tenant)
 
     # Pré-carregar valores de atributos
     attr_values = {av.attribute_type_id: av.value for av in variant.attribute_values.all()}
@@ -254,8 +256,19 @@ def variant_delete(request, pk):
     product_pk = variant.product.pk
 
     if request.method == 'POST':
+        from apps.inventory.models import StockMovement
+
+        if not variant.can_be_safely_deleted:
+            messages.error(
+                request,
+                "Não é possível excluir esta variação pois existem movimentações de saída vinculadas."
+            )
+            return redirect('products:product_detail', pk=product_pk)
+
+        # Excluir movimentações primeiro
+        StockMovement.objects.filter(variant=variant).delete()
         variant.delete()
-        messages.success(request, "Variação removida.")
+        messages.success(request, "Variação e suas movimentações foram removidas!")
 
     return redirect('products:product_detail', pk=product_pk)
 
@@ -263,14 +276,87 @@ def variant_delete(request, pk):
 @login_required
 @trial_allows_read
 def product_delete(request, pk):
-    """Excluir produto (e todas as variações)"""
+    """
+    Excluir produto com verificação de segurança.
+    - Só exclui se não houver movimentações de SAÍDA (OUT)
+    - Se tiver apenas entradas, exclui as movimentações junto
+    """
+    from apps.inventory.models import StockMovement
+
     product = get_object_or_404(Product, pk=pk, tenant=request.tenant)
+
     if request.method == 'POST':
         name = product.name
-        product.delete()
-        messages.success(request, f"Produto '{name}' removido.")
-        return redirect('products:product_list')
+
+        if not product.can_be_safely_deleted:
+            messages.error(
+                request,
+                f"Não é possível excluir '{name}' pois existem movimentações de saída vinculadas. "
+                f"Desative o produto ao invés de excluí-lo."
+            )
+            return redirect('products:product_detail', pk=pk)
+
+        try:
+            # Excluir movimentações de entrada/ajuste primeiro
+            if product.is_variable:
+                for variant in product.variants.all():
+                    StockMovement.objects.filter(variant=variant).delete()
+            else:
+                StockMovement.objects.filter(product=product).delete()
+
+            # Agora pode excluir o produto
+            product.delete()
+            messages.success(request, f"Produto '{name}' e suas movimentações foram removidos com sucesso!")
+            return redirect('products:product_list')
+
+        except Exception as e:
+            messages.error(request, f"Erro ao excluir: {str(e)}")
+            return redirect('products:product_detail', pk=pk)
+
     return redirect('products:product_detail', pk=pk)
+
+# ============== BULK DELETE ==============
+
+@login_required
+def bulk_delete(request):
+    """
+    Exclusão em massa de produtos selecionados.
+    Só exclui produtos sem movimentações de saída.
+    """
+    if request.method != 'POST':
+        return redirect('products:product_list')
+
+    from apps.inventory.models import StockMovement
+
+    product_ids = request.POST.getlist('product_ids')
+
+    if not product_ids:
+        messages.warning(request, "Nenhum produto selecionado.")
+        return redirect('products:product_list')
+
+    products = Product.objects.filter(tenant=request.tenant, pk__in=product_ids)
+
+    deleted_count = 0
+    skipped_count = 0
+
+    for product in products:
+        if product.can_be_safely_deleted:
+            if product.is_variable:
+                for variant in product.variants.all():
+                    StockMovement.objects.filter(variant=variant).delete()
+            else:
+                StockMovement.objects.filter(product=product).delete()
+            product.delete()
+            deleted_count += 1
+        else:
+            skipped_count += 1
+
+    if deleted_count > 0:
+        messages.success(request, f"✅ {deleted_count} produto(s) excluído(s)!")
+    if skipped_count > 0:
+        messages.warning(request, f"⚠️ {skipped_count} produto(s) protegido(s) por terem saídas.")
+
+    return redirect('products:product_list')
 
 
 # ============== CATEGORIAS E MARCAS ==============
@@ -294,10 +380,13 @@ def category_brand_list(request):
 @trial_allows_read
 def category_create(request):
     if request.method == 'POST':
-        name = request.POST.get('name')
+        name = request.POST.get('name', '').strip()
         if name:
-            Category.objects.create(name=name, tenant=request.tenant)
-            messages.success(request, f"Categoria '{name}' criada!")
+            if Category.objects.filter(tenant=request.tenant, name=name).exists():
+                messages.error(request, f"A categoria '{name}' já existe.")
+            else:
+                Category.objects.create(name=name, tenant=request.tenant)
+                messages.success(request, f"Categoria '{name}' criada!")
     return redirect('products:category_brand_list')
 
 
@@ -305,10 +394,13 @@ def category_create(request):
 @trial_allows_read
 def brand_create(request):
     if request.method == 'POST':
-        name = request.POST.get('name')
+        name = request.POST.get('name', '').strip()
         if name:
-            Brand.objects.create(name=name, tenant=request.tenant)
-            messages.success(request, f"Marca '{name}' criada!")
+            if Brand.objects.filter(tenant=request.tenant, name=name).exists():
+                messages.error(request, f"A marca '{name}' já existe.")
+            else:
+                Brand.objects.create(name=name, tenant=request.tenant)
+                messages.success(request, f"Marca '{name}' criada!")
     return redirect('products:category_brand_list')
 
 
@@ -316,10 +408,13 @@ def brand_create(request):
 def attribute_type_create(request):
     """Criar novo tipo de atributo (Cor, Tamanho, etc.)"""
     if request.method == 'POST':
-        name = request.POST.get('name')
+        name = request.POST.get('name', '').strip()
         if name:
-            AttributeType.objects.create(name=name, tenant=request.tenant)
-            messages.success(request, f"Atributo '{name}' criado!")
+            if AttributeType.objects.filter(tenant=request.tenant, name=name).exists():
+                messages.error(request, f"O atributo '{name}' já existe.")
+            else:
+                AttributeType.objects.create(name=name, tenant=request.tenant)
+                messages.success(request, f"Atributo '{name}' criado!")
     return redirect('products:category_brand_list')
 
 
@@ -403,3 +498,98 @@ def product_search_api(request):
         })
 
     return JsonResponse({'results': results})
+@login_required
+def ai_enhance_product_api(request):
+    """API para preenchimento inteligente via IA baseado no nome do produto"""
+    name = request.GET.get('name', '')
+    if not name or len(name) < 3:
+        return JsonResponse({'error': 'Nome muito curto'}, status=400)
+
+    from apps.core.services import AIService
+
+    prompt = f"""
+    Tarefa: Enriquecer dados de um produto comercial para inventário.
+    NOME DO PRODUTO: "{name}"
+
+    Gere um JSON com os seguintes campos (em Português do Brasil):
+    - description: Uma descrição EXTREMAMENTE CURTA, profissional e técnica de no MÁXIMO 2 parágrafos pequenos.
+    - category_suggestion: Sugestão de categoria (Ex: Bebidas, Ferramentas, Eletrônicos).
+    - brand_suggestion: Sugestão de marca caso esteja no nome.
+    - tags: 3 a 5 palavras-chave.
+
+    Retorne APENAS o JSON.
+    """
+
+    content = AIService.call_ai(prompt, schema="json")
+    if not content:
+        return JsonResponse({'error': 'Falha na IA'}, status=500)
+
+    try:
+        import re
+        # Busca o primeiro '{' e o último '}' para extrair o objeto JSON
+        start = content.find('{')
+        end = content.rfind('}')
+        if start != -1 and end != -1:
+            json_str = content[start:end+1]
+            data = json.loads(json_str)
+            return JsonResponse(data)
+
+        return JsonResponse({'error': 'JSON não encontrado na resposta'}, status=500)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Erro ao parsear IA: {str(e)} | Content: {content}")
+        return JsonResponse({'error': f'Falha ao processar: {str(e)}'}, status=500)
+
+
+# ============== CONSOLIDATION VIEWS ==============
+
+@login_required
+def consolidation_suggestions(request):
+    """
+    Lista sugestões de consolidação de produtos SIMPLES em VARIÁVEIS.
+    Detecta padrões como 'AMIGURUMI - COR 6006' e sugere agrupamento.
+    """
+    from .services import ConsolidationService
+
+    service = ConsolidationService(request.tenant)
+    candidates = service.detect_candidates()
+
+    return render(request, 'products/consolidation_suggestions.html', {
+        'candidates': candidates,
+        'total_candidates': len(candidates),
+        'total_products': sum(c['count'] for c in candidates),
+    })
+
+
+@login_required
+def consolidation_execute(request):
+    """
+    Executa a consolidação de produtos selecionados.
+    POST com: parent_name, attribute, product_ids[]
+    """
+    if request.method != 'POST':
+        return redirect('products:consolidation_suggestions')
+
+    from .services import ConsolidationService
+
+    parent_name = request.POST.get('parent_name', '').strip()
+    attribute = request.POST.get('attribute', 'Cor').strip()
+    product_ids = request.POST.getlist('product_ids')
+
+    if not parent_name or len(product_ids) < 2:
+        messages.error(request, "Selecione pelo menos 2 produtos e informe o nome do produto pai.")
+        return redirect('products:consolidation_suggestions')
+
+    try:
+        service = ConsolidationService(request.tenant)
+        parent = service.consolidate(parent_name, attribute, product_ids)
+
+        messages.success(
+            request,
+            f"✅ Consolidação realizada! '{parent_name}' agora tem {len(product_ids)} variações."
+        )
+        return redirect('products:product_detail', pk=parent.pk)
+
+    except Exception as e:
+        messages.error(request, f"Erro na consolidação: {str(e)}")
+        return redirect('products:consolidation_suggestions')

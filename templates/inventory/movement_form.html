@@ -1,133 +1,208 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto py-8">
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
     <div class="mb-10 flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Registro de Movimentação</h1>
-            <p class="text-slate-500 font-medium">Lançamento auditado de entradas e saídas.</p>
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-full">Operação Logística</span>
+            </div>
+            <h1 class="text-3xl font-black text-slate-900">Movimentar Estoque</h1>
+            <p class="text-slate-500">Registre entradas, saídas ou ajustes manuais no ledger.</p>
         </div>
-        <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
-            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Audit Trail Ativo</span>
+        <div class="hidden md:block">
+            <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-xl shadow-amber-200">
+                <i data-lucide="repeat" class="w-8 h-8"></i>
+            </div>
         </div>
     </div>
 
-    <div class="bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-900/5 border border-slate-100 overflow-hidden">
-        <div class="bg-slate-900 p-8 text-white relative flex items-center justify-between">
-            <div>
-                <h3 class="font-bold text-lg">Detalhes da Operação</h3>
-                <p class="text-slate-400 text-xs">Preencha os dados abaixo com precisão.</p>
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Main Info -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-md transition-all">
+                    <h2 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-3">
+                        <i data-lucide="package" class="w-5 h-5 text-amber-500"></i>
+                        Seleção do Item
+                    </h2>
+
+                    <div class="space-y-6">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Produto ou Variação</label>
+                            <div class="flex gap-4">
+                                <div class="flex-1 relative group">
+                                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <i data-lucide="search" class="w-5 h-5 text-slate-400 group-focus-within:text-amber-500 transition-colors"></i>
+                                    </div>
+                                    <input type="text" name="product_identifier" id="product" required list="product-list"
+                                        class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all font-bold placeholder:text-slate-400"
+                                        placeholder="Digite nome, SKU ou EAN...">
+                                    <datalist id="product-list">
+                                        {% for prod in simple_products %}
+                                        <option value="{{ prod.sku }}">{{ prod.name }} (Est: {{ prod.current_stock }})</option>
+                                        {% endfor %}
+                                        {% for var in variants %}
+                                        <option value="{{ var.sku }}">{{ var.display_name }} (Est: {{ var.current_stock }})</option>
+                                        {% endfor %}
+                                    </datalist>
+                                </div>
+                                <button type="button" id="start-scan" class="px-6 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center">
+                                    <i data-lucide="scan-line" class="w-6 h-6"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-4">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Operação</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label class="relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-emerald-50 transition-all border-slate-100 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 group">
+                                        <input type="radio" name="type" value="IN" checked class="hidden">
+                                        <i data-lucide="arrow-down-circle" class="w-6 h-6 text-emerald-600 mb-1 group-has-[:checked]:scale-110 transition-transform"></i>
+                                        <span class="text-[10px] font-black uppercase text-emerald-800">Entrada</span>
+                                    </label>
+                                    <label class="relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-rose-50 transition-all border-slate-100 has-[:checked]:border-rose-500 has-[:checked]:bg-rose-50 group">
+                                        <input type="radio" name="type" value="OUT" class="hidden">
+                                        <i data-lucide="arrow-up-circle" class="w-6 h-6 text-rose-600 mb-1 group-has-[:checked]:scale-110 transition-transform"></i>
+                                        <span class="text-[10px] font-black uppercase text-rose-800">Saída</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quantidade</label>
+                                <div class="relative group">
+                                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <i data-lucide="hash" class="w-5 h-5 text-slate-400 group-focus-within:text-amber-500"></i>
+                                    </div>
+                                    <input type="number" name="quantity" id="quantity" required min="1"
+                                        class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all font-black"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Local de Estoque</label>
+                            <div class="relative group">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <i data-lucide="map-pin" class="w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors"></i>
+                                </div>
+                                <select name="location" required
+                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-bold appearance-none">
+                                    {% for loc in locations %}
+                                    <option value="{{ loc.id }}" {% if loc.is_default %}selected{% endif %}>{{ loc.name }} {% if loc.is_default %}(Padrão){% endif %}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-md transition-all">
+                    <h2 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-3">
+                        <i data-lucide="message-square" class="w-5 h-5 text-amber-500"></i>
+                        Justificativa & Auditoria
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo / Observação</label>
+                            <textarea name="reason" id="reason" rows="3"
+                                class="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all font-medium resize-none"
+                                placeholder="Descreva o motivo desta movimentação (ex: Venda, Devolução, Ajuste de Inventário)..."></textarea>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Custo Unitário (Opcional p/ Entrada)</label>
+                            <div class="relative group">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <span class="text-slate-400 font-bold">R$</span>
+                                </div>
+                                <input type="number" step="0.01" name="unit_cost" id="unit_cost"
+                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all font-bold"
+                                    placeholder="0,00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <i data-lucide="shield-check" class="w-8 h-8 text-indigo-400 opacity-20"></i>
+
+            <!-- Sidebar Info -->
+            <div class="space-y-6">
+                <div class="bg-gradient-to-br from-slate-900 to-amber-950 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden group">
+                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+
+                    <h2 class="text-lg font-black mb-6 flex items-center gap-3 relative z-10">
+                        <i data-lucide="shield" class="w-5 h-5 text-amber-400"></i>
+                        Finalizar
+                    </h2>
+
+                    <div class="space-y-6 relative z-10">
+                        <div class="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                            <div class="flex items-center gap-3 mb-1">
+                                <i data-lucide="user" class="w-4 h-4 text-amber-400"></i>
+                                <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Operador</span>
+                            </div>
+                            <span class="text-sm font-black">{{ request.user.username }}</span>
+                        </div>
+
+                        <div class="pt-4 border-t border-white/10">
+                            <button type="submit" class="w-full py-4 bg-amber-500 hover:bg-amber-400 text-white font-black rounded-2xl transition-all shadow-lg shadow-amber-500/20 active:scale-95">
+                                Confirmar Lançamento
+                            </button>
+                            <a href="{% url 'inventory:movement_list' %}" class="block w-full mt-4 py-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl transition-all text-center text-sm">
+                                Cancelar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-50 border border-indigo-100 rounded-[2rem] p-6">
+                    <div class="flex gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                            <i data-lucide="info" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-black text-indigo-900 text-sm mb-1">Auditoria</h4>
+                            <p class="text-xs text-indigo-700 leading-relaxed">
+                                Todas as movimentações são registradas com data, hora e usuário para garantir a integridade do estoque.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+    </form>
+</div>
 
-        <form method="post" class="p-8 lg:p-12 space-y-8">
-            {% csrf_token %}
-
-            <!-- Product Selection -->
-            <div class="space-y-4">
-                <label for="product" class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Identificar Produto ou Variação (Nome, SKU ou Barcode)</label>
-                <div class="flex gap-4">
-                    <div class="flex-1 relative group">
-                        <i data-lucide="package" class="absolute left-4 top-4 w-5 h-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors"></i>
-                        <input type="text" name="product_identifier" id="product" required list="product-list"
-                               class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all outline-none"
-                               placeholder="Digite o nome ou código...">
-                        <datalist id="product-list">
-                            {% for prod in simple_products %}
-                            <option value="{{ prod.sku }}">{{ prod.name }} (Est: {{ prod.current_stock }})</option>
-                            {% endfor %}
-                            {% for var in variants %}
-                            <option value="{{ var.sku }}">{{ var.display_name }} (Est: {{ var.current_stock }})</option>
-                            {% endfor %}
-                        </datalist>
-                    </div>
-                    <button type="button" id="start-scan" class="px-6 bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-600 rounded-2xl transition-all shadow-sm flex items-center justify-center font-bold">
-                        <i data-lucide="scan-line" class="w-6 h-6"></i>
-                    </button>
-                </div>
+<!-- Scanner Modal -->
+<div id="scanner-container" class="hidden fixed inset-0 z-50 bg-slate-900/95 backdrop-blur-xl flex flex-col justify-center items-center p-6">
+    <div class="bg-white rounded-[3rem] p-8 w-full max-w-md shadow-2xl relative">
+        <button type="button" onclick="window.scannerInstance.stopScanning()" class="absolute -top-4 -right-4 w-12 h-12 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-2xl border border-slate-100 hover:scale-110 transition-transform">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+        <div class="text-center mb-6">
+            <h4 class="font-black text-slate-900 uppercase text-xs tracking-[0.2em] mb-2">Escaneamento Inteligente</h4>
+            <p class="text-slate-500 text-[10px] font-bold">POSICIONE O CÓDIGO DE BARRAS NO QUADRADO</p>
+        </div>
+        <div id="reader" class="rounded-[2rem] overflow-hidden border-4 border-slate-50 mb-6 bg-slate-100 aspect-square"></div>
+        <div class="flex justify-center">
+            <div class="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                <span class="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                Buscando Foco...
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- Type Selection -->
-                <div class="space-y-4">
-                    <label class="text-xs font-black text-slate-400 uppercase tracking-widest px-1 text-indigo-600">Tipo de Fluxo</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <label class="relative flex items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-emerald-50 transition-all border-slate-100 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 group">
-                            <input type="radio" name="type" value="IN" checked class="hidden">
-                            <div class="flex flex-col items-center">
-                                <i data-lucide="arrow-down-circle" class="w-6 h-6 text-emerald-600 mb-1 group-has-[:checked]:scale-110 transition-transform"></i>
-                                <span class="text-[10px] font-black uppercase text-emerald-800">Entrada</span>
-                            </div>
-                        </label>
-                        <label class="relative flex items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-rose-50 transition-all border-slate-100 has-[:checked]:border-rose-500 has-[:checked]:bg-rose-50 group">
-                            <input type="radio" name="type" value="OUT" class="hidden">
-                            <div class="flex flex-col items-center">
-                                <i data-lucide="arrow-up-circle" class="w-6 h-6 text-rose-600 mb-1 group-has-[:checked]:scale-110 transition-transform"></i>
-                                <span class="text-[10px] font-black uppercase text-rose-800">Saída</span>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Quantity input -->
-                <div class="space-y-4">
-                    <label for="quantity" class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Quantidade</label>
-                    <div class="relative group">
-                         <i data-lucide="hash" class="absolute left-4 top-4 w-5 h-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors"></i>
-                        <input type="number" name="quantity" id="quantity" required min="1"
-                               class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-black focus:bg-white focus:border-indigo-600 transition-all outline-none"
-                               placeholder="Ex: 50">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Unit Cost (optional for IN) -->
-            <div class="space-y-4">
-                <label for="unit_cost" class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Custo Unitário (opcional para entradas)</label>
-                <div class="relative group">
-                    <span class="absolute left-4 top-4 text-slate-400 font-bold">R$</span>
-                    <input type="number" step="0.01" name="unit_cost" id="unit_cost"
-                           class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none"
-                           placeholder="0.00">
-                </div>
-            </div>
-
-            <!-- Reason selection -->
-            <div class="space-y-4">
-                 <label for="reason" class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Motivo / Observação</label>
-                 <div class="relative group">
-                    <i data-lucide="message-square" class="absolute left-4 top-4 w-5 h-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors"></i>
-                    <textarea name="reason" id="reason" rows="3"
-                              class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-medium focus:bg-white focus:border-indigo-600 transition-all outline-none"
-                              placeholder="Justifique esta movimentação..."></textarea>
-                 </div>
-            </div>
-
-            <div class="pt-8 border-t border-slate-50">
-                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-5 rounded-3xl transition-all shadow-xl shadow-indigo-600/30 active:scale-[0.98] flex items-center justify-center gap-3">
-                    <i data-lucide="check" class="w-6 h-6"></i>
-                    CONFIRMAR LANÇAMENTO NO LEDGER
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- Scanner Modal -->
-    <div id="scanner-container" class="hidden fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-md flex flex-col justify-center items-center p-6">
-        <div class="bg-white rounded-[2rem] p-4 w-full max-w-sm shadow-2xl relative">
-            <button type="button" onclick="window.scannerInstance.stopScanning()" class="absolute -top-4 -right-4 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg">
-                <i data-lucide="x" class="w-4 h-4 text-slate-500"></i>
-            </button>
-            <div class="text-center mb-4">
-                <h4 class="font-black text-slate-900 uppercase text-xs tracking-widest">Leitor de Câmera</h4>
-            </div>
-            <div id="reader" class="rounded-2xl overflow-hidden mb-4"></div>
-            <p class="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">Aponte para o código de barras do item</p>
         </div>
     </div>
 </div>
+
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="/static/js/scanner.js"></script>
+<script>
+    lucide.createIcons();
+    window.scannerInstance = new StockScanner('product', 'start-scan', 'scanner-container');
+</script>
 
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="/static/js/scanner.js"></script>

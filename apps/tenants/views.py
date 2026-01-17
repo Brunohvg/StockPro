@@ -39,7 +39,7 @@ def signup_view(request):
         last_name = request.POST.get('last_name', '').strip()
         email = request.POST.get('email', '').strip()
         password = request.POST.get('password', '')
-        plan_name = request.GET.get('plan', 'FREE')
+        plan_name = request.GET.get('plan', 'GRATUITO')
 
         errors = {}
         if not company_name:
@@ -62,9 +62,9 @@ def signup_view(request):
         # Get or create plan (only use existing plans, don't auto-create)
         plan = Plan.objects.filter(name=plan_name).first()
         if not plan:
-            plan = Plan.objects.filter(name='FREE').first()
+            plan = Plan.objects.filter(name='GRATUITO').first()
         if not plan:
-            plan = Plan.objects.create(name='FREE', display_name='Gratuito', price=0, max_products=50, max_users=3)
+            plan = Plan.objects.create(name='GRATUITO', display_name='Gratuito', price=0, max_products=50, max_users=3)
 
         tenant = Tenant.objects.create(name=company_name, cnpj=cnpj, plan=plan, subscription_status='TRIAL')
 

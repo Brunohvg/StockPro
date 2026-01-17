@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-10 flex items-center justify-between">
+        <div>
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-3 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-full">Estrutura Logística</span>
+            </div>
+            <h1 class="text-3xl font-black text-slate-900">{% if location %}Editar{% else %}Nova{% endif %} Localização</h1>
+            <p class="text-slate-500">Defina os detalhes físicos ou lógicos do seu local de armazenamento.</p>
+        </div>
+        <div class="hidden md:block">
+            <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-200">
+                <i data-lucide="map-pin" class="w-8 h-8"></i>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+
+        {% if form.errors %}
+        <div class="p-6 bg-rose-50 border-2 border-rose-100 rounded-[2rem] animate-in fade-in slide-in-from-top-4 duration-300">
+            <div class="flex gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
+                    <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-rose-900 mb-1">Ops! Verifique os dados</h3>
+                    <ul class="text-sm text-rose-700/80 font-medium list-disc list-inside">
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                        {% for field in form %}
+                            {% for error in field.errors %}
+                                <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Main Content -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-md transition-all">
+                    <h2 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-3">
+                        <i data-lucide="info" class="w-5 h-5 text-indigo-500"></i>
+                        Identificação
+                    </h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Local</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código de Referência</label>
+                            {{ form.code }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-md transition-all">
+                    <h2 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-3">
+                        <i data-lucide="map" class="w-5 h-5 text-indigo-500"></i>
+                        Localização & Tipo
+                    </h2>
+
+                    <div class="space-y-6">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Localização</label>
+                            {{ form.location_type }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço / Observações de Acesso</label>
+                            {{ form.address }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <div class="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden group">
+                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+
+                    <h2 class="text-lg font-black mb-6 flex items-center gap-3 relative z-10">
+                        <i data-lucide="settings" class="w-5 h-5 text-indigo-400"></i>
+                        Status & Regras
+                    </h2>
+
+                    <div class="space-y-4 relative z-10">
+                        <label class="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl cursor-pointer transition-all">
+                            {{ form.is_default }}
+                            <div>
+                                <span class="block text-sm font-bold">Local Padrão</span>
+                                <span class="text-[10px] text-slate-400 italic">Usado em novas entradas</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl cursor-pointer transition-all">
+                            {{ form.is_active }}
+                            <div>
+                                <span class="block text-sm font-bold">Local Ativo</span>
+                                <span class="text-[10px] text-slate-400 italic">Permite movimentações</span>
+                            </div>
+                        </label>
+
+                        <div class="pt-6 border-t border-white/10">
+                            <button type="submit" class="w-full py-4 bg-indigo-500 hover:bg-indigo-400 text-white font-black rounded-2xl transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+                                Salvar Local
+                            </button>
+                            <a href="{% url 'inventory:location_list' %}" class="block w-full mt-4 py-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl transition-all text-center text-sm">
+                                Cancelar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-50 border border-indigo-100 rounded-[2rem] p-6">
+                    <h4 class="font-black text-indigo-900 text-sm mb-3">Sobre Localizações</h4>
+                    <p class="text-xs text-indigo-700 leading-relaxed">
+                        Você pode criar locais virtuais (como "Em Trânsito") ou locais físicos (como "Prateleira A1"). O sistema usará o local padrão para todas as entradas automáticas de NF-e.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

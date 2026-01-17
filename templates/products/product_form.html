@@ -19,6 +19,29 @@
         <form method="post" enctype="multipart/form-data" class="space-y-0">
             {% csrf_token %}
 
+            {% if form.errors %}
+            <div class="m-8 p-6 bg-rose-50 border-2 border-rose-100 rounded-[2rem] animate-in fade-in slide-in-from-top-4 duration-300">
+                <div class="flex gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
+                        <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-rose-900 mb-1">Ops! Verifique os dados</h3>
+                        <ul class="text-sm text-rose-700/80 font-medium list-disc list-inside">
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Section 1: Basic Info -->
             <div class="p-8 lg:p-12 space-y-10">
                 <div class="space-y-6">
@@ -43,10 +66,16 @@
                         <div class="flex-1 space-y-6">
                             <div class="space-y-2 group">
                                 <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome do Produto *</label>
-                                <div class="relative">
+                                <div class="relative group">
                                     <i data-lucide="package" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
-                                    <input type="text" name="name" value="{{ form.name.value|default:'' }}" required placeholder="Nome descritivo do produto"
-                                        class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all outline-none">
+                                    <input type="text" name="name" id="product_name" value="{{ form.name.value|default:'' }}" required placeholder="Nome descritivo do produto"
+                                        class="w-full pl-12 pr-12 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all outline-none">
+
+                                    <!-- AI MAGIC BUTTON -->
+                                    <button type="button" id="btn-ai-magic" title="Mágica: Preencher detalhes com IA"
+                                        class="absolute right-2 top-2 w-10 h-10 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white rounded-xl flex items-center justify-center transition-all group/magic active:scale-90">
+                                        <i data-lucide="sparkles" class="w-5 h-5 group-hover/magic:animate-pulse"></i>
+                                    </button>
                                 </div>
                             </div>
 
@@ -117,6 +146,37 @@
                         </div>
                     </div>
 
+                    <!-- Supplier and Location (V2) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2 group">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Fornecedor Padrão (Busca Inteligente)</label>
+                            <div class="relative supplier-autocomplete">
+                                <i data-lucide="truck" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors"></i>
+                                <input type="text" id="supplier-search" placeholder="Digite nome ou CNPJ..." autocomplete="off"
+                                    value="{% if form.instance.default_supplier %}{{ form.instance.default_supplier.display_name }}{% endif %}"
+                                    class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 transition-all outline-none">
+                                <input type="hidden" name="default_supplier" id="supplier-id" value="{{ form.default_supplier.value|default:'' }}">
+
+                                <!-- Floating Dropdown for results -->
+                                <div id="supplier-results" class="hidden absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] max-h-60 overflow-y-auto">
+                                    <!-- Results injected here -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-2 group" id="location-field">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Local de Estoque Padrão</label>
+                            <div class="relative">
+                                <i data-lucide="map-pin" class="absolute left-4 top-4 w-5 h-5 text-slate-300 group-focus-within:text-emerald-500 transition-colors"></i>
+                                <select name="default_location" class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-emerald-500 transition-all outline-none appearance-none">
+                                    <option value="">Nenhum (Global)</option>
+                                    {% for loc in form.fields.default_location.queryset %}
+                                    <option value="{{ loc.id }}" {% if form.default_location.value|stringformat:"s" == loc.id|stringformat:"s" %}selected{% endif %}>{{ loc.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Description -->
                     <div class="space-y-2">
                         <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Descrição</label>
@@ -178,6 +238,130 @@
 
 <script>
     lucide.createIcons();
+
+    // ==========================================
+    // 1. FORNECEDOR AUTOCOMPLETE (V2)
+    // ==========================================
+    const supplierSearch = document.getElementById('supplier-search');
+    const supplierId = document.getElementById('supplier-id');
+    const supplierResults = document.getElementById('supplier-results');
+    let searchTimeout;
+
+    if (supplierSearch) {
+        supplierSearch.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const q = this.value;
+
+            if (q.length < 2) {
+                supplierResults.classList.add('hidden');
+                return;
+            }
+
+            searchTimeout = setTimeout(() => {
+                fetch(`/partners/api/suppliers/search/?q=${encodeURIComponent(q)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        supplierResults.innerHTML = '';
+                        if (data.results.length > 0) {
+                            data.results.forEach(s => {
+                                const div = document.createElement('div');
+                                div.className = 'px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors';
+                                div.innerHTML = `
+                                    <div class="font-bold text-slate-800 text-sm">${s.name}</div>
+                                    <div class="text-[10px] text-slate-500 font-mono">${s.cnpj}</div>
+                                `;
+                                div.onclick = () => {
+                                    supplierSearch.value = s.name;
+                                    supplierId.value = s.id;
+                                    supplierResults.classList.add('hidden');
+                                };
+                                supplierResults.appendChild(div);
+                            });
+                            supplierResults.classList.remove('hidden');
+                        } else {
+                            supplierResults.classList.add('hidden');
+                        }
+                    });
+            }, 300);
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.supplier-autocomplete')) {
+                supplierResults.classList.add('hidden');
+            }
+        });
+    }
+
+    // ==========================================
+    // 2. AI MAGIC FILL (V2)
+    // ==========================================
+    const btnMagic = document.getElementById('btn-ai-magic');
+    const productName = document.getElementById('product_name');
+
+    if (btnMagic) {
+        btnMagic.addEventListener('click', function() {
+            const name = productName.value;
+            if (name.length < 3) {
+                alert('Digite um nome mais completo para a IA analisar.');
+                return;
+            }
+
+            // Visual feedback
+            const originalIcon = this.innerHTML;
+            this.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>';
+            lucide.createIcons();
+            this.disabled = true;
+
+            fetch(`/products/api/ai-enhance/?name=${encodeURIComponent(name)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Erro na IA: ' + data.error);
+                    } else {
+                        // Populate fields
+                        if (data.description) {
+                            const descField = document.querySelector('textarea[name="description"]');
+                            if (descField) descField.value = data.description;
+                        }
+
+                        // Try to select Category
+                        if (data.category_suggestion) {
+                            const catSelect = document.querySelector('select[name="category"]');
+                            if (catSelect) {
+                                [...catSelect.options].forEach(opt => {
+                                    if (opt.text.toLowerCase().includes(data.category_suggestion.toLowerCase())) {
+                                        catSelect.value = opt.value;
+                                    }
+                                });
+                            }
+                        }
+
+                        // Try to select Brand
+                        if (data.brand_suggestion) {
+                            const brandSelect = document.querySelector('select[name="brand"]');
+                            if (brandSelect) {
+                                [...brandSelect.options].forEach(opt => {
+                                    if (opt.text.toLowerCase().includes(data.brand_suggestion.toLowerCase())) {
+                                        brandSelect.value = opt.value;
+                                    }
+                                });
+                            }
+                        }
+
+                        // Show success feedback
+                        productName.classList.add('border-emerald-500');
+                        setTimeout(() => productName.classList.remove('border-emerald-500'), 2000);
+                    }
+                })
+                .catch(err => alert('Erro na conexão com IA'))
+                .finally(() => {
+                    this.innerHTML = originalIcon;
+                    lucide.createIcons();
+                    this.disabled = false;
+                });
+        });
+    }
 
     // Toggle stock fields based on product type
     document.querySelectorAll('input[name="product_type"]').forEach(radio => {

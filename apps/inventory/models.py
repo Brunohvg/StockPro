@@ -40,6 +40,14 @@ class StockMovement(TenantMixin):
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    location = models.ForeignKey(
+        'inventory.Location',
+        on_delete=models.PROTECT,
+        related_name='movements',
+        null=True,
+        blank=True,
+        verbose_name="Local de Estoque"
+    )
     type = models.CharField(max_length=3, choices=MOVEMENT_TYPES)
     quantity = models.PositiveIntegerField()
     balance_after = models.IntegerField(default=0, verbose_name="Saldo Após")
@@ -101,6 +109,13 @@ class ImportBatch(TenantMixin):
     success_count = models.PositiveIntegerField(default=0)
     error_count = models.PositiveIntegerField(default=0)
     log = models.TextField(blank=True, null=True)
+    source_doc = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Documento de Origem",
+        help_text="Identificador único (ex: NFE-CNPJ-SERIE-NUMERO)"
+    )
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -109,6 +124,9 @@ class ImportBatch(TenantMixin):
         ordering = ['-created_at']
         verbose_name = "Lote de Importação"
         verbose_name_plural = "Lotes de Importação"
+        indexes = [
+            models.Index(fields=['tenant', 'source_doc']),
+        ]
 
     def __str__(self):
         return f"{self.get_type_display()} - {self.created_at.strftime('%d/%m/%Y %H:%M')}"

@@ -52,41 +52,69 @@
             </thead>
             <tbody class="divide-y divide-slate-50">
                 {% for imp in imports %}
-                <tr class="group hover:bg-slate-50 transition-all duration-200" hx-get="." hx-trigger="every 10s" hx-select="#import-table-row-{{ imp.id }}" hx-swap="outerHTML" id="import-table-row-{{ imp.id }}">
+                <tr class="group hover:bg-slate-50 transition-all duration-200"
+                    {% if imp.status == 'PROCESSING' or imp.status == 'PENDING' %}
+                    hx-get="{% url 'inventory:import_list' %}"
+                    hx-trigger="every 5s"
+                    hx-select="#import-table-row-{{ imp.id }}"
+                    hx-target="#import-table-row-{{ imp.id }}"
+                    hx-swap="outerHTML"
+                    {% endif %}
+                    id="import-table-row-{{ imp.id }}">
                     <td class="px-8 py-6">
                         <div class="flex items-center gap-3">
                             <i data-lucide="file-text" class="w-5 h-5 text-slate-300"></i>
                             <span class="text-sm font-bold text-slate-900">{{ imp.file.name|truncatechars:30 }}</span>
                         </div>
                     </td>
-                    <td class="px-8 py-6">
+                    <td class="px-8 py-6 whitespace-nowrap">
                         <span class="text-xs font-bold text-slate-500">{{ imp.get_type_display }}</span>
                     </td>
                     <td class="px-8 py-6">
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter
-                            {% if imp.status == 'COMPLETED' %}bg-emerald-50 text-emerald-700
-                            {% elif imp.status == 'PROCESSING' %}bg-indigo-50 text-indigo-700
-                            {% elif imp.status == 'ERROR' %}bg-rose-50 text-rose-700
-                            {% else %}bg-amber-50 text-amber-700{% endif %}">
-                            {% if imp.status == 'PROCESSING' %}<span class="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2 animate-ping"></span>{% endif %}
-                            {{ imp.get_status_display }}
-                        </span>
+                        <div class="flex flex-col gap-2">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter
+                                {% if imp.status == 'COMPLETED' %}bg-emerald-50 text-emerald-700
+                                {% elif imp.status == 'PROCESSING' %}bg-indigo-50 text-indigo-700
+                                {% elif imp.status == 'ERROR' %}bg-rose-50 text-rose-700
+                                {% else %}bg-amber-50 text-amber-700{% endif %} w-fit">
+                                {% if imp.status == 'PROCESSING' %}<span class="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2 animate-ping"></span>{% endif %}
+                                {{ imp.get_status_display }}
+                            </span>
+
+                            {% if imp.status == 'PROCESSING' %}
+                            <div class="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-indigo-500 transition-all duration-500" style="width: {{ imp.progress_percent }}%"></div>
+                            </div>
+                            <span class="text-[9px] font-black text-indigo-400">{{ imp.progress_percent }}%</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td class="px-8 py-6 text-xs text-slate-400 font-medium">
                         {{ imp.created_at|date:"d/m/Y H:i" }}
                     </td>
-                    <td class="px-8 py-6">
-                        <a href="{% url 'inventory:import_detail' imp.id %}" class="text-[10px] font-mono text-slate-500 bg-slate-100 p-2 rounded-lg max-w-xs truncate hover:underline" title="{{ imp.log }}">
-                            {{ imp.log|default:"Aguardando processamento..." }}
+                    <td class="px-8 py-6 max-w-[200px]">
+                        <a href="{% url 'inventory:import_detail' imp.id %}"
+                           class="block text-[10px] font-mono p-2 rounded-lg truncate hover:underline
+                                  {% if 'Erro' in imp.log or 'ERROR' in imp.log %}bg-rose-50 text-rose-600{% else %}bg-slate-50 text-slate-500{% endif %}"
+                           title="{{ imp.log }}">
+                            {{ imp.log|default:"Aguardando processamento..."|truncatechars:50 }}
                         </a>
                     </td>
                     <td class="px-8 py-6 text-right">
-                        <form action="{% url 'inventory:delete_import' imp.id %}" method="post" class="inline" onsubmit="return confirm('Tem certeza que deseja apagar este registro de importação?');">
-                            {% csrf_token %}
-                            <button type="submit" class="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Excluir Lote">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
-                        </form>
+                        <div class="flex items-center justify-end gap-2">
+                            {% if imp.status != 'COMPLETED' and imp.status != 'PROCESSING' %}
+                            <a href="{% url 'inventory:import_reprocess' imp.id %}" class="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all" title="Reprocessar Lote">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            </a>
+                            {% endif %}
+
+                            <form action="{% url 'inventory:delete_import' imp.id %}" method="post" class="inline" onsubmit="return confirm('Tem certeza que deseja apagar este registro de importação?');">
+                                {% csrf_token %}
+                                <button type="submit" class="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Excluir Lote">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% empty %}

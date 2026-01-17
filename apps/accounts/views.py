@@ -159,10 +159,10 @@ def create_company(request):
             return render(request, 'accounts/create_company.html')
 
         # Get free plan
-        free_plan = Plan.objects.filter(name='FREE').first()
+        free_plan = Plan.objects.filter(name='GRATUITO').first()
         if not free_plan:
             free_plan = Plan.objects.create(
-                name='FREE',
+                name='GRATUITO',
                 display_name='Gratuito',
                 price=0,
                 max_products=50,

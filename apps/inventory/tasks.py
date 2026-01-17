@@ -44,11 +44,11 @@ def process_import_task(self, batch_id, idempotency_key=None):
             with open(batch.file.path, 'rb') as f:
                 idempotency_key = generate_idempotency_key(batch_id, f.read())
 
-        # Check if already processed
-        existing_log = ImportLog.objects.filter(idempotency_key=idempotency_key).first()
+        # Check if already processed successfully
+        existing_log = ImportLog.objects.filter(idempotency_key=idempotency_key, status='SUCCESS').first()
         if existing_log:
             batch.status = 'COMPLETED'
-            batch.log = f"Já processado anteriormente em {existing_log.created_at}"
+            batch.log = f"Já processado com sucesso anteriormente em {existing_log.created_at}"
             batch.save()
             return f"Idempotent skip: {idempotency_key}"
 
@@ -72,7 +72,7 @@ def process_import_task(self, batch_id, idempotency_key=None):
             batch=batch,
             idempotency_key=idempotency_key,
             status='SUCCESS',
-            details=result
+            message=result
         )
 
     except SoftTimeLimitExceeded:
@@ -124,25 +124,39 @@ def detect_product_type(row):
 
 def process_csv_v10(batch):
     """
-    Enhanced CSV processor with variant support
-
-    Expected format:
-    sku,name,type,category,brand,attr_cor,attr_tamanho,stock,cost,minimum_stock
-
-    Types:
-    - SIMPLE: Regular product
-    - VARIABLE: Parent product for variants (no stock on parent)
-    - VARIANT:PARENT-SKU: Variant of a variable product
+    Enhanced CSV processor with AI-powered column mapping and variant support
     """
     tenant = batch.tenant
     df = pd.read_csv(batch.file.path)
 
-    # Normalize column names
+    # Normalize column names (lowercase, strip whitespace)
     df.columns = [c.strip().lower() for c in df.columns]
 
+    batch.total_rows = len(df)
+    batch.processed_rows = 0
+    batch.save()
+
     required_cols = ['sku', 'name']
+
+    # If required columns are missing, try AI mapping
     if not all(col in df.columns for col in required_cols):
-        return f"Erro: Colunas obrigatórias ausentes. Necessário: {required_cols}"
+        ai_mapping = ai_map_csv_columns(batch.file.path)
+
+        if ai_mapping and ai_mapping.get('column_mapping'):
+            df, detected_type = normalize_csv_with_mapping(df, ai_mapping)
+
+            # Log AI mapping success
+            import logging
+            logging.getLogger(__name__).info(
+                f"AI mapped CSV columns: {ai_mapping.get('column_mapping')} "
+                f"(confidence: {ai_mapping.get('confidence', 'unknown')})"
+            )
+        else:
+            return f"Erro: Colunas obrigatórias ausentes ({required_cols}). A IA não conseguiu mapear automaticamente. Verifique se o CSV tem colunas de código e nome do produto."
+
+    # Validate again after potential AI mapping
+    if not all(col in df.columns for col in required_cols):
+        return f"Erro: Mesmo após mapeamento IA, colunas obrigatórias ausentes. Necessário: {required_cols}"
 
     # Find attribute columns
     attr_cols = [c for c in df.columns if c.startswith('attr_')]
@@ -161,6 +175,10 @@ def process_csv_v10(batch):
 
     # First pass: create SIMPLE and VARIABLE products
     for idx, row in df.iterrows():
+        batch.processed_rows = idx + 1
+        if (idx + 1) % 5 == 0:  # Update DB every 5 rows to reduce overhead
+            batch.save()
+
         try:
             product_type, parent_sku = detect_product_type(row)
 
@@ -292,7 +310,7 @@ def process_csv_v10(batch):
 
 
 def process_xml_nfe(batch):
-    """Process XML NF-e - creates SIMPLE products only"""
+    """Process XML NF-e with deduplication and barcode support"""
     tenant = batch.tenant
     try:
         tree = ET.parse(batch.file.path)
@@ -316,39 +334,459 @@ def process_xml_nfe(batch):
 
         nNF = root.find('.//nfe:ide/nfe:nNF', current_ns).text
         serie = root.find('.//nfe:ide/nfe:serie', current_ns).text
-        emit_name = root.find('.//nfe:emit/nfe:xNome', current_ns).text
+        emit_node = root.find('.//nfe:emit', current_ns)
+        emit_name = emit_node.find('nfe:xNome', current_ns).text
+        emit_cnpj = emit_node.find('nfe:CNPJ', current_ns).text
+
+        # Deduplication check: generate source_doc and check if already imported
+        source_doc = f"NFE-{emit_cnpj}-{serie}-{nNF}"
+
+        existing_import = ImportBatch.objects.filter(
+            tenant=tenant,
+            source_doc=source_doc,
+            status='COMPLETED'
+        ).first()
+
+        if existing_import:
+            batch.status = 'COMPLETED'
+            batch.log = f"Esta nota já foi importada anteriormente em {existing_import.created_at.strftime('%d/%m/%Y %H:%M')}."
+            batch.source_doc = source_doc
+            batch.save()
+            return batch.log
+
+        # Save source_doc for future deduplication
+        batch.source_doc = source_doc
+        batch.save()
+
         doc_ref = f"NF {nNF}-{serie} ({emit_name[:15]})"
 
-        success_count = 0
-        errors = []
+        # Create/get supplier
+        from apps.partners.models import Supplier
+        supplier_obj, _ = Supplier.get_or_create_from_nfe(
+            tenant=tenant,
+            cnpj=emit_cnpj,
+            company_name=emit_name
+        )
 
-        for det in root.findall('.//nfe:det', current_ns):
-            prod = det.find('nfe:prod', current_ns)
-            sku = prod.find('nfe:cProd', current_ns).text
-            name = prod.find('nfe:xProd', current_ns).text
-            qty = float(prod.find('nfe:qCom', current_ns).text)
-            uom = prod.find('nfe:uCom', current_ns).text
-            unit_val = float(prod.find('nfe:vUnCom', current_ns).text)
+        items = root.findall('.//nfe:det', current_ns)
+        batch.total_rows = len(items)
+        batch.processed_rows = 0
+        batch.save()
 
-            try:
-                cat_obj, _ = Category.objects.get_or_create(tenant=tenant, name='Importado XML')
-                brand_obj, _ = Brand.objects.get_or_create(tenant=tenant, name=emit_name[:100])
+        # Create category and brand for this import (AI-powered brand extraction)
+        cat_obj, _ = Category.objects.get_or_create(tenant=tenant, name='Importado XML')
+        clean_brand_name = ai_extract_brand_name(emit_name)
+        brand_obj, _ = Brand.objects.get_or_create(tenant=tenant, name=clean_brand_name)
 
+        # Use intelligent variant detection
+        return process_nfe_with_variants(
+            batch=batch,
+            items=items,
+            current_ns=current_ns,
+            tenant=tenant,
+            supplier_obj=supplier_obj,
+            brand_obj=brand_obj,
+            cat_obj=cat_obj,
+            nNF=nNF
+        )
+
+    except Exception as e:
+        return f"Falha de processamento XML: {str(e)}"
+
+
+def ai_map_csv_columns(file_path):
+    """
+    Use AI to intelligently map CSV columns to our internal schema.
+    Returns a mapping dict or None if AI fails.
+    """
+    import json
+    from apps.core.services import AIService
+
+    try:
+        # Read first 3 rows as sample
+        df = pd.read_csv(file_path, nrows=3)
+        csv_sample = df.to_csv(index=False)
+
+        prompt = f"""Você é um assistente de mapeamento de dados para um sistema de estoque. Analise o cabeçalho e as 2 primeiras linhas deste CSV e retorne um JSON com:
+
+1. **Mapeamento de Colunas**: Identifique qual coluna corresponde a cada campo do nosso schema.
+2. **Tipo de Produto**: Detecte se o CSV contém produtos SIMPLES ou VARIÁVEIS (com variações como cor, tamanho, voltagem).
+
+**Pistas para detectar Produtos Variáveis:**
+- Colunas com nomes como "cor", "tamanho", "voltagem", "atributo", "variacao", "opcao"
+- SKUs repetidos com valores diferentes em outras colunas
+- Padrão de nome como "Camiseta - Azul - M"
+
+**Schema Interno:**
+- sku (código do produto)
+- name (nome/descrição)
+- barcode (código de barras / EAN / GTIN)
+- stock (estoque/quantidade)
+- cost (custo/preço)
+- category (categoria)
+- brand (marca)
+- attr_* (atributos de variação: attr_cor, attr_tamanho, etc.)
+
+CSV:
+{csv_sample}
+
+Retorne APENAS um JSON no formato:
+{{
+  "product_type": "SIMPLE",
+  "column_mapping": {{
+    "sku_column": "nome_da_coluna_ou_null",
+    "name_column": "nome_da_coluna_ou_null",
+    "barcode_column": "nome_da_coluna_ou_null",
+    "stock_column": "nome_da_coluna_ou_null",
+    "cost_column": "nome_da_coluna_ou_null",
+    "category_column": "nome_da_coluna_ou_null",
+    "brand_column": "nome_da_coluna_ou_null"
+  }},
+  "attribute_columns": [],
+  "confidence": "HIGH",
+  "notes": ""
+}}"""
+
+        response = AIService.call_ai(prompt, schema="json")
+        if not response:
+            return None
+
+        # Parse JSON from response
+        start = response.find('{')
+        end = response.rfind('}')
+        if start != -1 and end != -1:
+            json_str = response[start:end+1]
+            return json.loads(json_str)
+
+        return None
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"AI CSV mapping failed: {e}")
+        return None
+
+
+def normalize_csv_with_mapping(df, mapping):
+    """
+    Rename CSV columns based on AI mapping to match internal schema.
+    """
+    column_rename = {}
+    col_map = mapping.get('column_mapping', {})
+
+    if col_map.get('sku_column'):
+        column_rename[col_map['sku_column']] = 'sku'
+    if col_map.get('name_column'):
+        column_rename[col_map['name_column']] = 'name'
+    if col_map.get('barcode_column'):
+        column_rename[col_map['barcode_column']] = 'barcode'
+    if col_map.get('stock_column'):
+        column_rename[col_map['stock_column']] = 'stock'
+    if col_map.get('cost_column'):
+        column_rename[col_map['cost_column']] = 'cost'
+    if col_map.get('category_column'):
+        column_rename[col_map['category_column']] = 'category'
+    if col_map.get('brand_column'):
+        column_rename[col_map['brand_column']] = 'brand'
+
+    # Rename attribute columns
+    for attr_col in mapping.get('attribute_columns', []):
+        if attr_col in df.columns:
+            column_rename[attr_col] = f'attr_{attr_col.lower()}'
+
+    df = df.rename(columns=column_rename)
+    return df, mapping.get('product_type', 'SIMPLE')
+
+
+def ai_extract_brand_name(supplier_name):
+    """
+    Use AI to extract a clean, marketable brand name from a supplier/company name.
+
+    Examples:
+    - "INDUSTRIA DE FELTROS SANTA FE S/A" → "Santa Fé"
+    - "CIRCULO LTDA" → "Círculo"
+    - "COATS CORRENTE LTDA" → "Coats Corrente"
+
+    Returns the original name if AI fails.
+    """
+    import json
+    from apps.core.services import AIService
+
+    if not supplier_name or len(supplier_name) < 3:
+        return supplier_name
+
+    prompt = f"""Você é um especialista em branding. Extraia o NOME DA MARCA comercial do nome desta empresa fornecedora:
+
+"{supplier_name}"
+
+Regras:
+1. Remova termos jurídicos: LTDA, S/A, S.A., ME, EPP, EIRELI, CIA, IND, COM, IMP, EXP, etc.
+2. Remova termos genéricos: INDUSTRIA, INDUSTRIAS, COMERCIO, IMPORTADORA, DISTRIBUIDORA, FABRICA
+3. Mantenha o nome principal/fantasia da marca
+4. Use capitalização correta (ex: "Santa Fé", não "SANTA FE")
+5. Se houver acentuação provável, adicione (ex: "CIRCULO" → "Círculo")
+
+Retorne APENAS um JSON: {{"brand": "Nome da Marca"}}"""
+
+    try:
+        response = AIService.call_ai(prompt, schema="json")
+        if response:
+            start = response.find('{')
+            end = response.rfind('}')
+            if start != -1 and end != -1:
+                data = json.loads(response[start:end+1])
+                brand = data.get('brand', '').strip()
+                if brand and len(brand) >= 2:
+                    return brand[:100]  # Limit to 100 chars
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"AI brand extraction failed: {e}")
+
+    # Fallback: basic cleanup
+    cleaned = supplier_name.upper()
+    for term in ['LTDA', 'S/A', 'S.A.', ' ME', ' EPP', ' EIRELI', ' CIA', ' IND', ' COM']:
+        cleaned = cleaned.replace(term, '')
+    return cleaned.strip().title()[:100]
+
+
+def ai_group_nfe_products(product_list):
+    """
+    Use AI to analyze NF-e product names and detect variable product groupings.
+
+    Args:
+        product_list: List of dicts with {sku, name, qty, cost, barcode}
+
+    Returns:
+        Dict with groupings: {
+            'parent_name': {
+                'attribute': 'Cor',
+                'variants': [
+                    {'sku': '...', 'name': '...', 'attr_value': 'Azul Baby', ...},
+                ]
+            }
+        }
+        Or None if no groupings detected.
+    """
+    import json
+    from apps.core.services import AIService
+
+    if len(product_list) < 2:
+        return None  # Need at least 2 products to group
+
+    # Prepare product list for AI
+    product_names = "\n".join([f"- SKU: {p['sku']}, Nome: {p['name']}" for p in product_list[:30]])  # Limit to 30
+
+    prompt = f"""Você é um assistente de catalogação de produtos. Analise esta lista de produtos de uma NF-e e identifique quais são VARIAÇÕES de um mesmo produto base.
+
+**Exemplos de variações:**
+- "FELTRO SANTA FE 10M AZUL BABY 140CM" e "FELTRO SANTA FE 10M VERMELHO 140CM" → Variações de "FELTRO SANTA FE 10M 140CM" com atributo "Cor"
+- "CAMISETA BÁSICA P PRETA" e "CAMISETA BÁSICA G BRANCA" → Variações de "CAMISETA BÁSICA" com atributos "Tamanho" e "Cor"
+- "TNT VERDE BILHAR 50G/M2 140CM 50M" e "TNT PRETO 50G/M2 140CM 50M" → Variações de "TNT 50G/M2 140CM 50M" com atributo "Cor"
+
+**Lista de Produtos:**
+{product_names}
+
+**Instruções:**
+1. Identifique grupos de produtos que são variações do mesmo item base
+2. Para cada grupo, determine o nome do produto pai e qual atributo varia (Cor, Tamanho, Voltagem, etc.)
+3. Se um produto não tem variações, NÃO o inclua no resultado
+
+Retorne APENAS um JSON no formato:
+{{
+  "groups": [
+    {{
+      "parent_name": "FELTRO SANTA FE 10M 140CM",
+      "attribute": "Cor",
+      "variants": [
+        {{"sku": "123", "attr_value": "AZUL BABY"}},
+        {{"sku": "456", "attr_value": "VERMELHO"}}
+      ]
+    }}
+  ]
+}}
+
+Se não houver grupos detectados, retorne: {{"groups": []}}"""
+
+    try:
+        response = AIService.call_ai(prompt, schema="json")
+        if not response:
+            return None
+
+        # Parse JSON from response
+        start = response.find('{')
+        end = response.rfind('}')
+        if start != -1 and end != -1:
+            json_str = response[start:end+1]
+            result = json.loads(json_str)
+            if result.get('groups'):
+                return result
+
+        return None
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"AI NF-e grouping failed: {e}")
+        return None
+
+
+def process_nfe_with_variants(batch, items, current_ns, tenant, supplier_obj, brand_obj, cat_obj, nNF):
+    """
+    Process NF-e items with intelligent variant detection.
+    """
+    from decimal import Decimal
+
+    # Step 1: Collect all product info
+    product_list = []
+    for det in items:
+        prod = det.find('nfe:prod', current_ns)
+        sku = prod.find('nfe:cProd', current_ns).text
+        name = prod.find('nfe:xProd', current_ns).text
+        qty = Decimal(prod.find('nfe:qCom', current_ns).text)
+        uom = prod.find('nfe:uCom', current_ns).text
+        unit_val = Decimal(prod.find('nfe:vUnCom', current_ns).text)
+
+        barcode_node = prod.find('nfe:cEAN', current_ns)
+        barcode = None
+        if barcode_node is not None and barcode_node.text and barcode_node.text != 'SEM GTIN':
+            barcode = barcode_node.text.strip()
+
+        product_list.append({
+            'sku': sku,
+            'name': name,
+            'qty': qty,
+            'uom': uom,
+            'cost': unit_val,
+            'barcode': barcode
+        })
+
+    # Step 2: Try AI grouping
+    groupings = ai_group_nfe_products(product_list)
+
+    success_count = 0
+    errors = []
+
+    # Create SKU lookup from groupings
+    sku_to_group = {}
+    if groupings and groupings.get('groups'):
+        for group in groupings['groups']:
+            parent_name = group['parent_name']
+            attribute = group['attribute']
+
+            # Add explicitly listed variants
+            for variant in group.get('variants', []):
+                sku_to_group[variant['sku']] = {
+                    'parent_name': parent_name,
+                    'attribute': attribute,
+                    'attr_value': variant['attr_value']
+                }
+
+            # AGGRESSIVE FALLBACK: Find other products that match this parent
+            # Look for products whose name contains the parent name (fuzzy match)
+            parent_words = set(parent_name.upper().split())
+
+            for p in product_list:
+                if p['sku'] in sku_to_group:
+                    continue  # Already mapped
+
+                # Check if product name contains most of the parent words
+                product_words = set(p['name'].upper().split())
+                common_words = parent_words & product_words
+
+                # If 70%+ of parent words are in product name, it's likely a variant
+                if len(common_words) >= len(parent_words) * 0.7:
+                    # Extract the attribute value from the name difference
+                    diff_words = product_words - parent_words
+                    attr_value = ' '.join(sorted(diff_words)) if diff_words else p['name']
+
+                    sku_to_group[p['sku']] = {
+                        'parent_name': parent_name,
+                        'attribute': attribute,
+                        'attr_value': attr_value.title()
+                    }
+
+    # Step 3: Process products
+    parent_cache = {}  # Cache for parent VARIABLE products
+
+    for idx, p in enumerate(product_list):
+        batch.processed_rows = idx + 1
+        batch.save()
+
+        try:
+            if p['sku'] in sku_to_group:
+                # This is a variant
+                group_info = sku_to_group[p['sku']]
+                parent_name = group_info['parent_name']
+
+                # Get or create parent VARIABLE product
+                if parent_name not in parent_cache:
+                    parent_sku = f"VAR-{parent_name[:20].replace(' ', '-').upper()}"
+                    parent, _ = Product.objects.update_or_create(
+                        tenant=tenant,
+                        name=parent_name,
+                        product_type=ProductType.VARIABLE,
+                        defaults={
+                            'sku': parent_sku,
+                            'category': cat_obj,
+                            'brand': brand_obj,
+                            'default_supplier': supplier_obj,
+                            'is_active': True,
+                        }
+                    )
+                    parent_cache[parent_name] = parent
+
+                parent = parent_cache[parent_name]
+
+                # Get or create attribute type
+                attr_type, _ = AttributeType.objects.get_or_create(
+                    tenant=tenant,
+                    name=group_info['attribute']
+                )
+
+                # Create variant
+                variant, created = ProductVariant.objects.update_or_create(
+                    tenant=tenant,
+                    sku=p['sku'],
+                    defaults={
+                        'product': parent,
+                        'name': p['name'],
+                        'barcode': p['barcode'],
+                        'avg_unit_cost': p['cost'],
+                    }
+                )
+
+                # Set attribute value
+                VariantAttributeValue.objects.update_or_create(
+                    variant=variant,
+                    attribute_type=attr_type,
+                    defaults={'value': group_info['attr_value']}
+                )
+
+                # Create stock movement for variant
+                StockService.create_movement(
+                    tenant=tenant,
+                    user=batch.user,
+                    variant=variant,
+                    movement_type='IN',
+                    quantity=int(p['qty']),
+                    reason=f"Importação NF-e {nNF}",
+                    unit_cost=p['cost']
+                )
+            else:
+                # Simple product (no grouping detected)
                 product, created = Product.objects.update_or_create(
                     tenant=tenant,
-                    sku=sku,
+                    sku=p['sku'],
                     defaults={
-                        'name': name,
-                        'uom': uom,
+                        'name': p['name'],
+                        'uom': p['uom'],
                         'category': cat_obj,
                         'brand': brand_obj,
+                        'default_supplier': supplier_obj,
+                        'barcode': p['barcode'],
                         'is_active': True,
                         'product_type': ProductType.SIMPLE,
                     }
                 )
 
                 if not product.avg_unit_cost or product.avg_unit_cost == 0:
-                    product.avg_unit_cost = unit_val
+                    product.avg_unit_cost = p['cost']
                     product.save()
 
                 StockService.create_movement(
@@ -356,19 +794,25 @@ def process_xml_nfe(batch):
                     user=batch.user,
                     product=product,
                     movement_type='IN',
-                    quantity=int(qty),
+                    quantity=int(p['qty']),
                     reason=f"Importação NF-e {nNF}",
-                    unit_cost=unit_val
+                    unit_cost=p['cost']
                 )
-                success_count += 1
-            except Exception as e:
-                errors.append(f"Erro item {sku}: {str(e)}")
 
-        status_msg = f"Sucesso: {success_count} itens."
-        if errors:
-            status_msg += f" Erros: {len(errors)}. {'; '.join(errors[:3])}"
+            success_count += 1
+        except Exception as e:
+            errors.append(f"Erro item {p['sku']}: {str(e)}")
 
-        return status_msg
+    # Build status message
+    grouped_count = len(sku_to_group)
+    simple_count = success_count - grouped_count
 
-    except Exception as e:
-        return f"Falha de processamento XML: {str(e)}"
+    status_msg = f"Sucesso: {success_count} itens"
+    if grouped_count > 0:
+        status_msg += f" ({grouped_count} variações agrupadas, {simple_count} simples)"
+    status_msg += "."
+
+    if errors:
+        status_msg += f" Erros: {len(errors)}. {'; '.join(errors[:3])}"
+
+    return status_msg

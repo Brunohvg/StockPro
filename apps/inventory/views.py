@@ -5,12 +5,15 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
+import csv
+from django.http import HttpResponse
 
 from .models import StockMovement, ImportBatch
-from .forms import ImportBatchForm
+from .models_v2 import Location
+from .forms import ImportBatchForm, LocationForm
 from apps.products.models import Product, ProductVariant, ProductType
 from apps.core.services import StockService
-from apps.tenants.middleware import trial_allows_read
+from apps.tenants.middleware import trial_allows_read, admin_required
 
 
 @login_required
@@ -42,6 +45,9 @@ def movement_list(request):
 def create_movement(request):
     tenant = request.tenant
 
+    # Pre-fetch locations
+    locations = Location.objects.filter(tenant=tenant, is_active=True).order_by('-is_default', 'name')
+
     # Pre-fetch products for datalist
     simple_products = Product.objects.filter(
         tenant=tenant,
@@ -60,6 +66,7 @@ def create_movement(request):
         quantity = int(request.POST.get('quantity', 0))
         reason = request.POST.get('reason', '')
         unit_cost = request.POST.get('unit_cost')
+        location_id = request.POST.get('location')
 
         try:
             # Try to find by SKU (variant first, then simple product)
@@ -100,7 +107,8 @@ def create_movement(request):
                 product=product,
                 variant=variant,
                 reason=reason,
-                unit_cost=float(unit_cost) if unit_cost else None
+                unit_cost=float(unit_cost) if unit_cost else None,
+                location_id=location_id
             )
 
             target_name = variant.display_name if variant else product.name
@@ -111,7 +119,8 @@ def create_movement(request):
 
     return render(request, 'inventory/movement_form.html', {
         'simple_products': simple_products,
-        'variants': variants
+        'variants': variants,
+        'locations': locations
     })
 
 
@@ -218,14 +227,47 @@ def import_create(request):
             batch.user = request.user
             batch.tenant = request.tenant
             batch.save()
-            from .tasks import process_import_task
-            process_import_task.delay(str(batch.id))
-            messages.info(request, "Arquivo enviado! O processamento iniciará em segundo plano.")
+
+            try:
+                from .tasks import process_import_task
+                process_import_task.delay(str(batch.id))
+                messages.info(request, "Arquivo enviado! O processamento iniciará em segundo plano.")
+            except Exception as e:
+                # Se o Celery/Redis falhar, avisamos mas salvamos o lote (sem jargão técnico para o usuário)
+                messages.warning(request, "Arquivo recebido! O processamento automático está temporariamente indisponível, mas seu lote foi salvo. Ele será processado assim que o serviço for restabelecido.")
+                print(f"Celery Error: {e}")
+
             return redirect('inventory:import_list')
     else:
         form = ImportBatchForm()
     return render(request, 'inventory/import_form.html', {'form': form})
 
+@login_required
+@admin_required
+def import_reprocess(request, pk):
+    """Reinicia o processamento de um lote"""
+    batch = get_object_or_404(ImportBatch, id=pk, tenant=request.tenant)
+
+    if batch.status == 'COMPLETED':
+        messages.warning(request, "Este lote já foi processado com sucesso.")
+        return redirect('inventory:import_list')
+
+    # Deletamos logs de erro anteriores para permitir nova tentativa limpa
+    ImportLog.objects.filter(batch=batch, status='ERROR').delete()
+
+    batch.status = 'PENDING'
+    batch.log = "Reprocessamento solicitado pelo usuário..."
+    batch.save()
+
+    try:
+        from .tasks import process_import_task
+        process_import_task.delay(str(batch.id))
+        messages.success(request, f"O reprocessamento do lote {batch.id} foi iniciado.")
+    except Exception as e:
+        messages.warning(request, "Lote agendado, mas o serviço de fila está offline. O processamento ocorrerá assim que possível.")
+        print(f"Celery Error: {e}")
+
+    return redirect('inventory:import_list')
 
 @login_required
 def import_detail(request, pk):
@@ -240,3 +282,60 @@ def delete_import(request, pk):
         batch.delete()
         messages.success(request, "Importação removida.")
     return redirect('inventory:import_list')
+@login_required
+@admin_required
+def location_list(request):
+    """List all inventory locations for the tenant"""
+    tenant = request.tenant
+    locations = Location.objects.filter(tenant=tenant).order_by('-is_default', 'name')
+    return render(request, 'inventory/location_list.html', {'locations': locations})
+
+
+@login_required
+@admin_required
+@trial_allows_read
+def location_create(request):
+    """Create a new inventory location"""
+    if request.method == 'POST':
+        form = LocationForm(request.POST, tenant=request.tenant)
+        if form.is_valid():
+            location = form.save(commit=False)
+            location.tenant = request.tenant
+            location.save()
+            messages.success(request, f"Localização '{location.name}' criada com sucesso!")
+            return redirect('inventory:location_list')
+    else:
+        form = LocationForm(tenant=request.tenant)
+    return render(request, 'inventory/location_form.html', {'form': form})
+
+
+@login_required
+@admin_required
+@trial_allows_read
+def location_edit(request, pk):
+    """Edit an existing inventory location"""
+    location = get_object_or_404(Location, pk=pk, tenant=request.tenant)
+    if request.method == 'POST':
+        form = LocationForm(request.POST, instance=location, tenant=request.tenant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Localização '{location.name}' atualizada!")
+            return redirect('inventory:location_list')
+    else:
+        form = LocationForm(instance=location, tenant=request.tenant)
+    return render(request, 'inventory/location_form.html', {'form': form, 'location': location})
+@login_required
+@admin_required
+def download_csv_template(request):
+    """Gera um arquivo CSV modelo para importação de produtos"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="modelo_importacao_produtos.csv"'
+
+    writer = csv.writer(response)
+    # Header
+    writer.writerow(['nome', 'sku', 'codigo_barras', 'custo_medio', 'estoque_atual', 'estoque_minimo', 'categoria', 'marca'])
+    # Example rows
+    writer.writerow(['Produto Exemplo A', 'SKU-001', '7891234567890', '10.50', '100', '10', 'Ferramentas', 'Bosch'])
+    writer.writerow(['Produto Exemplo B', 'SKU-002', '7891234567891', '55.00', '50', '5', 'Elétrica', 'Tramontina'])
+
+    return response
