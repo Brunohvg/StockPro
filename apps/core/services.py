@@ -1,7 +1,5 @@
-"""
-Stock Service - Business logic for inventory operations (V10)
-Suporta Product (SIMPLE) e ProductVariant (para VARIABLE)
-"""
+from typing import Optional
+from decimal import Decimal
 from django.db import transaction
 from django.conf import settings
 import requests
