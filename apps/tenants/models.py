@@ -7,13 +7,7 @@ from django.utils.text import slugify
 
 class Plan(models.Model):
     """Subscription plans with limits"""
-    PLAN_TYPES = [
-        ('GRATUITO', 'Gratuito'),
-        ('INICIAL', 'Inicial'),
-        ('PROFISSIONAL', 'Profissional'),
-        ('CORPORATIVO', 'Corporativo'),
-    ]
-    name = models.CharField(max_length=50, choices=PLAN_TYPES, unique=True)
+    name = models.CharField(max_length=100, unique=True, verbose_name="Identificador do Plano")
     display_name = models.CharField(max_length=100, default="Plano")
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     max_products = models.PositiveIntegerField(default=50, help_text="Limite de produtos cadastrados")

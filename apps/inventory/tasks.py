@@ -209,6 +209,10 @@ def process_csv_v10(batch):
                     product_defaults['avg_unit_cost'] = float(row.get('cost', 0)) if pd.notna(row.get('cost')) else None
 
                     initial_stock = int(row.get('stock', 0)) if pd.notna(row.get('stock')) else 0
+                    # Pre-check: SKU must not exist as a Variant
+                    if ProductVariant.objects.filter(tenant=tenant, sku=sku).exists():
+                        raise ValueError(f"SKU {sku} já existe como Variação de outro produto.")
+
                     product, created = Product.objects.update_or_create(
                         tenant=tenant,
                         sku=sku,
@@ -285,6 +289,11 @@ def process_csv_v10(batch):
                     'avg_unit_cost': float(row.get('cost', 0)) if pd.notna(row.get('cost')) else None,
                     'minimum_stock': int(row.get('minimum_stock', 0)) if pd.notna(row.get('minimum_stock')) else 0,
                 }
+
+                # Pre-check: SKU must not exist as a Simple Product
+                if Product.objects.filter(tenant=tenant, sku=sku, product_type=ProductType.SIMPLE).exists():
+                    stats['errors'].append(f"Linha {idx+2}: SKU {sku} já existe como Produto Simples e não pode ser Variação.")
+                    continue
 
                 variant, created = ProductVariant.objects.update_or_create(
                     tenant=tenant,
