@@ -69,3 +69,6 @@ uploads/
 # Test files
 test_import_*.csv
 test_import_*.xml
+
+.env.local
+.env*
