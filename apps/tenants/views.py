@@ -82,7 +82,7 @@ def signup_view(request):
 
         SystemSetting.objects.create(tenant=tenant, company_name=company_name)
 
-        login(request, user)
+        login(request, user, backend='apps.accounts.backends.EmailBackend')
         request.session['active_tenant_id'] = tenant.id  # Set active tenant
         messages.success(request, f"Bem-vindo ao StockPro, {first_name}! Sua empresa '{company_name}' está pronta.")
         return redirect('reports:dashboard')

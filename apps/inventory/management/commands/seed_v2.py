@@ -26,7 +26,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from apps.inventory.models_v2 import Location, AdjustmentReason
+        from apps.inventory.models import Location, AdjustmentReason
 
         tenant_slug = options.get('tenant')
 

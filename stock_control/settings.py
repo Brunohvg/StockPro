@@ -1,8 +1,14 @@
 from pathlib import Path
-from decouple import config, Csv
+from decouple import Config, RepositoryEnv, Csv
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Loading environment variables
+env_path = os.path.join(BASE_DIR, '.env.local') if os.path.exists(os.path.join(BASE_DIR, '.env.local')) else os.path.join(BASE_DIR, '.env')
+print(f"DEBUG: Carregando configurações de: {env_path}")
+config = Config(RepositoryEnv(env_path))
+print(f"DEBUG: DB_TYPE selecionado: {config('DB_TYPE', default='postgres')}")
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-secret-key-replace-me')
 
@@ -88,8 +94,9 @@ WSGI_APPLICATION = 'stock_control.wsgi.application'
 
 # Database Configuration
 DB_HOST = config('DB_HOST', default='')
+DB_TYPE = config('DB_TYPE', default='postgres' if DB_HOST else 'sqlite')
 
-if DB_HOST:
+if DB_TYPE == 'postgres' and DB_HOST:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',

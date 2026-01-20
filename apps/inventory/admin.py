@@ -9,7 +9,7 @@ from .models import ImportBatch, ImportLog, StockMovement
 
 # Tenta importar modelos V2 (podem não existir ainda se migrations não rodaram)
 try:
-    from .models_v2 import Location, AdjustmentReason, PendingAssociation
+    from .models import Location, AdjustmentReason, PendingAssociation
     V2_AVAILABLE = True
 except ImportError:
     V2_AVAILABLE = False
@@ -18,7 +18,7 @@ except ImportError:
 @admin.register(StockMovement)
 class StockMovementAdmin(admin.ModelAdmin):
     list_display = [
-        'created_at', 'type', 'target_display', 'quantity', 
+        'created_at', 'type', 'target_display', 'quantity',
         'balance_after', 'user', 'source'
     ]
     list_filter = ['type', 'source', 'created_at', 'tenant']
@@ -30,7 +30,7 @@ class StockMovementAdmin(admin.ModelAdmin):
     ]
     raw_id_fields = ['product', 'variant']
     ordering = ['-created_at']
-    
+
     def target_display(self, obj):
         if obj.variant:
             return f'{obj.variant.sku}'
@@ -41,14 +41,14 @@ class StockMovementAdmin(admin.ModelAdmin):
 @admin.register(ImportBatch)
 class ImportBatchAdmin(admin.ModelAdmin):
     list_display = [
-        'created_at', 'type', 'status', 'progress_display', 
+        'created_at', 'type', 'status', 'progress_display',
         'success_count', 'error_count', 'user'
     ]
     list_filter = ['type', 'status', 'created_at', 'tenant']
     search_fields = ['log']
     date_hierarchy = 'created_at'
     readonly_fields = ['id', 'created_at', 'completed_at', 'total_rows', 'processed_rows']
-    
+
     def progress_display(self, obj):
         pct = obj.progress_percent
         color = 'green' if pct == 100 else 'orange' if pct > 50 else 'red'
@@ -65,7 +65,7 @@ class ImportLogAdmin(admin.ModelAdmin):
     list_filter = ['status', 'created_at']
     search_fields = ['idempotency_key', 'message']
     raw_id_fields = ['batch']
-    
+
     def message_preview(self, obj):
         if obj.message:
             return obj.message[:100] + '...' if len(obj.message) > 100 else obj.message
@@ -82,7 +82,7 @@ if V2_AVAILABLE:
         search_fields = ['code', 'name']
         ordering = ['name']
         list_editable = ['is_active', 'is_default']
-        
+
         fieldsets = (
             ('Identificação', {
                 'fields': ('tenant', 'code', 'name', 'location_type')
@@ -111,7 +111,7 @@ if V2_AVAILABLE:
     @admin.register(PendingAssociation)
     class PendingAssociationAdmin(admin.ModelAdmin):
         list_display = [
-            'supplier_sku', 'supplier_name', 'supplier', 
+            'supplier_sku', 'supplier_name', 'supplier',
             'quantity', 'unit_cost', 'status', 'created_at'
         ]
         list_filter = ['status', 'supplier', 'created_at', 'tenant']
@@ -119,6 +119,6 @@ if V2_AVAILABLE:
         date_hierarchy = 'created_at'
         raw_id_fields = ['import_batch', 'supplier', 'resolved_product', 'resolved_variant']
         readonly_fields = ['id', 'created_at', 'resolved_at']
-        
+
         def has_add_permission(self, request):
             return False  # Não permite adicionar manualmente

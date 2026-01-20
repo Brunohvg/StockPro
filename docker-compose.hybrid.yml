@@ -1,0 +1,34 @@
+# StockPro - Hybrid Local Development
+# Runs only Redis and Celery in Docker, DB is local SQLite
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build: .
+    command: celery -A stock_control worker -l info
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=local-dev-key
+      - DB_TYPE=sqlite
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  beat:
+    build: .
+    command: celery -A stock_control beat -l info
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=local-dev-key
+      - DB_TYPE=sqlite
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis

@@ -28,6 +28,9 @@ class SmartLoginView(LoginView):
     def form_valid(self, form):
         user = form.get_user()
 
+        # Log the user in first (specify backend to avoid ambiguity with multiple backends)
+        login(self.request, user, backend='apps.accounts.backends.EmailBackend')
+
         # Get active memberships
         memberships = TenantMembership.objects.filter(
             user=user,
@@ -38,9 +41,6 @@ class SmartLoginView(LoginView):
         ).select_related('tenant')
 
         active_count = memberships.count()
-
-        # Log the user in first
-        login(self.request, user)
 
         if active_count == 0:
             # No active companies - check if they have any pending invites
@@ -335,7 +335,7 @@ def accept_invite(request, token):
         membership = invite.accept(user)
 
         # Login
-        login(request, user)
+        login(request, user, backend='apps.accounts.backends.EmailBackend')
         request.session['active_tenant_id'] = membership.tenant_id
 
         messages.success(request, f"Conta criada! Bem-vindo à {invite.tenant.name}!")

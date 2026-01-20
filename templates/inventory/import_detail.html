@@ -1,85 +1,257 @@
 {% extends 'base.html' %}
+{% load humanize %}
+{% load core_tags %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --premium-indigo: #6366f1;
+        --premium-slate: #0f172a;
+        --premium-emerald: #10b981;
+        --premium-rose: #f43f5e;
+    }
+
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 1.5rem;
+        box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.05);
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-left: 2.5rem;
+        padding-bottom: 2rem;
+        border-left: 2px dashed #e2e8f0;
+    }
+
+    .timeline-item:last-child {
+        padding-bottom: 0;
+        border-left: 2px dashed transparent;
+    }
+
+    .timeline-dot {
+        position: absolute;
+        left: -0.5rem;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 9999px;
+        background: white;
+        border: 2px solid var(--premium-indigo);
+        z-index: 10;
+    }
+
+    .log-card {
+        transition: all 0.2s ease;
+        border: 1px solid #f1f5f9;
+        background: rgba(255, 255, 255, 0.5);
+    }
+
+    .log-card:hover {
+        background: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.05);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto py-8 space-y-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-    <div class="flex items-center justify-between border-b border-slate-100 pb-6">
+    <!-- Header & Action Bar -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
-            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Lote de Importação #{{ batch.id }}</h1>
-            <p class="text-slate-500 font-medium text-sm">Registro detalhado de processamento de dados.</p>
+            <nav class="flex items-center gap-2 mb-2">
+                <a href="{% url 'inventory:import_list' %}" class="text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:text-indigo-600 transition-colors">Importações</a>
+                <i data-lucide="chevron-right" class="w-3 h-3 text-slate-300"></i>
+                <span class="text-[9px] font-bold uppercase tracking-widest text-slate-900">Lote #{{ batch.id|stringformat:".8s" }}</span>
+            </nav>
+            <h1 class="text-3xl font-black text-slate-900 tracking-tight">Relatório de Carga</h1>
+            <p class="text-slate-500 mt-1 text-sm font-medium">Monitoramento do processamento de dados.</p>
         </div>
-        <a href="{% url 'inventory:import_list' %}" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar à Lista
-        </a>
+
+        <div class="flex items-center gap-2">
+            {% if batch.status == 'ERROR' or batch.status == 'PARTIAL' %}
+            <a href="{% url 'inventory:import_reprocess' batch.pk %}" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/10 transition-all text-sm">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                Reprocessar
+            </a>
+            {% endif %}
+            <a href="{% url 'inventory:import_list' %}" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all text-sm">
+                Voltar
+            </a>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status Atual</p>
-            <div class="flex items-center gap-2">
-                {% if batch.status == 'COMPLETED' %}
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span class="text-sm font-black text-emerald-700">Concluído</span>
-                {% elif batch.status == 'ERROR' %}
-                    <span class="w-2 h-2 rounded-full bg-rose-500"></span>
-                    <span class="text-sm font-black text-rose-700">Erro Fatal</span>
-                {% else %}
-                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                    <span class="text-sm font-black text-amber-700">Processando... ({{ batch.progress_percent }}%)</span>
-                {% endif %}
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left Sidebar -->
+        <div class="lg:col-span-4 space-y-6">
+            <div class="glass-panel p-6 text-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r {% if batch.status == 'COMPLETED' %}from-emerald-500 to-teal-400{% elif batch.status == 'ERROR' %}from-rose-500 to-orange-400{% else %}from-indigo-500 to-purple-400{% endif %}"></div>
+
+                <div class="relative w-32 h-32 mx-auto mb-6">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <circle class="text-slate-100" stroke-width="6" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50"/>
+                        <circle class="{% if batch.status == 'COMPLETED' %}text-emerald-500{% elif batch.status == 'ERROR' %}text-rose-500{% else %}text-indigo-500{% endif %} transition-all duration-1000"
+                                stroke-width="8"
+                                stroke-dasharray="282.7"
+                                stroke-dashoffset="{{ 282.7|multiply:batch.progress_percent|divide:100|subtract:282.7|multiply:-1 }}"
+                                stroke-linecap="round"
+                                stroke="currentColor"
+                                fill="transparent"
+                                r="45" cx="50" cy="50"/>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span class="text-2xl font-black text-slate-900">{{ batch.progress_percent }}%</span>
+                        <span class="text-[8px] font-bold uppercase tracking-widest text-slate-400">Progresso</span>
+                    </div>
+                </div>
+
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg font-bold text-[10px] uppercase tracking-widest border
+                    {% if batch.status == 'COMPLETED' %}bg-emerald-50 text-emerald-600 border-emerald-100
+                    {% elif batch.status == 'ERROR' %}bg-rose-50 text-rose-600 border-rose-100
+                    {% else %}bg-indigo-50 text-indigo-600 border-indigo-100{% endif %}">
+                    {{ batch.get_status_display }}
+                </div>
             </div>
-            {% if batch.status == 'PROCESSING' %}
-            <div class="mt-4 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-indigo-500" style="width: {{ batch.progress_percent }}%"></div>
+
+            <div class="glass-panel p-6">
+                <h3 class="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+                    Resumo do Lote
+                </h3>
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                                <i data-lucide="list" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-600">Total</span>
+                        </div>
+                        <span class="text-base font-black text-slate-900">{{ batch.total_rows }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500">
+                                <i data-lucide="shield-check" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-600">Sucesso</span>
+                        </div>
+                        <span class="text-base font-black text-emerald-600">{{ batch.success_count }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500">
+                                <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-600">Erros</span>
+                        </div>
+                        <span class="text-base font-black text-rose-600">{{ batch.error_count }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-6 bg-slate-900 text-white">
+                <h3 class="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-4">Informações</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center py-2 border-b border-white/10">
+                        <span class="text-[9px] text-slate-400 font-bold uppercase">Fonte</span>
+                        <span class="text-xs font-bold">{{ batch.get_type_display }}</span>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-white/10">
+                        <span class="text-[9px] text-slate-400 font-bold uppercase">Data</span>
+                        <span class="text-xs font-bold">{{ batch.created_at|date:"d/m/Y H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Main Content -->
+        <div class="lg:col-span-8 space-y-6">
+            <div class="glass-panel p-8">
+                <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
+                        <i data-lucide="activity" class="w-5 h-5"></i>
+                    </div>
+                    Fluxo
+                </h3>
+
+                <div class="relative ml-2">
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="flex justify-between items-start mb-1">
+                            <h4 class="text-sm font-bold text-slate-900">Entrada de Dados</h4>
+                            <span class="text-[9px] font-bold text-indigo-500">{{ batch.created_at|date:"H:i:s" }}</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Arquivo recebido pelo sistema.</p>
+                    </div>
+
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="flex justify-between items-start mb-1">
+                            <h4 class="text-sm font-bold text-slate-900">Processamento IA</h4>
+                            <span class="text-[9px] font-bold text-indigo-500">{{ batch.created_at|date:"H:i:s" }}</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Análise V3 para agrupamento de produtos.</p>
+                    </div>
+
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="flex flex-col gap-4">
+                            <h4 class="text-sm font-bold text-slate-900">Telemetria em Tempo Real</h4>
+                            <div class="bg-slate-950 rounded-2xl p-6 font-mono text-[10px] text-indigo-400 border border-slate-800">
+                                <pre class="whitespace-pre-wrap leading-relaxed">{{ batch.log|default:"Aguardando logs..." }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if batch.logs_legacy.exists %}
+            <div class="glass-panel p-8">
+                <div class="flex items-center justify-between mb-8">
+                    <h3 class="text-xl font-black text-slate-900 flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white">
+                            <i data-lucide="terminal" class="w-5 h-5"></i>
+                        </div>
+                        Rastreio Detalhado
+                    </h3>
+                </div>
+
+                <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {% for log in batch.logs_legacy.all %}
+                    <div class="log-card p-4 rounded-xl flex items-start gap-4">
+                        <div class="mt-1">
+                            {% if log.status == 'SUCCESS' or 'sucesso' in log.status|lower %}
+                                <div class="w-6 h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                    <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                                </div>
+                            {% else %}
+                                <div class="w-6 h-6 rounded-md bg-rose-100 text-rose-600 flex items-center justify-center">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[8px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-md">Linha #{{ log.row_number }}</span>
+                                <span class="text-[8px] font-bold text-slate-400">{{ log.created_at|date:"H:i:s" }}</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-900">{{ log.message }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
             {% endif %}
         </div>
-        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Data de Início</p>
-            <p class="text-sm font-black text-slate-900">{{ batch.created_at|date:"d/m/Y H:i:s" }}</p>
-        </div>
-        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tipo de Arquivo</p>
-            <p class="text-sm font-black text-slate-900">{{ batch.get_type_display }}</p>
-        </div>
     </div>
-
-    <div class="bg-slate-900 rounded-[2.5rem] p-8 lg:p-12 text-white shadow-2xl relative overflow-hidden">
-        <div class="absolute -right-20 -bottom-20 w-80 h-80 bg-white/5 rounded-full"></div>
-
-        <div class="relative z-10 space-y-6">
-            <div class="flex items-center gap-3 border-b border-white/10 pb-6">
-                <i data-lucide="terminal" class="w-6 h-6 text-indigo-400"></i>
-                <h3 class="text-lg font-bold">Logs de Processamento</h3>
-            </div>
-
-            <div class="bg-black/40 rounded-3xl p-6 font-mono text-xs text-indigo-200 leading-relaxed max-h-[400px] overflow-y-auto whitespace-pre-wrap">
-{{ batch.log|default:"Nenhum log disponível para este processamento." }}
-            </div>
-
-            <div class="pt-6 flex flex-col md:flex-row gap-4 justify-between items-center bg-white/5 p-6 rounded-2xl">
-                 <div class="text-center md:text-left">
-                    <p class="text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] mb-1">Resultado Final</p>
-                    <p class="text-sm font-medium text-white/80">
-                        {% if batch.status == 'COMPLETED' %}
-                            Processamento finalizado com sucesso. Dados persistidos.
-                        {% elif batch.status == 'ERROR' %}
-                            Falha crítica detectada. Verifique o log para depuração.
-                        {% else %}
-                            Aguardando conclusão do processamento em background.
-                        {% endif %}
-                    </p>
-                 </div>
-
-                 <form action="{% url 'inventory:delete_import' batch.id %}" method="post" onsubmit="return confirm('Deseja realmente remover este registro de lote?');">
-                    {% csrf_token %}
-                    <button type="submit" class="px-6 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl text-xs font-bold transition-all flex items-center gap-2">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i> Remover Registro
-                    </button>
-                 </form>
-            </div>
-        </div>
-    </div>
-
 </div>
+
+<script>
+    lucide.createIcons();
+</script>
 {% endblock %}

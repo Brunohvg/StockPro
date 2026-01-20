@@ -15,8 +15,15 @@ urlpatterns = [
     path('imports/template/', views.download_csv_template, name='download_csv_template'),
     path('imports/<uuid:pk>/reprocess/', views.import_reprocess, name='import_reprocess'),
 
+    # AI Staging (V20)
+    path('pending/', views.pending_product_list, name='pending_product_list'),
+    path('pending/<int:pk>/approve/', views.pending_product_approve, name='pending_product_approve'),
+    path('pending/<int:pk>/reject/', views.pending_product_reject, name='pending_product_reject'),
+    path('pending/bulk-approve/', views.pending_product_bulk_approve, name='pending_product_bulk_approve'),
+    path('pending/bulk-reject/', views.pending_product_bulk_reject, name='pending_product_bulk_reject'),
+
     # Locations (V2)
     path('locations/', views.location_list, name='location_list'),
-    path('locations/add/', views.location_create, name='location_create'),
+    path('locations/create/', views.location_create, name='location_create'),
     path('locations/<int:pk>/edit/', views.location_edit, name='location_edit'),
 ]

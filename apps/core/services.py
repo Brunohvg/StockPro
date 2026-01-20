@@ -143,6 +143,7 @@ class StockService:
         Create a stock movement and update stock.
         """
         from decimal import Decimal
+        quantity = Decimal(str(quantity))
         if unit_cost is not None:
             unit_cost = Decimal(str(unit_cost))
         # Resolve by SKU if no direct reference
@@ -161,7 +162,7 @@ class StockService:
             target_type = 'variant'
         elif product:
             if product.is_variable:
-                raise ValueError(f"Produto '{product.sku}' é variável. Especifique uma variação.")
+                raise ValueError(f"O produto '{product.sku}' ({product.name}) é variável e exige a especificação de uma variação (tamanho, cor, etc.) para movimentar estoque.")
             target = product
             target_type = 'product'
         else:
@@ -175,7 +176,7 @@ class StockService:
 
         # Fallback for location_id
         if not location_id:
-            from apps.inventory.models_v2 import Location
+            from apps.inventory.models import Location
             if target_type == 'product' and target.default_location_id:
                 location_id = target.default_location_id
             elif target_type == 'variant' and target.product.default_location_id:
@@ -204,6 +205,7 @@ class StockService:
             raise ValueError(f"Tipo de movimento inválido: {movement_type}")
 
         target.current_stock = new_stock
+        target._allow_stock_change = True  # Unlock ledger for this authorized movement
         target.save()
 
         # Create immutable movement record

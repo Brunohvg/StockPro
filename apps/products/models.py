@@ -66,6 +66,7 @@ class Product(TenantMixin):
     Para VARIABLE: estoque é a soma das variantes.
     """
     sku = models.CharField(max_length=50, blank=True, null=True, verbose_name="SKU Base")
+    _allow_stock_change = False  # Flag interna para permitir alteração de estoque via StockService
     name = models.CharField(max_length=255, verbose_name="Nome do Produto")
     product_type = models.CharField(
         max_length=10,
@@ -99,9 +100,13 @@ class Product(TenantMixin):
 
     # Campos para SIMPLE - ignorados se VARIABLE
     barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")
-    current_stock = models.IntegerField(default=0, verbose_name="Estoque Atual")
-    minimum_stock = models.IntegerField(default=0, verbose_name="Estoque Mínimo")
+    current_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Atual")
+    minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo")
     avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio")
+
+    # AI Hardening (V3)
+    requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
+    ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -126,11 +131,25 @@ class Product(TenantMixin):
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
+
+        # LOCKDOWN: Se não for novo e o estoque mudou sem a flag, bloqueia
+        if not is_new and hasattr(self, 'id'):
+            old_instance = Product.objects.get(pk=self.id)
+            if old_instance.current_stock != self.current_stock and not getattr(self, '_allow_stock_change', False):
+                # Reverte e avisa
+                self.current_stock = old_instance.current_stock
+                # Em produção poderíamos dar raise ValidationError, mas para evitar quebrar o Admin por completo,
+                # apenas revertemos silenciosamente ou logamos. Vamos de Reversão Silenciosa + Flag interna para o Admin saber.
+
         super().save(*args, **kwargs)
         if (is_new and not self.sku) or (self.sku and (self.sku.startswith('PROD-') or '-' not in self.sku)):
             # Se for novo ou tiver o padrão antigo 'PROD-...'
             self.sku = self.generate_sku()
             Product.objects.filter(pk=self.pk).update(sku=self.sku)
+
+    @property
+    def ai_confidence_percent(self):
+        return int((self.ai_confidence or 0) * 100)
 
     def __str__(self):
         return f"{self.sku} - {self.name}" if self.sku else self.name
@@ -209,13 +228,18 @@ class ProductVariant(TenantMixin):
         limit_choices_to={'product_type': ProductType.VARIABLE}
     )
     sku = models.CharField(max_length=50, null=True, blank=True, verbose_name="SKU Variação")
+    _allow_stock_change = False
     name = models.CharField(max_length=255, blank=True, verbose_name="Nome da Variação")
     barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")
     photo = models.ImageField(upload_to='products/variants/', blank=True, null=True)
 
-    current_stock = models.IntegerField(default=0, verbose_name="Estoque")
-    minimum_stock = models.IntegerField(default=0, verbose_name="Estoque Mínimo")
+    current_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque")
+    minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo")
     avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio")
+
+    # AI Hardening (V3)
+    requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
+    ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -247,6 +271,13 @@ class ProductVariant(TenantMixin):
         # Inherit tenant from parent product
         if self.product_id and not self.tenant_id:
             self.tenant = self.product.tenant
+
+        # LOCKDOWN
+        if not is_new and hasattr(self, 'id'):
+            old_instance = ProductVariant.objects.get(pk=self.id)
+            if old_instance.current_stock != self.current_stock and not getattr(self, '_allow_stock_change', False):
+                self.current_stock = old_instance.current_stock
+
         super().save(*args, **kwargs)
         if (is_new and not self.sku) or (self.sku and self.sku.startswith('VAR-') and '-' not in self.sku[4:]):
             self.sku = self.generate_sku()
@@ -257,6 +288,10 @@ class ProductVariant(TenantMixin):
         if attrs:
             return f"{self.product.name} ({attrs})"
         return self.name or f"{self.product.name} - {self.sku}"
+
+    @property
+    def ai_confidence_percent(self):
+        return int((self.ai_confidence or 0) * 100)
 
     @property
     def stock_value(self):
