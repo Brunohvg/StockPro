@@ -70,9 +70,12 @@ class Tenant(models.Model):
 
     @property
     def products_count(self):
-        """Count products for this tenant"""
-        from apps.products.models import Product
-        return Product.objects.filter(tenant=self).count()
+        """Count products for this tenant (SIMPLE products + Variants)"""
+        from apps.products.models import Product, ProductVariant, ProductType
+        # Contagem de produtos SIMPLES + todas as variações de produtos VARIÁVEIS
+        simple_count = Product.objects.filter(tenant=self, product_type=ProductType.SIMPLE).count()
+        variant_count = ProductVariant.objects.filter(tenant=self).count()
+        return simple_count + variant_count
 
     @property
     def users_count(self):

@@ -1,0 +1,364 @@
+{% extends 'base.html' %}
+{% load humanize l10n %}
+{% load core_tags %}
+
+{% block extra_css %}
+<style>
+    .glass-effect {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .hover-card {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .hover-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 20px -10px rgba(0, 0, 0, 0.08);
+    }
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .confidence-high { background: #10b981; box-shadow: 0 0 12px #10b98144; }
+    .confidence-medium { background: #f59e0b; box-shadow: 0 0 12px #f59e0b44; }
+    .confidence-low { background: #ef4444; box-shadow: 0 0 12px #ef444444; }
+
+    /* Custom Checkbox */
+    .checkbox-wrapper input {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Hero Header -->
+    <div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+            <div class="flex items-center gap-2 mb-2">
+                <div class="p-1.5 bg-rose-100 text-rose-600 rounded-lg">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                </div>
+                <span class="text-xs font-black uppercase tracking-widest text-slate-400">Hub de Inteligência</span>
+            </div>
+            <h1 class="text-3xl font-black text-slate-900 tracking-tight">Curadoria de Importação</h1>
+            <p class="text-slate-500 font-medium mt-1">Revise as sugestões da IA para integrar novos itens ao seu catálogo.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                <div class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+                <span class="text-sm font-bold text-slate-700">{{ pending_items|length }} pendentes</span>
+            </div>
+            <a href="{% url 'inventory:import_list' %}" class="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95">
+                <i data-lucide="list" class="w-4 h-4 text-slate-400"></i>
+                Ver Historico
+            </a>
+        </div>
+    </div>
+
+    {% if pending_items %}
+    <form id="bulk-form" method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Optimized Bulk Action Bar -->
+        <div class="sticky top-6 z-40 bg-white/90 backdrop-blur-xl border border-slate-200 p-3 rounded-2xl shadow-xl flex items-center justify-between gap-4">
+            <div class="flex items-center gap-4 pl-3">
+                <input type="checkbox" id="select-all"
+                       class="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                       onclick="toggleSelectAll(this)">
+                <div class="h-6 w-px bg-slate-200"></div>
+                <span id="selected-count" class="text-sm font-bold text-slate-500">0 selecionados</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button type="submit" formaction="{% url 'inventory:pending_product_bulk_approve' %}"
+                        class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center gap-2"
+                        id="bulk-approve-btn" disabled>
+                    <i data-lucide="check-check" class="w-4 h-4"></i>
+                    Aprovar Seleção
+                </button>
+                <button type="submit" formaction="{% url 'inventory:pending_product_bulk_reject' %}"
+                        class="px-6 py-2.5 bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 rounded-xl font-bold text-sm transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center gap-2"
+                        id="bulk-reject-btn" disabled>
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    Rejeitar
+                </button>
+            </div>
+        </div>
+
+        <!-- Items Table-like Card Layout -->
+        <div class="space-y-3">
+            {% for item in pending_items %}
+            <div class="bg-white border {% if item.ai_confidence >= 0.9 %}border-l-4 border-l-emerald-500{% elif item.ai_confidence >= 0.7 %}border-l-4 border-l-amber-500{% else %}border-l-4 border-l-rose-500{% endif %} border-slate-200 rounded-2xl p-4 hover-card group" id="item-{{ item.pk }}">
+                <div class="flex flex-wrap items-center gap-6">
+                    <!-- Selection -->
+                    <div class="flex-shrink-0">
+                        <input type="checkbox" class="item-checkbox w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                               name="item_ids" value="{{ item.pk|unlocalize }}"
+                               onchange="updateSelectedCount()">
+                    </div>
+
+                    <!-- Item Identity -->
+                    <div class="flex-grow min-w-[300px]">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">SKU: {{ item.supplier_sku }}</span>
+                            {% if item.ean %}
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">EAN: {{ item.ean }}</span>
+                            {% endif %}
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{{ item.description }}</h3>
+                        <div class="mt-2 flex items-center gap-4">
+                            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                                <i data-lucide="box" class="w-3 h-3 text-slate-400"></i> {{ item.quantity|floatformat:0 }} un
+                            </span>
+                            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1 text-emerald-600">
+                                <i data-lucide="circle-dollar-sign" class="w-3 h-3"></i> R$ {{ item.unit_cost|floatformat:2|intcomma }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- AI Intelligence Summary Section -->
+                    <div class="w-full lg:w-[400px] bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="status-dot {% if item.ai_confidence >= 0.9 %}confidence-high{% elif item.ai_confidence >= 0.7 %}confidence-medium{% else %}confidence-low{% endif %}"></span>
+                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Análise de IA</span>
+                            </div>
+                            <span class="text-[10px] font-black {% if item.ai_confidence >= 0.9 %}text-emerald-600{% elif item.ai_confidence >= 0.7 %}text-amber-600{% else %}text-rose-600{% endif %} uppercase tracking-widest">
+                                {{ item.ai_confidence_percent }}% Confiança
+                            </span>
+                        </div>
+
+                        <!-- Logic Summary (Important for understanding WHY) -->
+                        <div class="text-[11px] text-slate-600 font-medium leading-relaxed mb-2 line-clamp-2 italic">
+                            {{ item.ai_logic_summary|default:"Dedução automática baseada em padrões de mercado." }}
+                        </div>
+
+                        <!-- Detected Attributes Pill Flow -->
+                        <div class="flex flex-wrap gap-1.5">
+                            {% if item.ai_suggestion.detected_category %}
+                            <span class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 flex items-center gap-1.5">
+                                <i data-lucide="folder" class="w-3 h-3 text-indigo-500"></i> {{ item.ai_suggestion.detected_category }}
+                            </span>
+                            {% endif %}
+                            {% if item.ai_suggestion.detected_brand %}
+                            <span class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 flex items-center gap-1.5">
+                                <i data-lucide="tag" class="w-3 h-3 text-rose-500"></i> {{ item.ai_suggestion.detected_brand }}
+                            </span>
+                            {% endif %}
+                            {% if item.ai_suggestion.detected_attributes %}
+                                {% for attr, val in item.ai_suggestion.detected_attributes.items %}
+                                <span class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 flex items-center gap-1.5">
+                                    <i data-lucide="sliders" class="w-3 h-3 text-indigo-500"></i> {{ val }}
+                                </span>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex items-center gap-2 ml-auto">
+                        <button type="button"
+                                class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                                data-bs-toggle="modal" data-bs-target="#configModal-{{ item.pk }}">
+                            <i data-lucide="settings-2" class="w-4 h-4 text-indigo-300"></i> Configurar
+                        </button>
+                        <button type="button"
+                                class="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                                hx-post="{% url 'inventory:pending_product_reject' item.pk|unlocalize %}"
+                                hx-target="#item-{{ item.pk }}"
+                                hx-swap="outerHTML"
+                                hx-confirm="Deseja mesmo rejeitar este item?"
+                                title="Rejeitar Item">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Redesigned Config Modal -->
+            <div class="modal fade" id="configModal-{{ item.pk }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-lg">
+                    <div class="modal-content overflow-hidden border-none rounded-[2rem] shadow-2xl">
+                        <form method="post" action="{% url 'inventory:pending_product_approve' item.pk %}">
+                            {% csrf_token %}
+
+                            <div class="bg-slate-900 px-8 py-6 text-white relative overflow-hidden">
+                                <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+                                <div class="relative z-10">
+                                    <div class="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 mb-2">Configuração de Cadastro</div>
+                                    <h4 class="text-xl font-black">{{ item.description|truncatechars:100 }}</h4>
+                                </div>
+                                <button type="button" class="absolute top-6 right-6 text-white/50 hover:text-white transition-colors" data-bs-dismiss="modal">
+                                    <i data-lucide="x" class="w-6 h-6"></i>
+                                </button>
+                            </div>
+
+                            <div class="p-8 bg-slate-50">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                    <!-- Option: Simple -->
+                                    <label class="relative block cursor-pointer group">
+                                        <input type="radio" name="product_action" value="create_simple" checked class="peer sr-only" onchange="toggleOptionFields('{{ item.pk }}', 'simple')">
+                                        <div class="h-full px-5 py-6 bg-white border-2 border-slate-200 rounded-2xl peer-checked:border-indigo-600 peer-checked:bg-white transition-all hover:border-slate-300 group-hover:shadow-lg">
+                                            <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 mb-4 peer-checked:bg-indigo-600 peer-checked:text-white transition-colors">
+                                                <i data-lucide="package" class="w-6 h-6"></i>
+                                            </div>
+                                            <div class="font-bold text-slate-900">Produto Simples</div>
+                                            <div class="text-[10px] text-slate-400 font-bold uppercase mt-1">Uso Padrão</div>
+                                        </div>
+                                        <div class="absolute top-3 right-3 opacity-0 peer-checked:opacity-100 transition-opacity">
+                                            <i data-lucide="check-circle-2" class="w-5 h-5 text-indigo-600"></i>
+                                        </div>
+                                    </label>
+
+                                    <!-- Option: Variable -->
+                                    <label class="relative block cursor-pointer group">
+                                        <input type="radio" name="product_action" value="create_variable" class="peer sr-only" onchange="toggleOptionFields('{{ item.pk }}', 'variable')">
+                                        <div class="h-full px-5 py-6 bg-white border-2 border-slate-200 rounded-2xl peer-checked:border-emerald-600 peer-checked:bg-white transition-all hover:border-slate-300 group-hover:shadow-lg">
+                                            <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 mb-4 peer-checked:bg-emerald-600 peer-checked:text-white transition-colors">
+                                                <i data-lucide="layers" class="w-6 h-6"></i>
+                                            </div>
+                                            <div class="font-bold text-slate-900">Criar Variável</div>
+                                            <div class="text-[10px] text-slate-400 font-bold uppercase mt-1">Pai + Variação</div>
+                                        </div>
+                                        <div class="absolute top-3 right-3 opacity-0 peer-checked:opacity-100 transition-opacity">
+                                            <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600"></i>
+                                        </div>
+                                    </label>
+
+                                    <!-- Option: Add Variant -->
+                                    <label class="relative block cursor-pointer group">
+                                        <input type="radio" name="product_action" value="add_variant" class="peer sr-only" onchange="toggleOptionFields('{{ item.pk }}', 'variant')">
+                                        <div class="h-full px-5 py-6 bg-white border-2 border-slate-200 rounded-2xl peer-checked:border-amber-600 peer-checked:bg-white transition-all hover:border-slate-300 group-hover:shadow-lg">
+                                            <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 mb-4 peer-checked:bg-amber-600 peer-checked:text-white transition-colors">
+                                                <i data-lucide="plus-circle" class="w-6 h-6"></i>
+                                            </div>
+                                            <div class="font-bold text-slate-900">Vincular/Variante</div>
+                                            <div class="text-[10px] text-slate-400 font-bold uppercase mt-1">Existente</div>
+                                        </div>
+                                        <div class="absolute top-3 right-3 opacity-0 peer-checked:opacity-100 transition-opacity">
+                                            <i data-lucide="check-circle-2" class="w-5 h-5 text-amber-600"></i>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <!-- Dynamic Input Fields Header -->
+                                <div id="dynamic-inputs-{{ item.pk }}" class="hidden animate-in fade-in slide-in-from-bottom-2">
+                                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+
+                                        <!-- Parent Product Selector -->
+                                        <div id="parent-selector-{{ item.pk }}" class="hidden">
+                                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Selecionar Produto Pai Registrado</label>
+                                            <select name="parent_product_id" class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all">
+                                                <option value="">-- Buscar catálogo --</option>
+                                                {% for product in products %}
+                                                <option value="{{ product.pk }}">{{ product.name }} ({{ product.sku }})</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+
+                                        <!-- Attributes Row -->
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Atributo (Ex: Cor)</label>
+                                                <input type="text" name="variant_attribute"
+                                                       value="{% for k, v in item.ai_suggestion.detected_attributes.items %}{% if forloop.first %}{{ k }}{% endif %}{% endfor %}"
+                                                       class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-300">
+                                            </div>
+                                            <div>
+                                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Valor (Ex: Azul)</label>
+                                                <input type="text" name="variant_value"
+                                                       value="{% for k, v in item.ai_suggestion.detected_attributes.items %}{% if forloop.first %}{{ v }}{% endif %}{% endfor %}"
+                                                       class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-300">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="px-8 py-6 bg-white flex items-center justify-between gap-4">
+                                <button type="button" class="px-8 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold transition-all" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="flex-grow px-8 py-4 bg-slate-900 hover:bg-indigo-600 text-white rounded-2xl font-bold transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3">
+                                    Confirmar Integração
+                                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </form>
+    {% else %}
+    <!-- Empty State -->
+    <div class="py-32 flex flex-col items-center justify-center text-center">
+        <div class="w-24 h-24 bg-indigo-50 text-indigo-200 rounded-[2.5rem] flex items-center justify-center mb-8">
+            <i data-lucide="party-popper" class="w-12 h-12"></i>
+        </div>
+        <h2 class="text-3xl font-black text-slate-900 tracking-tight mb-3">Tudo Revisado!</h2>
+        <p class="text-slate-500 font-medium max-w-sm mb-10">Você já processou todos os itens pendentes do Hub de Inteligência. Bom trabalho!</p>
+        <div class="flex items-center gap-4">
+            <a href="{% url 'inventory:import_list' %}" class="flex items-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-indigo-600 transition-all shadow-xl active:scale-95">
+                Ver Importações
+            </a>
+            <a href="{% url 'products:product_list' %}" class="flex items-center gap-2 px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all">
+                Ir para Catálogo
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateSelectedCount() {
+        const checked = document.querySelectorAll('.item-checkbox:checked').length;
+        document.getElementById('selected-count').textContent = checked + ' selecionados';
+        document.getElementById('bulk-approve-btn').disabled = checked === 0;
+        document.getElementById('bulk-reject-btn').disabled = checked === 0;
+
+        // Visual feedback on row
+        document.querySelectorAll('.item-checkbox').forEach(cb => {
+            const card = cb.closest('.hover-card');
+            if (cb.checked) {
+                card.classList.add('bg-indigo-50/50', 'border-indigo-200');
+            } else {
+                card.classList.remove('bg-indigo-50/50', 'border-indigo-200');
+            }
+        });
+    }
+
+    function toggleSelectAll(selectAllCb) {
+        document.querySelectorAll('.item-checkbox').forEach(cb => {
+            cb.checked = selectAllCb.checked;
+        });
+        updateSelectedCount();
+    }
+
+    function toggleOptionFields(itemPk, mode) {
+        const dynamicInputs = document.getElementById('dynamic-inputs-' + itemPk);
+        const parentSelector = document.getElementById('parent-selector-' + itemPk);
+
+        if (mode === 'simple') {
+            dynamicInputs.classList.add('hidden');
+        } else {
+            dynamicInputs.classList.remove('hidden');
+            if (mode === 'variant') {
+                parentSelector.classList.remove('hidden');
+            } else {
+                parentSelector.classList.add('hidden');
+            }
+        }
+    }
+</script>
+{% endblock %}

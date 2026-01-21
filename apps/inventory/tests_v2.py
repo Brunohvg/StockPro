@@ -49,7 +49,7 @@ class LocationModelTests(BaseTestCase):
     
     def test_create_location(self):
         """Deve criar localização corretamente."""
-        from apps.inventory.models_v2 import Location, LocationType
+        from apps.inventory.models import Location, LocationType
         
         location = Location.objects.create(
             tenant=self.tenant,
@@ -64,7 +64,7 @@ class LocationModelTests(BaseTestCase):
     
     def test_unique_code_per_tenant(self):
         """Código deve ser único por tenant."""
-        from apps.inventory.models_v2 import Location
+        from apps.inventory.models import Location
         from django.db import IntegrityError
         
         Location.objects.create(
@@ -82,7 +82,7 @@ class LocationModelTests(BaseTestCase):
     
     def test_only_one_default_per_tenant(self):
         """Deve ter apenas um local padrão por tenant."""
-        from apps.inventory.models_v2 import Location
+        from apps.inventory.models import Location
         
         loc1 = Location.objects.create(
             tenant=self.tenant,
@@ -105,7 +105,7 @@ class LocationModelTests(BaseTestCase):
     
     def test_hierarchical_location(self):
         """Deve suportar hierarquia de locais."""
-        from apps.inventory.models_v2 import Location, LocationType
+        from apps.inventory.models import Location, LocationType
         
         warehouse = Location.objects.create(
             tenant=self.tenant,
@@ -127,7 +127,7 @@ class LocationModelTests(BaseTestCase):
     
     def test_ensure_default_exists(self):
         """Deve criar local padrão se não existir."""
-        from apps.inventory.models_v2 import Location
+        from apps.inventory.models import Location
         
         Location.objects.filter(tenant=self.tenant).delete()
         
@@ -184,7 +184,7 @@ class AdjustmentReasonTests(BaseTestCase):
     
     def test_seed_defaults(self):
         """Deve criar motivos padrão."""
-        from apps.inventory.models_v2 import AdjustmentReason
+        from apps.inventory.models import AdjustmentReason
         
         created = AdjustmentReason.seed_defaults(self.tenant)
         
@@ -308,7 +308,7 @@ class NfeImportServiceTests(BaseTestCase):
     def test_never_create_duplicate(self):
         """Nunca deve criar produto duplicado automaticamente."""
         from apps.partners.services import NfeImportService
-        from apps.inventory.models_v2 import PendingAssociation
+        from apps.inventory.models import PendingAssociation
         from apps.products.models import Product
         
         xml_content = self._get_sample_xml()

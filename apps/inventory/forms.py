@@ -1,6 +1,6 @@
 from django import forms
 from .models import ImportBatch
-from .models_v2 import Location
+from .models import Location
 
 class ImportBatchForm(forms.ModelForm):
     class Meta:

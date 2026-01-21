@@ -8,8 +8,7 @@ from django.db.models import Q
 import csv
 from django.http import HttpResponse
 
-from .models import StockMovement, ImportBatch, ImportLog
-from .models_v2 import Location
+from .models import StockMovement, ImportBatch, ImportLog, Location
 from .forms import ImportBatchForm, LocationForm
 from apps.products.models import Product, ProductVariant, ProductType
 from apps.core.services import StockService
@@ -362,3 +361,344 @@ def download_csv_template(request):
     writer.writerow(['Produto Exemplo B', 'SKU-002', '7891234567891', '55.00', '50', '5', 'Elétrica', 'Tramontina'])
 
     return response
+
+
+@login_required
+@admin_required
+def pending_product_list(request):
+    """Dashboard to review products flagged by AI (V3 Enhanced)"""
+    from .models import ImportItem
+    from apps.products.models import Product
+
+    pending_items = ImportItem.objects.filter(
+        tenant=request.tenant,
+        status='PENDING'
+    ).select_related('batch', 'matched_product', 'matched_variant')
+
+    # Get existing products for "add as variant" option
+    products = Product.objects.filter(
+        tenant=request.tenant,
+        is_active=True
+    ).order_by('name')[:100]
+
+    return render(request, 'inventory/pending_list.html', {
+        'pending_items': pending_items,
+        'products': products,
+    })
+
+@login_required
+@admin_required
+def pending_product_approve(request, pk):
+    """Approves an AI suggestion for a specific ImportItem (V3 Enhanced)"""
+    from apps.core.services import StockService
+    from django.utils import timezone
+    from django.db import transaction
+    from .models import ImportItem
+    from apps.products.models import Product, ProductVariant, ProductType, Category, Brand, AttributeType, VariantAttributeValue
+
+    item = get_object_or_404(ImportItem, pk=pk, tenant=request.tenant)
+
+    if request.method == 'POST':
+        try:
+            with transaction.atomic():
+                target_product = item.matched_product
+                target_variant = item.matched_variant
+
+                # Get form data for product type selection
+                product_action = request.POST.get('product_action', 'create_simple')
+                parent_product_id = request.POST.get('parent_product_id')
+                variant_attribute = request.POST.get('variant_attribute', '')
+                variant_value = request.POST.get('variant_value', '')
+
+                # If no match yet, create based on action
+                if not target_product and not target_variant:
+                    suggestion = item.ai_suggestion or {}
+                    suggested_name = suggestion.get('suggested_name', item.description)
+
+                    # Use detected category or create default
+                    detected_cat = suggestion.get('detected_category')
+                    if detected_cat:
+                        cat_obj, _ = Category.objects.get_or_create(
+                            tenant=request.tenant,
+                            name=detected_cat,
+                            defaults={'rotation': 'B'}
+                        )
+                    else:
+                        cat_obj, _ = Category.objects.get_or_create(
+                            tenant=request.tenant,
+                            name="Importação",
+                            defaults={'rotation': 'B'}
+                        )
+
+                    # Use detected brand or create default
+                    detected_brand = suggestion.get('detected_brand')
+                    if detected_brand:
+                        brand_obj, _ = Brand.objects.get_or_create(
+                            tenant=request.tenant,
+                            name=detected_brand
+                        )
+                    else:
+                        brand_obj, _ = Brand.objects.get_or_create(
+                            tenant=request.tenant,
+                            name="Sem Marca"
+                        )
+
+                    if product_action == 'create_simple':
+                        # Create simple product
+                        target_product = Product.objects.create(
+                            tenant=request.tenant,
+                            name=suggested_name,
+                            product_type=ProductType.SIMPLE,
+                            barcode=item.ean,
+                            avg_unit_cost=item.unit_cost,
+                            category=cat_obj,
+                            brand=brand_obj,
+                            is_active=True
+                        )
+
+                    elif product_action == 'create_variable':
+                        # Create variable product + first variant
+                        target_product = Product.objects.create(
+                            tenant=request.tenant,
+                            name=suggested_name,
+                            product_type=ProductType.VARIABLE,
+                            category=cat_obj,
+                            brand=brand_obj,
+                            is_active=True
+                        )
+
+                        # Create attribute type if provided
+                        attr_type = None
+                        if variant_attribute:
+                            attr_type, _ = AttributeType.objects.get_or_create(
+                                tenant=request.tenant,
+                                name=variant_attribute
+                            )
+
+                        # Create first variant
+                        target_variant = ProductVariant.objects.create(
+                            tenant=request.tenant,
+                            product=target_product,
+                            name=variant_value or item.description,
+                            barcode=item.ean,
+                            avg_unit_cost=item.unit_cost,
+                            is_active=True
+                        )
+
+                        # Add attribute value if provided
+                        if attr_type and variant_value:
+                            VariantAttributeValue.objects.create(
+                                variant=target_variant,
+                                attribute_type=attr_type,
+                                value=variant_value
+                            )
+
+                    elif product_action == 'add_variant' and parent_product_id:
+                        # Add as variant to existing product
+                        target_product = Product.objects.filter(
+                            pk=parent_product_id,
+                            tenant=request.tenant
+                        ).first()
+
+                        if target_product:
+                            # Ensure product is VARIABLE type
+                            if target_product.product_type != ProductType.VARIABLE:
+                                target_product.product_type = ProductType.VARIABLE
+                                target_product.save()
+
+                            # Create attribute type if provided
+                            attr_type = None
+                            if variant_attribute:
+                                attr_type, _ = AttributeType.objects.get_or_create(
+                                    tenant=request.tenant,
+                                    name=variant_attribute
+                                )
+
+                            target_variant = ProductVariant.objects.create(
+                                tenant=request.tenant,
+                                product=target_product,
+                                name=variant_value or item.description,
+                                barcode=item.ean,
+                                avg_unit_cost=item.unit_cost,
+                                is_active=True
+                            )
+
+                            if attr_type and variant_value:
+                                VariantAttributeValue.objects.create(
+                                    variant=target_variant,
+                                    attribute_type=attr_type,
+                                    value=variant_value
+                                )
+
+                # Execute Stock Movement
+                StockService.create_movement(
+                    tenant=request.tenant,
+                    user=request.user,
+                    product=target_product if not target_variant else None,
+                    variant=target_variant,
+                    movement_type='IN',
+                    quantity=item.quantity,
+                    reason=f"Aprovação Manual (Lote {item.batch.id})",
+                    unit_cost=item.unit_cost
+                )
+
+                item.status = 'DONE'
+                item.processed_at = timezone.now()
+                item.matched_product = target_product
+                item.matched_variant = target_variant
+                item.save()
+
+            if request.headers.get('HX-Request'):
+                return HttpResponse(status=204)
+
+            messages.success(request, "Item aprovado e estoque atualizado!")
+            return redirect('inventory:pending_product_list')
+        except Exception as e:
+            if request.headers.get('HX-Request'):
+                return HttpResponse(f"Erro: {str(e)}", status=400)
+            messages.error(request, str(e))
+
+    return redirect('inventory:pending_product_list')
+
+@login_required
+@admin_required
+def pending_product_reject(request, pk):
+    """Rejects an AI suggestion for an ImportItem"""
+    from django.utils import timezone
+    from .models import ImportItem
+    item = get_object_or_404(ImportItem, pk=pk, tenant=request.tenant)
+
+    item.status = 'REJECTED'
+    item.processed_at = timezone.now()
+    item.save()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse(status=204)
+
+    messages.info(request, "Sugestão rejeitada.")
+    return redirect('inventory:pending_product_list')
+
+
+@login_required
+@admin_required
+def pending_product_bulk_approve(request):
+    """Bulk approve multiple ImportItems at once"""
+    from apps.core.services import StockService
+    from django.utils import timezone
+    from django.db import transaction
+    from .models import ImportItem
+    from apps.products.models import Product, ProductType, Category, Brand
+
+    if request.method != 'POST':
+        return redirect('inventory:pending_product_list')
+
+    item_ids = request.POST.getlist('item_ids')
+    if not item_ids:
+        messages.warning(request, "Nenhum item selecionado.")
+        return redirect('inventory:pending_product_list')
+
+    # Defensive parsing: remove any thousand separators (dots) that might have leaked from localized templates
+    clean_ids = []
+    for oid in item_ids:
+        try:
+            clean_ids.append(int(str(oid).replace('.', '').replace(',', '')))
+        except ValueError:
+            continue
+
+    items = ImportItem.objects.filter(
+        pk__in=clean_ids,
+        tenant=request.tenant,
+        status='PENDING'
+    )
+
+    success_count = 0
+    error_count = 0
+
+    # Get or create default category/brand
+    cat_obj, _ = Category.objects.get_or_create(
+        tenant=request.tenant,
+        name="Importação",
+        defaults={'rotation': 'B'}
+    )
+    brand_obj, _ = Brand.objects.get_or_create(
+        tenant=request.tenant,
+        name="Sem Marca"
+    )
+
+    for item in items:
+        try:
+            with transaction.atomic():
+                target_product = item.matched_product
+                target_variant = item.matched_variant
+
+                # If no match, create simple product
+                if not target_product and not target_variant:
+                    suggestion = item.ai_suggestion or {}
+                    suggested_name = suggestion.get('suggested_name', item.description)
+
+                    target_product = Product.objects.create(
+                        tenant=request.tenant,
+                        name=suggested_name,
+                        product_type=ProductType.SIMPLE,
+                        barcode=item.ean,
+                        avg_unit_cost=item.unit_cost,
+                        category=cat_obj,
+                        brand=brand_obj,
+                        is_active=True
+                    )
+
+                # Execute Stock Movement
+                StockService.create_movement(
+                    tenant=request.tenant,
+                    user=request.user,
+                    product=target_product if not target_variant else None,
+                    variant=target_variant,
+                    movement_type='IN',
+                    quantity=item.quantity,
+                    reason=f"Aprovação em Lote (Lote {item.batch.id})",
+                    unit_cost=item.unit_cost
+                )
+
+                item.status = 'DONE'
+                item.processed_at = timezone.now()
+                item.matched_product = target_product
+                item.matched_variant = target_variant
+                item.save()
+                success_count += 1
+
+        except Exception as e:
+            error_count += 1
+            print(f"Bulk approve error for item {item.pk}: {e}")
+
+    if success_count > 0:
+        messages.success(request, f"✅ {success_count} item(s) aprovado(s) com sucesso!")
+    if error_count > 0:
+        messages.warning(request, f"⚠️ {error_count} item(s) com erro durante aprovação.")
+
+    return redirect('inventory:pending_product_list')
+
+
+@login_required
+@admin_required
+def pending_product_bulk_reject(request):
+    """Bulk reject multiple ImportItems at once"""
+    from django.utils import timezone
+    from .models import ImportItem
+
+    if request.method != 'POST':
+        return redirect('inventory:pending_product_list')
+
+    item_ids = request.POST.getlist('item_ids')
+    if not item_ids:
+        messages.warning(request, "Nenhum item selecionado.")
+        return redirect('inventory:pending_product_list')
+
+    count = ImportItem.objects.filter(
+        pk__in=item_ids,
+        tenant=request.tenant,
+        status='PENDING'
+    ).update(status='REJECTED', processed_at=timezone.now())
+
+    messages.info(request, f"🚫 {count} item(s) rejeitado(s).")
+    return redirect('inventory:pending_product_list')
+

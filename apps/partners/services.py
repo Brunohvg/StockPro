@@ -39,6 +39,8 @@ if TYPE_CHECKING:
     from apps.inventory.models import ImportBatch
     from django.contrib.auth.models import User
 
+from apps.inventory.services.matcher import ProductMatcher
+
 
 # =============================================================================
 # ENUMS E DATA CLASSES
@@ -114,6 +116,8 @@ class MatchResult:
     @property
     def is_matched(self) -> bool:
         return self.level != MatchLevel.NONE
+
+# Redundant ProductMatcher and MatchLevel removed. Using apps.inventory.services.matcher.
 
 
 @dataclass
@@ -288,249 +292,7 @@ class NfeParser:
 # PRODUCT MATCHER
 # =============================================================================
 
-class ProductMatcher:
-    """Algoritmo de deduplicação de produtos."""
-
-    def __init__(self, tenant: 'Tenant', supplier: 'Supplier'):
-        self.tenant = tenant
-        self.supplier = supplier
-
-    def match(self, item: NfeItem) -> MatchResult:
-        # 🥇 GOLD - Match por EAN
-        if item.has_valid_ean:
-            result = self._match_by_ean(item)
-            if result.is_matched:
-                return result
-
-        # 🥈 SILVER - Match por SupplierProductMap
-        result = self._match_by_supplier_map(item)
-        if result.is_matched:
-            return result
-
-        # 🥉 BRONZE - Match por SKU interno
-        result = self._match_by_sku(item)
-        if result.is_matched:
-            return result
-
-        # 🤖 IA SMARTO MATCH - Match por similaridade de descrição (Novo V2+)
-        if self.tenant.plan.has_ai_matching:
-            result = self._match_by_ai_description(item)
-            if result.is_matched and result.confidence > 0.85:
-                return result
-
-        # ⚠️ FALLBACK - Sem match
-        return self._create_pending_result(item)
-
-    def _match_by_ai_description(self, item: NfeItem) -> MatchResult:
-        """Match inteligente via AIService."""
-        from apps.products.models import Product
-        from apps.core.services import AIService
-
-        candidates = list(Product.objects.filter(
-            tenant=self.tenant,
-            is_active=True
-        ).only('id', 'name', 'sku', 'barcode'))
-
-        if not candidates:
-            return MatchResult(item=item, level=MatchLevel.NONE, confidence=0.0)
-
-        prompt = f"""
-        Tarefa: Match inteligente entre item de NF-e e catálogo de produtos.
-        ITEM DA NF-E: "{item.description}" (SKU: {item.supplier_sku})
-        CATÁLOGO INTERNO: {json.dumps([{'id': c.id, 'name': c.name, 'sku': c.sku} for c in candidates[:40]], ensure_ascii=False)}
-
-        Siga estas regras:
-        1. Compare as descrições e identifique se o item da NF-e é o mesmo produto do catálogo.
-        2. Retorne APENAS um JSON no formato: {{"best_match_id": ID, "score": 0.0 a 1.0}}
-        3. Se não houver nenhum match razoável (score < 0.65), retorne: {{"best_match_id": null, "score": 0.0}}
-        """
-
-        content = AIService.call_ai(prompt, schema="json")
-        if content:
-            return self._parse_ai_json_response(content, item, candidates)
-
-        return self._fallback_keyword_matching(item, candidates)
-
-    def _parse_ai_json_response(self, content: str, item: NfeItem, candidates: List) -> MatchResult:
-        """Common parser for AI JSON responses."""
-        try:
-            # Extrai apenas o JSON caso a IA retorne markdown ou texto extra
-            start = content.find('{')
-            end = content.rfind('}')
-            if start == -1 or end == -1:
-                return MatchResult(item=item, level=MatchLevel.NONE, confidence=0.0)
-
-            json_str = content[start:end+1]
-            match_data = json.loads(json_str)
-            score = float(match_data.get('score', 0))
-            match_id = match_data.get('best_match_id')
-
-            if match_id and score >= 0.65:
-                # Verifica se o ID realmente existe no catálogo atual
-                matched_prod = next((c for c in candidates if str(c.id) == str(match_id)), None)
-                if matched_prod:
-                    return MatchResult(
-                        item=item,
-                        level=MatchLevel.NONE,
-                        confidence=score,
-                        product=matched_prod,
-                        suggestions=[{'id': matched_prod.id, 'name': matched_prod.name, 'score': score, 'source': 'IA-SMART'}]
-                    )
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Erro ao processar JSON da IA: {str(e)} | Content: {content}")
-
-        return MatchResult(item=item, level=MatchLevel.NONE, confidence=0.0)
-
-    def _fallback_keyword_matching(self, item: NfeItem, candidates: List['Product']) -> MatchResult:
-        """Algoritmo de fallback robusto baseado em tokens."""
-        tokens = set(re.findall(r'\w{3,}', item.description.upper()))
-        best_match = None
-        highest_score = 0.0
-
-        for cand in candidates:
-            cand_tokens = set(re.findall(r'\w{3,}', cand.name.upper()))
-            if not cand_tokens: continue
-            intersection = tokens.intersection(cand_tokens)
-            score = len(intersection) / max(len(tokens), len(cand_tokens))
-            if score > highest_score:
-                highest_score = score
-                best_match = cand
-
-        if best_match and highest_score > 0.6:
-            return MatchResult(
-                item=item,
-                level=MatchLevel.NONE,
-                confidence=float(highest_score),
-                product=best_match,
-                suggestions=[{'id': best_match.id, 'name': best_match.name, 'score': highest_score, 'source': 'Fallback'}]
-            )
-        return MatchResult(item=item, level=MatchLevel.NONE, confidence=0.0)
-
-    def _match_by_ean(self, item: NfeItem) -> MatchResult:
-        from apps.products.models import Product, ProductVariant, ProductType
-
-        variant = ProductVariant.objects.filter(
-            tenant=self.tenant,
-            barcode=item.ean,
-            is_active=True
-        ).select_related('product').first()
-
-        if variant:
-            return MatchResult(
-                item=item,
-                level=MatchLevel.GOLD,
-                confidence=1.0,
-                product=variant.product,
-                variant=variant,
-            )
-
-        product = Product.objects.filter(
-            tenant=self.tenant,
-            barcode=item.ean,
-            product_type=ProductType.SIMPLE,
-            is_active=True
-        ).first()
-
-        if product:
-            return MatchResult(
-                item=item,
-                level=MatchLevel.GOLD,
-                confidence=1.0,
-                product=product,
-            )
-
-        return MatchResult(item=item, level=MatchLevel.NONE, confidence=0.0)
-
-    def _match_by_supplier_map(self, item: NfeItem) -> MatchResult:
-        from apps.partners.models import SupplierProductMap
-
-        mapping = SupplierProductMap.objects.filter(
-            tenant=self.tenant,
-            supplier=self.supplier,
-            supplier_sku=item.supplier_sku,
-            is_active=True
-        ).select_related('product', 'variant').first()
-
-        if mapping:
-            return MatchResult(
-                item=item,
-                level=MatchLevel.SILVER,
-                confidence=0.95,
-                product=mapping.product,
-                variant=mapping.variant,
-                supplier_map=mapping,
-            )
-
-        return MatchResult(item=item, level=MatchLevel.NONE, confidence=0.0)
-
-    def _match_by_sku(self, item: NfeItem) -> MatchResult:
-        from apps.products.models import Product, ProductVariant, ProductType
-
-        variant = ProductVariant.objects.filter(
-            tenant=self.tenant,
-            sku=item.supplier_sku,
-            is_active=True
-        ).select_related('product').first()
-
-        if variant:
-            return MatchResult(
-                item=item,
-                level=MatchLevel.BRONZE,
-                confidence=0.7,
-                product=variant.product,
-                variant=variant,
-            )
-
-        product = Product.objects.filter(
-            tenant=self.tenant,
-            sku=item.supplier_sku,
-            product_type=ProductType.SIMPLE,
-            is_active=True
-        ).first()
-
-        if product:
-            return MatchResult(
-                item=item,
-                level=MatchLevel.BRONZE,
-                confidence=0.7,
-                product=product,
-            )
-
-        return MatchResult(item=item, level=MatchLevel.NONE, confidence=0.0)
-
-    def _create_pending_result(self, item: NfeItem) -> MatchResult:
-        from apps.products.models import Product, ProductVariant
-
-        suggestions = []
-        words = item.description.upper().split()[:3]
-
-        if words:
-            query = Q()
-            for word in words:
-                if len(word) > 3:
-                    query |= Q(name__icontains=word)
-
-            products = Product.objects.filter(
-                tenant=self.tenant,
-                is_active=True
-            ).filter(query)[:5]
-
-            for p in products:
-                suggestions.append({
-                    'type': 'product',
-                    'id': p.id,
-                    'sku': p.sku,
-                    'name': p.name,
-                    'barcode': p.barcode,
-                })
-
-        return MatchResult(
-            item=item,
-            level=MatchLevel.NONE,
-            confidence=0.0,
-            suggestions=suggestions[:10],
-        )
+# Legacy ProductMatcher and support methods removed.
 
 
 # =============================================================================
@@ -548,7 +310,7 @@ class NfeImportService:
     def import_from_bytes(self, xml_content: bytes) -> ImportResult:
         from apps.partners.models import Supplier, SupplierProductMap
         from apps.inventory.models import ImportBatch
-        from apps.inventory.models_v2 import PendingAssociation, PendingAssociationStatus
+        from apps.inventory.models import PendingAssociation, PendingAssociationStatus
         from apps.core.services import StockService
 
         # 1. Parse do XML
@@ -605,8 +367,6 @@ class NfeImportService:
         )
 
         # 5. Processa itens
-        matcher = ProductMatcher(self.tenant, supplier)
-
         result = ImportResult(
             success=True,
             batch_id=str(batch.id),
@@ -618,7 +378,8 @@ class NfeImportService:
 
         for item in nfe_data.items:
             try:
-                match_result = matcher.match(item)
+                # Unified V3 Matcher
+                match_result = ProductMatcher.match(item, self.tenant, supplier)
 
                 if match_result.is_matched:
                     # Cria movimentação usando StockService existente
@@ -636,26 +397,19 @@ class NfeImportService:
                     )
 
                     # Atualiza/Cria mapeamento
-                    if not match_result.supplier_map:
-                        SupplierProductMap.objects.get_or_create(
-                            tenant=self.tenant,
-                            supplier=supplier,
-                            supplier_sku=item.supplier_sku,
-                            defaults={
-                                'product': match_result.product,
-                                'variant': match_result.variant,
-                                'supplier_ean': item.ean if item.has_valid_ean else '',
-                                'supplier_name': item.description[:120],
-                                'last_cost': item.unit_cost,
-                                'last_purchase': timezone.now().date(),
-                            }
-                        )
-                    else:
-                        match_result.supplier_map.update_purchase_info(
-                            cost=item.unit_cost,
-                            quantity=int(item.quantity),
-                            purchase_date=nfe_data.emission_date.date()
-                        )
+                    SupplierProductMap.objects.get_or_create(
+                        tenant=self.tenant,
+                        supplier=supplier,
+                        supplier_sku=item.supplier_sku,
+                        defaults={
+                            'product': match_result.product,
+                            'variant': match_result.variant,
+                            'supplier_ean': item.ean if item.has_valid_ean else '',
+                            'supplier_name': item.description[:120],
+                            'last_cost': item.unit_cost,
+                            'last_purchase': timezone.now().date(),
+                        }
+                    )
 
                     result.matched_items += 1
                     result.movements_created += 1
@@ -679,8 +433,8 @@ class NfeImportService:
                         unit_cost=item.unit_cost,
                         total_cost=item.total_cost,
                         status=PendingAssociationStatus.PENDING,
-                        match_suggestions=match_result.suggestions,
-                        match_score=match_result.confidence,
+                        match_suggestions=match_result.suggestion_data.get('detected_attributes', []),
+                        match_score=float(match_result.confidence),
                     )
 
                     result.pending_items += 1
