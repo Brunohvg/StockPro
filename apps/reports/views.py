@@ -277,7 +277,11 @@ Exemplo de formato:
 
 @login_required
 def employee_list(request):
-    employees = User.objects.filter(is_active=True).order_by('username')
+    employees = User.objects.filter(
+        memberships__tenant=request.tenant,
+        memberships__is_active=True,
+        is_active=True
+    ).distinct().order_by('username')
     return render(request, 'reports/employee_list.html', {'employees': employees})
 
 
