@@ -23,6 +23,10 @@ Este sistema é **exclusivamente** para controle de **ESTOQUE FÍSICO**.
 
 ## 🗄️ 3. Modelagem de Dados e Integridade
 
+### Multi-tenancy (`Tenant` & `TenantMembership`)
+* **Modelo Estrito:** Todos os dados críticos (`Product`, `StockMovement`, `Partner`) devem herdar de `TenantMixin`.
+* **Membros:** Usuários são vinculados a empresas via `TenantMembership` com papéis definidos.
+
 ### Produto (`Product`)
 
 * SKU (PK único), Nome, Categoria, Marca, UOM, Estoque Mínimo.

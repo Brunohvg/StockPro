@@ -6,6 +6,8 @@ StockPro é uma plataforma de gestão de estoque de alta performance desenvolvid
 
 ## 🚀 Novidades da V16 (Premium Release)
 - **💎 Gestão de Planos Dinâmica:** Controle total de limites (produtos/usuários) e ativação de empresas via Admin.
+- **👥 Gestão de Equipe Enterprise:** Papéis granulares (Owner, Admin, Operator) com isolamento estrito via `TenantMembership`.
+- **🔐 Strict Isolation Shield:** Arquitetura de segurança que garante 100% de segregação de dados entre empresas.
 - **🏷️ SKU Standardization:** Gerador automático de códigos profissionais (`SIM-CAT-0001` / `VAR-CAT-0001-BLUE`).
 - **🔍 Consolidação Universal:** Inteligência que agrupa qualquer tipo de variação de produto via prefixo comum.
 - **📥 Modo Inventário (Sobrescrever):** Novo modo de upload CSV focado em contagem física (ajuste absoluto).
