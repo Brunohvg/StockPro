@@ -35,6 +35,15 @@ def employee_create(request):
             user = form.save(commit=False)
             user.set_password(form.cleaned_data['password'])
             user.save()
+
+            # Create membership (V11 fix)
+            from apps.accounts.models import TenantMembership, MembershipRole
+            TenantMembership.objects.create(
+                user=user,
+                tenant=request.tenant,
+                role=MembershipRole.OPERATOR
+            )
+
             messages.success(request, f"Funcionário '{user.username}' criado!")
             return redirect('reports:employee_list')
     else:
