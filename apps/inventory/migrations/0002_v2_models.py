@@ -1,7 +1,8 @@
 # Generated manually for StockPro V2
 
-import django.db.models.deletion
 import uuid
+
+import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
@@ -9,12 +10,12 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     """
     Migração V2 do app Inventory.
-    
+
     Cria apenas os NOVOS modelos:
     - Location (Multi-localização)
     - AdjustmentReason (Motivos de ajuste)
     - PendingAssociation (Itens pendentes de associação)
-    
+
     NÃO altera StockMovement ou ImportBatch existentes.
     """
 

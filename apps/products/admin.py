@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from .models import Product, ProductVariant, Category, Brand, AttributeType
+from .models import AttributeType, Brand, Category, Product, ProductVariant
+
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):

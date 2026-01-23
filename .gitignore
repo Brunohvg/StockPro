@@ -72,3 +72,6 @@ test_import_*.xml
 
 .env.local
 .env*
+
+# Agent
+.agent

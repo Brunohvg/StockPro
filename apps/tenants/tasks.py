@@ -1,7 +1,9 @@
+import logging
+
 from celery import shared_task
 from django.utils import timezone
+
 from .models import Tenant
-import logging
 
 logger = logging.getLogger(__name__)
 

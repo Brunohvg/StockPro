@@ -3,10 +3,12 @@ Product Consolidation Service - Intelligent product grouping suggestions
 """
 import re
 from collections import defaultdict
+
 from django.db import transaction
 
-from .models import Product, ProductVariant, AttributeType, VariantAttributeValue, ProductType
 from apps.inventory.models import StockMovement
+
+from .models import AttributeType, Product, ProductType, ProductVariant, VariantAttributeValue
 
 
 class ConsolidationService:

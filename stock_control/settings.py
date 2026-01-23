@@ -1,6 +1,9 @@
-from pathlib import Path
-from decouple import Config, RepositoryEnv, Csv
 import os
+from datetime import timedelta
+from pathlib import Path
+
+from celery.schedules import crontab
+from decouple import Config, Csv, RepositoryEnv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -44,6 +47,7 @@ INSTALLED_APPS = [
 
     # Third party
     'rest_framework',
+    'rest_framework_simplejwt',
     'django_htmx',
     'corsheaders',
 
@@ -174,7 +178,6 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
         'interval_max': 0.5,
     }
 }
-from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
     'cleanup-expired-trials-daily': {
@@ -186,3 +189,24 @@ CELERY_BEAT_SCHEDULE = {
 # AI Integration (Grok / X.AI)
 XAI_API_KEY = config('XAI_API_KEY', default='')
 XAI_MODEL = 'grok-2-latest'
+
+# REST Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50,
+}
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+}

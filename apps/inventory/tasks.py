@@ -5,19 +5,19 @@ Enhanced Celery Tasks for Import Processing (V10)
 - Idempotency via ImportLog
 - Retry with exponential backoff
 """
-import csv
-import io
 import hashlib
 import xml.etree.ElementTree as ET
 from decimal import Decimal
+
+import pandas as pd
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from django.db import transaction
-import pandas as pd
 
-from .models import ImportBatch, ImportLog, StockMovement
-from apps.products.models import Product, ProductVariant, Category, Brand, AttributeType, VariantAttributeValue, ProductType
 from apps.core.services import StockService
+from apps.products.models import Brand, Category
+
+from .models import ImportBatch, ImportLog
 
 
 def generate_idempotency_key(batch_id, file_content):
@@ -325,10 +325,11 @@ def process_csv_v10(batch):
         return f"Erro: Mesmo após mapeamento IA, colunas obrigatórias ausentes. Necessário: {required_cols}"
 
     # Step 3: Create Granular ImportItems and Process (V3)
+    from decimal import Decimal
+
     from apps.inventory.models import ImportItem
     from apps.partners.models import Supplier
     from apps.products.models import Brand, Category
-    from decimal import Decimal
 
     # Placeholder Brand/Category if not provided in CSV
     brand_obj, _ = Brand.objects.get_or_create(tenant=tenant, name="CSV Import")
@@ -366,6 +367,7 @@ def ai_map_csv_columns(file_path):
     Returns a mapping dict or None if AI fails.
     """
     import json
+
     from apps.core.services import AIService
 
     try:
@@ -474,6 +476,7 @@ def ai_extract_brand_name(supplier_name):
     Returns the original name if AI fails.
     """
     import json
+
     from apps.core.services import AIService
 
     if not supplier_name or len(supplier_name) < 3:
@@ -524,6 +527,7 @@ def ai_group_nfe_products(product_list, tenant=None, user=None):
         Dict with groupings and confidence metadata.
     """
     import json
+
     from apps.core.services import AIService
 
     if len(product_list) < 2:
@@ -607,12 +611,12 @@ def process_batch_v3_intelligence(batch, tenant, supplier_obj, brand_obj, cat_ob
     V3 Intelligent Ingestion: Orchestrates the classification and processing
     of each ImportItem in the batch.
     """
-    from apps.inventory.services.matcher import ProductMatcher
-    from apps.core.models import SystemSetting, AIDecisionLog
-    from apps.core.services import StockService
-    from django.utils import timezone
-    from django.db import transaction
     from decimal import Decimal
+
+    from django.utils import timezone
+
+    from apps.core.models import SystemSetting
+    from apps.inventory.services.matcher import ProductMatcher
 
     settings = SystemSetting.get_settings(tenant)
     threshold = settings.ai_auto_approve_threshold if settings else Decimal('0.90')

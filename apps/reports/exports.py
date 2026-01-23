@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAS_OPENPYXL = False
 
-from apps.products.models import Product, ProductVariant, ProductType
+from apps.products.models import Product, ProductType
 
 
 class DecimalEncoder(json.JSONEncoder):

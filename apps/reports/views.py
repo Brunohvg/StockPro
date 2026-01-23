@@ -1,15 +1,15 @@
 """
 Reports App Views - Dashboard and Business Intelligence
 """
-from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import models
-from django.db.models import Sum, F
+from django.db.models import F, Sum
+from django.shortcuts import render
 from django.utils import timezone
 
-from apps.products.models import Product, Category
 from apps.inventory.models import StockMovement
+from apps.products.models import Category, Product
 
 
 @login_required
@@ -17,8 +17,9 @@ def dashboard(request):
     tenant = request.tenant
     today = timezone.now().date()
 
-    from apps.products.models import ProductVariant, ProductType
     from decimal import Decimal
+
+    from apps.products.models import ProductType, ProductVariant
 
     # Products (including VARIABLE parents and SIMPLE)
     products = Product.objects.filter(tenant=tenant, is_active=True)
@@ -98,8 +99,9 @@ def dashboard(request):
 def inventory_reports(request):
     """Business Intelligence View with Chart.js data and AI Insights"""
     tenant = request.tenant
-    from apps.products.models import ProductVariant, ProductType
     from decimal import Decimal
+
+    from apps.products.models import ProductType, ProductVariant
 
     # Category breakdown (include variants for VARIABLE products)
     categories = Category.objects.filter(tenant=tenant)
@@ -139,6 +141,11 @@ def inventory_reports(request):
         total_qty=Sum('quantity')
     ).order_by('created_at__date'))
 
+    # Collect data for AI insights
+    from .services import BIService
+    abc_classification = BIService.calculate_abc_analysis(tenant)
+    stock_health = BIService.get_inventory_health(tenant)
+
     # Top products by stock value (include variants for VARIABLE products)
     all_products = Product.objects.filter(tenant=tenant, is_active=True).prefetch_related('variants')
     products_with_value = []
@@ -156,7 +163,6 @@ def inventory_reports(request):
     products_with_value.sort(key=lambda x: x['stock_value'], reverse=True)
     top_products = products_with_value[:10]
 
-    # Collect data for AI insights
     products = Product.objects.filter(tenant=tenant, is_active=True)
     variants = ProductVariant.objects.filter(tenant=tenant, is_active=True)
 
@@ -185,6 +191,13 @@ def inventory_reports(request):
     entries_week = week_movements.filter(type='IN').aggregate(total=Sum('quantity'))['total'] or 0
     exits_week = week_movements.filter(type='OUT').aggregate(total=Sum('quantity'))['total'] or 0
 
+    # Prepare prompt-friendly data
+    abc_counts = {
+        'A': list(abc_classification.values()).count('A'),
+        'B': list(abc_classification.values()).count('B'),
+        'C': list(abc_classification.values()).count('C'),
+    }
+
     # Generate AI insights
     ai_insights = generate_ai_insights({
         'total_products': total_products,
@@ -194,6 +207,9 @@ def inventory_reports(request):
         'entries_week': entries_week,
         'exits_week': exits_week,
         'category_data': category_data[:5],
+        'abc_counts': abc_counts,
+        'dead_stock_count': stock_health['item_count'],
+        'dead_stock_value': float(stock_health['dead_stock_value']),
     })
 
     return render(request, 'reports/reports.html', {
@@ -206,12 +222,15 @@ def inventory_reports(request):
         'low_stock_count': low_stock_count,
         'entries_week': entries_week,
         'exits_week': exits_week,
+        'abc_counts': abc_counts,
+        'stock_health': stock_health,
     })
 
 
 def generate_ai_insights(data):
     """Generate AI-powered insights based on inventory data"""
     import json
+
     from apps.core.services import AIService
 
     prompt = f"""Você é um consultor de gestão de estoque. Analise estes dados e forneça 3-4 insights CURTOS e ACIONÁVEIS:
@@ -224,9 +243,12 @@ def generate_ai_insights(data):
 - Entradas (últimos 7 dias): {data['entries_week']} unidades
 - Saídas (últimos 7 dias): {data['exits_week']} unidades
 - Categorias principais: {', '.join([c['name'] for c in data.get('category_data', [])])}
+- Curva ABC: {data.get('abc_counts', {})}
+- Estoque Parado (>60 dias): {data.get('dead_stock_count', 0)} itens (R$ {data.get('dead_stock_value', 0):,.2f})
 
 **Instruções:**
-Retorne um JSON com insights práticos. Cada insight deve ter:
+Analise principalmente o "Estoque Parado" e a "Curva ABC". Se houver muito capital em itens 'C' parados, sugira liquidação. Se itens 'A' estiverem em nível crítico, sugira compra imediata.
+Retorne um JSON com insights práticos e SUGESTÕES DE COMPRA. Cada insight deve ter:
 - icon: emoji representativo
 - title: título curto (max 6 palavras)
 - text: descrição CURTA de 1-2 linhas
@@ -301,6 +323,7 @@ def employee_detail(request, user_id):
 def export_products_csv(request):
     """Export products to CSV"""
     from django.http import HttpResponse
+
     from .exports import ProductExporter
 
     exporter = ProductExporter(request.tenant)
@@ -318,6 +341,7 @@ def export_products_csv(request):
 def export_products_excel(request):
     """Export products to Excel"""
     from django.http import HttpResponse
+
     from .exports import ProductExporter
 
     exporter = ProductExporter(request.tenant)
@@ -341,6 +365,7 @@ def export_products_excel(request):
 def export_products_json(request):
     """Export products to JSON"""
     from django.http import HttpResponse
+
     from .exports import ProductExporter
 
     exporter = ProductExporter(request.tenant)
@@ -357,9 +382,10 @@ def export_products_json(request):
 @login_required
 def export_movements_csv(request):
     """Export stock movements to CSV"""
-    from django.http import HttpResponse
     import csv
     import io
+
+    from django.http import HttpResponse
 
     tenant = request.tenant
     days = int(request.GET.get('days', 30))

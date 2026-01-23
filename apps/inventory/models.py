@@ -2,14 +2,13 @@
 Inventory App - Stock Movements and Import Management (Normalized V3)
 """
 import uuid
-from decimal import Decimal
-from typing import Optional
-from django.db import models
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.utils import timezone
-from apps.tenants.models import TenantMixin
+from django.db import models
+
 from apps.products.models import Product, ProductVariant
+from apps.tenants.models import TenantMixin
 
 # ==========================================
 # 1. Choices & Enums
@@ -90,6 +89,7 @@ class StockMovement(TenantMixin):
     unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
     source = models.CharField(max_length=50, blank=True, default='MANUAL')
     source_doc = models.CharField(max_length=100, blank=True, null=True)
+    external_order = models.ForeignKey('ExternalOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='movements')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -166,7 +166,14 @@ class ImportItem(TenantMixin):
         ('REJECTED', 'Rejeitado'),
         ('ERROR', 'Erro'),
     ]
-    batch = models.ForeignKey(ImportBatch, on_delete=models.CASCADE, related_name='items')
+    SOURCE_CHOICES = [
+        ('XML', 'Importação XML'),
+        ('CSV', 'Importação CSV'),
+        ('API', 'Integração API'),
+        ('MANUAL', 'Manual'),
+    ]
+    batch = models.ForeignKey(ImportBatch, on_delete=models.CASCADE, related_name='items', null=True, blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='XML')
     supplier_sku = models.CharField(max_length=100, db_index=True)
     description = models.TextField()
     ean = models.CharField(max_length=20, blank=True, null=True)
@@ -279,3 +286,29 @@ class PendingAssociation(TenantMixin):
 
     def __str__(self):
         return f"{self.supplier_sku} - {self.supplier_name}"
+
+
+class ExternalOrder(TenantMixin):
+    """
+    Tracks orders from external platforms (Nuvemshop, Tray, etc.)
+    Used for stock consumption mapping (Plan C).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    platform = models.CharField(max_length=50) # 'NUVEMSHOP', 'TRAY'
+    external_order_id = models.CharField(max_length=100, db_index=True)
+
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=50, blank=True) # 'PAID', 'SHIPPED', etc.
+
+    customer_name = models.CharField(max_length=255, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Pedido Externo"
+        verbose_name_plural = "Pedidos Externos"
+        unique_together = ['tenant', 'platform', 'external_order_id']
+
+    def __str__(self):
+        return f"{self.platform} #{self.external_order_id} ({self.status})"

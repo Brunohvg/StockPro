@@ -3,6 +3,7 @@ Core App - Shared utilities and system-wide settings
 """
 from django.conf import settings
 from django.db import models
+
 from apps.tenants.models import TenantMixin
 
 
@@ -60,3 +61,32 @@ class AIDecisionLog(TenantMixin):
         ordering = ['-created_at']
         verbose_name = "Log de Decisão IA"
         verbose_name_plural = "Logs de Decisão IA"
+
+
+class VisualAuditLog(TenantMixin):
+    """
+    Stores snapshots of state changes for visual auditing (Plan C).
+    Tracks 'Before' and 'After' states for products, prices, and stock changes.
+    """
+    entity_type = models.CharField(max_length=50, db_index=True) # 'PRODUCT', 'STOCK', 'PRICE'
+    entity_id = models.CharField(max_length=100)
+
+    action = models.CharField(max_length=20) # 'CREATE', 'UPDATE', 'DELETE'
+    source = models.CharField(max_length=50) # 'APP', 'API', 'NUVEMSHOP', 'TRAY'
+
+    before_state = models.JSONField(null=True, blank=True)
+    after_state = models.JSONField(null=True, blank=True)
+    diff = models.JSONField(null=True, blank=True)
+
+    external_ref = models.CharField(max_length=100, blank=True, null=True) # e.g., Order ID
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Auditoria Visual"
+        verbose_name_plural = "Auditorias Visuais"
+
+    def __str__(self):
+        return f"{self.action} on {self.entity_type} ({self.entity_id}) at {self.created_at}"

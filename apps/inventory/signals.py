@@ -1,6 +1,8 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
 from .models import StockMovement
+
 
 @receiver(post_save, sender=StockMovement)
 def update_stock_cache(sender, instance, created, **kwargs):

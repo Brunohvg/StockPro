@@ -1,16 +1,17 @@
 """
 Tenants App Views - Landing, Billing, Admin Panel
 """
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import login
-from django.contrib.auth.models import User
 from django.contrib import messages
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Q
+from django.shortcuts import get_object_or_404, redirect, render
+
+from apps.core.models import SystemSetting
 
 from .models import Plan, Tenant
-from apps.core.models import SystemSetting
 
 
 def landing_page(request):
@@ -77,7 +78,7 @@ def signup_view(request):
         user = User.objects.create_user(username=username, email=email, password=password, first_name=first_name, last_name=last_name)
 
         # Create membership as OWNER (V11)
-        from apps.accounts.models import TenantMembership, MembershipRole
+        from apps.accounts.models import MembershipRole, TenantMembership
         TenantMembership.objects.create(user=user, tenant=tenant, role=MembershipRole.OWNER)
 
         SystemSetting.objects.create(tenant=tenant, company_name=company_name)

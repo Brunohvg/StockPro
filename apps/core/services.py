@@ -1,13 +1,14 @@
-from typing import Optional
 from decimal import Decimal
-from django.db import transaction
-from django.conf import settings
+from typing import Optional
+
 import requests
-import json
-import re
 from decouple import config
-from apps.products.models import Product, ProductVariant, ProductType
-from apps.inventory.models import StockMovement
+from django.db import transaction
+
+from apps.inventory.models import ExternalOrder, StockMovement
+from apps.products.models import Product, ProductType, ProductVariant
+
+from .models import VisualAuditLog
 
 
 class AIService:
@@ -137,12 +138,13 @@ class StockService:
         source='MANUAL',
         unit_cost=None,
         source_doc=None,
-        location_id=None
+        location_id=None,
+        external_order=None, # ExternalOrder instance
+        external_order_id=None # String for resolving/creating
     ):
         """
         Create a stock movement and update stock.
         """
-        from decimal import Decimal
         quantity = Decimal(str(quantity))
         if unit_cost is not None:
             unit_cost = Decimal(str(unit_cost))
@@ -186,6 +188,20 @@ class StockService:
                 if default_loc:
                     location_id = default_loc.id
 
+        # E-commerce Order Resolution
+        if external_order_id and not external_order:
+            external_order, _ = ExternalOrder.objects.get_or_create(
+                tenant=tenant,
+                platform=source if source != 'MANUAL' else 'API',
+                external_order_id=external_order_id
+            )
+
+        # Snapshot for Visual Audit (Before)
+        before_state = {
+            'current_stock': float(target.current_stock),
+            'avg_unit_cost': float(target.avg_unit_cost) if target.avg_unit_cost else None
+        }
+
         # Calculate new stock
         if movement_type == 'IN':
             new_stock = target.current_stock + quantity
@@ -220,6 +236,7 @@ class StockService:
             'unit_cost': unit_cost,
             'source_doc': source_doc,
             'location_id': location_id,
+            'external_order': external_order,
         }
 
         if target_type == 'variant':
@@ -228,6 +245,31 @@ class StockService:
             movement_data['product'] = target
 
         movement = StockMovement.objects.create(**movement_data)
+
+        # Visual Audit (After & Diff)
+        after_state = {
+            'current_stock': float(target.current_stock),
+            'avg_unit_cost': float(target.avg_unit_cost) if target.avg_unit_cost else None,
+            'movement_id': str(movement.id)
+        }
+
+        diff = {
+            'stock_change': float(quantity) if movement_type != 'OUT' else -float(quantity)
+        }
+
+        VisualAuditLog.objects.create(
+            tenant=tenant,
+            user=user,
+            entity_type='STOCK',
+            entity_id=str(target.pk),
+            action='UPDATE',
+            source=source,
+            before_state=before_state,
+            after_state=after_state,
+            diff=diff,
+            external_ref=external_order_id or (external_order.external_order_id if external_order else None)
+        )
+
         return movement
 
     @staticmethod

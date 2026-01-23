@@ -7,14 +7,13 @@ import json
 import logging
 import re
 from decimal import Decimal
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any, Dict, Optional
 
-from django.conf import settings
-from django.db.models import Q, F
+from django.db.models import Q
+
 from apps.core.services import AIService
-from apps.inventory.models import ImportKnowledge, ImportItem
 from apps.partners.models import SupplierProductMap
-from apps.products.models import Product, ProductVariant, Category, Brand
+from apps.products.models import Brand, Category, Product, ProductVariant
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +314,7 @@ class ProductMatcher:
         # If parent found, check if variant already exists with these attributes
         variant = None
         if parent:
-            from apps.products.models import VariantAttributeValue, ProductVariant
+            from apps.products.models import ProductVariant, VariantAttributeValue
             # Find variants of this parent that have an attribute value matching the AI suggestion
             variant_ids = VariantAttributeValue.objects.filter(
                 variant__product=parent,

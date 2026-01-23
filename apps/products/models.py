@@ -2,7 +2,8 @@
 Products App - Product Catalog Management (V10 - Normalized Architecture)
 """
 from django.db import models
-from apps.tenants.models import Tenant, TenantMixin
+
+from apps.tenants.models import TenantMixin
 
 
 class ProductType(models.TextChoices):
@@ -104,9 +105,12 @@ class Product(TenantMixin):
     minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo")
     avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio")
 
-    # AI Hardening (V3)
     requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
     ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")
+
+    # E-commerce Integration (V16 Plan B)
+    external_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    external_platform = models.CharField(max_length=50, blank=True, null=True)
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -237,9 +241,12 @@ class ProductVariant(TenantMixin):
     minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo")
     avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio")
 
-    # AI Hardening (V3)
     requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
     ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")
+
+    # E-commerce Integration (V16 Plan B)
+    external_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    external_platform = models.CharField(max_length=50, blank=True, null=True)
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

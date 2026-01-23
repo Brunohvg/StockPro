@@ -109,6 +109,7 @@
                     <!-- Item Identity -->
                     <div class="flex-grow min-w-[300px]">
                         <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[10px] font-black text-white uppercase tracking-widest {% if item.source == 'API' %}bg-indigo-500{% elif item.source == 'XML' %}bg-emerald-500{% else %}bg-slate-400{% endif %} px-2 py-0.5 rounded">Origem: {{ item.get_source_display }}</span>
                             <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">SKU: {{ item.supplier_sku }}</span>
                             {% if item.ean %}
                             <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">EAN: {{ item.ean }}</span>

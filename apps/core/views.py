@@ -1,13 +1,12 @@
 """
 Core App Views - System settings
 """
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect, render
 
+from .forms import EmployeeForm, SystemSettingForm
 from .models import SystemSetting
-from .forms import SystemSettingForm, EmployeeForm
 
 
 @login_required
@@ -37,7 +36,7 @@ def employee_create(request):
             user.save()
 
             # Create membership (V11 fix)
-            from apps.accounts.models import TenantMembership, MembershipRole
+            from apps.accounts.models import MembershipRole, TenantMembership
             TenantMembership.objects.create(
                 user=user,
                 tenant=request.tenant,

@@ -1,10 +1,10 @@
 """
 StockPro URL Configuration
 """
-from django.contrib import admin
-from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
+from django.urls import include, path
 
 urlpatterns = [
     path(settings.ADMIN_URL, admin.site.urls),
@@ -24,6 +24,9 @@ urlpatterns = [
     path('inventory/', include('apps.inventory.urls')),
     path('partners/', include('apps.partners.urls')),
     path('settings/', include('apps.core.urls')),
+
+    # Connect Protocol (Plan B - API)
+    path('api/v1/', include('stock_control.api_urls')),
 ]
 
 # Serve media files in development

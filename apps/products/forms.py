@@ -1,7 +1,17 @@
 from django import forms
-from .models import Product, ProductVariant, AttributeType, VariantAttributeValue, ProductType, Category, Brand
-from apps.partners.models import Supplier
+
 from apps.inventory.models import Location
+from apps.partners.models import Supplier
+
+from .models import (
+    AttributeType,
+    Brand,
+    Category,
+    Product,
+    ProductType,
+    ProductVariant,
+    VariantAttributeValue,
+)
 
 
 class ProductForm(forms.ModelForm):

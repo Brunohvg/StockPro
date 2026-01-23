@@ -1,10 +1,12 @@
 # apps/core/management/commands/seed_db.py
-from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model
-from apps.tenants.models import Tenant, Plan
-from apps.accounts.models import TenantMembership, MembershipRole
-from apps.core.models import SystemSetting
 from decouple import config
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
+
+from apps.accounts.models import MembershipRole, TenantMembership
+from apps.core.models import SystemSetting
+from apps.tenants.models import Plan, Tenant
+
 
 class Command(BaseCommand):
     help = 'Popula o banco de dados com dados iniciais (Planos, Tenant e Superuser)'

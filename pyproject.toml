@@ -1,0 +1,56 @@
+[project]
+name = "stock-control"
+version = "16.0.0"
+description = "StockPro Enterprise - High Performance Inventory Management"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "Django>=5.0,<6.0",
+    "djangorestframework",
+    "celery",
+    "redis",
+    "psycopg2-binary",
+    "django-htmx",
+    "python-decouple",
+    "gunicorn",
+    "whitenoise",
+    "dj-database-url",
+    "lxml",
+    "pandas",
+    "openpyxl",
+    "django-cors-headers",
+    "Pillow>=10.0.0",
+    "requests",
+    "djangorestframework-simplejwt>=5.5.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-django",
+    "pytest-cov",
+    "factory-boy",
+    "faker",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "DJ"]
+ignore = ["D100", "D104"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "stock_control.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "--nomigrations --cov=. --cov-report=term-missing"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -6,10 +6,9 @@ from django.utils.html import format_html
 
 from .models import ImportBatch, ImportLog, StockMovement
 
-
 # Tenta importar modelos V2 (podem não existir ainda se migrations não rodaram)
 try:
-    from .models import Location, AdjustmentReason, PendingAssociation
+    from .models import AdjustmentReason, Location, PendingAssociation
     V2_AVAILABLE = True
 except ImportError:
     V2_AVAILABLE = False

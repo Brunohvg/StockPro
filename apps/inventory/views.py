@@ -1,18 +1,31 @@
 """
 Inventory App Views - Stock movements and imports (V10)
 """
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.db.models import Q
 import csv
-from django.http import HttpResponse
 
-from .models import StockMovement, ImportBatch, ImportLog, Location
-from .forms import ImportBatchForm, LocationForm
-from apps.products.models import Product, ProductVariant, ProductType
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+
+from django.db import transaction
+from django.utils import timezone
+
 from apps.core.services import StockService
-from apps.tenants.middleware import trial_allows_read, admin_required
+from apps.products.models import (
+    AttributeType,
+    Brand,
+    Category,
+    Product,
+    ProductType,
+    ProductVariant,
+    VariantAttributeValue,
+)
+from apps.tenants.middleware import admin_required, trial_allows_read
+
+from .forms import ImportBatchForm, LocationForm
+from .models import ImportBatch, ImportItem, ImportLog, Location, StockMovement
 
 
 @login_required
@@ -367,8 +380,9 @@ def download_csv_template(request):
 @admin_required
 def pending_product_list(request):
     """Dashboard to review products flagged by AI (V3 Enhanced)"""
-    from .models import ImportItem
     from apps.products.models import Product
+
+    from .models import ImportItem
 
     pending_items = ImportItem.objects.filter(
         tenant=request.tenant,
@@ -389,12 +403,7 @@ def pending_product_list(request):
 @login_required
 @admin_required
 def pending_product_approve(request, pk):
-    """Approves an AI suggestion for a specific ImportItem (V3 Enhanced)"""
-    from apps.core.services import StockService
-    from django.utils import timezone
-    from django.db import transaction
-    from .models import ImportItem
-    from apps.products.models import Product, ProductVariant, ProductType, Category, Brand, AttributeType, VariantAttributeValue
+    # Approves an AI suggestion for a specific ImportItem (V3 Enhanced)
 
     item = get_object_or_404(ImportItem, pk=pk, tenant=request.tenant)
 
@@ -413,7 +422,8 @@ def pending_product_approve(request, pk):
                 # If no match yet, create based on action
                 if not target_product and not target_variant:
                     suggestion = item.ai_suggestion or {}
-                    suggested_name = suggestion.get('suggested_name', item.description)
+                    # Fallback to description if AI suggested name is missing
+                    suggested_name = suggestion.get('suggested_name') or item.description or "Produto sem nome"
 
                     # Use detected category or create default
                     detected_cat = suggestion.get('detected_category')
@@ -448,6 +458,7 @@ def pending_product_approve(request, pk):
                         target_product = Product.objects.create(
                             tenant=request.tenant,
                             name=suggested_name,
+                            sku=item.supplier_sku,
                             product_type=ProductType.SIMPLE,
                             barcode=item.ean,
                             avg_unit_cost=item.unit_cost,
@@ -461,6 +472,7 @@ def pending_product_approve(request, pk):
                         target_product = Product.objects.create(
                             tenant=request.tenant,
                             name=suggested_name,
+                            sku=item.supplier_sku, # Base SKU for variable
                             product_type=ProductType.VARIABLE,
                             category=cat_obj,
                             brand=brand_obj,
@@ -480,6 +492,7 @@ def pending_product_approve(request, pk):
                             tenant=request.tenant,
                             product=target_product,
                             name=variant_value or item.description,
+                            sku=item.supplier_sku, # Variant SKU
                             barcode=item.ean,
                             avg_unit_cost=item.unit_cost,
                             is_active=True
@@ -518,6 +531,7 @@ def pending_product_approve(request, pk):
                                 tenant=request.tenant,
                                 product=target_product,
                                 name=variant_value or item.description,
+                                sku=item.supplier_sku,
                                 barcode=item.ean,
                                 avg_unit_cost=item.unit_cost,
                                 is_active=True
@@ -530,17 +544,19 @@ def pending_product_approve(request, pk):
                                     value=variant_value
                                 )
 
-                # Execute Stock Movement
-                StockService.create_movement(
-                    tenant=request.tenant,
-                    user=request.user,
-                    product=target_product if not target_variant else None,
-                    variant=target_variant,
-                    movement_type='IN',
-                    quantity=item.quantity,
-                    reason=f"Aprovação Manual (Lote {item.batch.id})",
-                    unit_cost=item.unit_cost
-                )
+                # Execute Stock Movement ONLY if quantity > 0 (XML/Invoice style)
+                # For API Staged Creation, quantity is usually 0
+                if item.quantity > 0:
+                    StockService.create_movement(
+                        tenant=request.tenant,
+                        user=request.user,
+                        product=target_product if not target_variant else None,
+                        variant=target_variant,
+                        movement_type='IN',
+                        quantity=item.quantity,
+                        reason=f"Aprovação Manual - Fonte {item.get_source_display()} (ID {item.id})",
+                        unit_cost=item.unit_cost
+                    )
 
                 item.status = 'DONE'
                 item.processed_at = timezone.now()
@@ -565,6 +581,7 @@ def pending_product_approve(request, pk):
 def pending_product_reject(request, pk):
     """Rejects an AI suggestion for an ImportItem"""
     from django.utils import timezone
+
     from .models import ImportItem
     item = get_object_or_404(ImportItem, pk=pk, tenant=request.tenant)
 
@@ -582,12 +599,7 @@ def pending_product_reject(request, pk):
 @login_required
 @admin_required
 def pending_product_bulk_approve(request):
-    """Bulk approve multiple ImportItems at once"""
-    from apps.core.services import StockService
-    from django.utils import timezone
-    from django.db import transaction
-    from .models import ImportItem
-    from apps.products.models import Product, ProductType, Category, Brand
+    # Bulk approve multiple ImportItems at once
 
     if request.method != 'POST':
         return redirect('inventory:pending_product_list')
@@ -683,6 +695,7 @@ def pending_product_bulk_approve(request):
 def pending_product_bulk_reject(request):
     """Bulk reject multiple ImportItems at once"""
     from django.utils import timezone
+
     from .models import ImportItem
 
     if request.method != 'POST':

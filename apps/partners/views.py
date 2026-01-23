@@ -1,9 +1,12 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import Supplier
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect, render
+
+from apps.tenants.middleware import admin_required, trial_allows_read
+
 from .forms import SupplierForm
-from apps.tenants.middleware import trial_allows_read, admin_required
+from .models import Supplier
+
 
 @login_required
 @admin_required
@@ -65,8 +68,9 @@ def supplier_delete(request, pk):
     return redirect('partners:supplier_list')
 
 
-from django.http import JsonResponse
 from django.db.models import Q
+from django.http import JsonResponse
+
 
 @login_required
 def supplier_search_api(request):

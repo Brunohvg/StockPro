@@ -26,7 +26,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from apps.inventory.models import Location, AdjustmentReason
+        from apps.inventory.models import AdjustmentReason, Location
 
         tenant_slug = options.get('tenant')
 
@@ -68,6 +68,6 @@ class Command(BaseCommand):
                         f'  ✓ {len(reasons_created)} motivos de ajuste criados'
                     ))
                 else:
-                    self.stdout.write(f'  · Motivos de ajuste já existem')
+                    self.stdout.write('  · Motivos de ajuste já existem')
 
         self.stdout.write(self.style.SUCCESS('\n✅ Seed V2 concluído!'))

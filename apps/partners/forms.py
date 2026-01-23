@@ -1,5 +1,7 @@
 from django import forms
+
 from .models import Supplier
+
 
 class SupplierForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):

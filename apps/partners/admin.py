@@ -2,6 +2,7 @@
 Partners App - Admin Configuration
 """
 from django.contrib import admin
+
 from .models import Supplier, SupplierProductMap
 
 
@@ -11,7 +12,7 @@ class SupplierAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'state', 'tenant']
     search_fields = ['company_name', 'trade_name', 'cnpj']
     ordering = ['trade_name', 'company_name']
-    
+
     fieldsets = (
         ('Identificação', {
             'fields': ('cnpj', 'company_name', 'trade_name', 'state_registration')

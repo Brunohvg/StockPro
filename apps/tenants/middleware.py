@@ -8,11 +8,9 @@ Responsibilities:
 4. Detect expired trial
 5. Support tenant switching via session
 """
-from django.shortcuts import redirect
 from django.contrib import messages
+from django.shortcuts import redirect
 from django.urls import reverse
-
-from .models import Tenant
 
 
 class TenantMiddleware:
@@ -175,6 +173,7 @@ def trial_allows_read(view_func):
     Read operations (GET) are allowed, write operations (POST, PUT, DELETE) are blocked.
     """
     from functools import wraps
+
     from django.http import JsonResponse
 
     @wraps(view_func)
@@ -201,6 +200,7 @@ def trial_allows_read(view_func):
 def owner_required(view_func):
     """Decorator that requires OWNER role"""
     from functools import wraps
+
     from apps.accounts.models import MembershipRole
 
     @wraps(view_func)
@@ -216,6 +216,7 @@ def owner_required(view_func):
 def admin_required(view_func):
     """Decorator that requires OWNER or ADMIN role"""
     from functools import wraps
+
     from apps.accounts.models import MembershipRole
 
     @wraps(view_func)

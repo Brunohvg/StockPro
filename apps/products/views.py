@@ -1,18 +1,27 @@
 """
 Products App Views - Product catalog CRUD (V10 - Normalized Architecture)
 """
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.db.models import Q, Sum, Count
-from django.http import JsonResponse
-from django.core.paginator import Paginator
 import json
-import re
 
-from .models import Product, ProductVariant, Category, Brand, AttributeType, VariantAttributeValue, ProductType
-from .forms import ProductForm, ProductVariantForm, QuickVariantForm, AttributeTypeForm
-from apps.tenants.middleware import trial_allows_read, plan_limit_required
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+
+from apps.tenants.middleware import plan_limit_required, trial_allows_read
+
+from .forms import ProductForm, ProductVariantForm
+from .models import (
+    AttributeType,
+    Brand,
+    Category,
+    Product,
+    ProductType,
+    ProductVariant,
+    VariantAttributeValue,
+)
 
 ITEMS_PER_PAGE = 24  # Grid friendly (divisible by 2, 3, 4)
 
@@ -231,7 +240,7 @@ def variant_edit(request, pk):
                     attr_value.value = value.strip()
                     attr_value.save()
 
-            messages.success(request, f"Variação atualizada!")
+            messages.success(request, "Variação atualizada!")
             return redirect('products:product_detail', pk=variant.product.pk)
     else:
         form = ProductVariantForm(instance=variant, tenant=request.tenant)
@@ -526,7 +535,6 @@ def ai_enhance_product_api(request):
         return JsonResponse({'error': 'Falha na IA'}, status=500)
 
     try:
-        import re
         # Busca o primeiro '{' e o último '}' para extrair o objeto JSON
         start = content.find('{')
         end = content.rfind('}')

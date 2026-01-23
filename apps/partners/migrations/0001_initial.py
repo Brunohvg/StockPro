@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     """
     Migração inicial do app Partners.
-    
+
     Cria:
     - Supplier (Fornecedores)
     - SupplierProductMap (Mapeamento de Produtos)

@@ -18,29 +18,24 @@ Classes:
 from __future__ import annotations
 
 import re
-import requests
-import json
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
 from datetime import datetime
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from decimal import Decimal, InvalidOperation
 from enum import Enum
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 
 if TYPE_CHECKING:
-    from apps.tenants.models import Tenant
-    from apps.products.models import Product, ProductVariant
-    from apps.partners.models import Supplier, SupplierProductMap
-    from apps.inventory.models import ImportBatch
     from django.contrib.auth.models import User
 
-from apps.inventory.services.matcher import ProductMatcher
+    from apps.partners.models import SupplierProductMap
+    from apps.products.models import Product, ProductVariant
+    from apps.tenants.models import Tenant
 
+from apps.inventory.services.matcher import ProductMatcher
 
 # =============================================================================
 # ENUMS E DATA CLASSES
@@ -308,10 +303,9 @@ class NfeImportService:
 
     @transaction.atomic
     def import_from_bytes(self, xml_content: bytes) -> ImportResult:
-        from apps.partners.models import Supplier, SupplierProductMap
-        from apps.inventory.models import ImportBatch
-        from apps.inventory.models import PendingAssociation, PendingAssociationStatus
         from apps.core.services import StockService
+        from apps.inventory.models import ImportBatch, PendingAssociation, PendingAssociationStatus
+        from apps.partners.models import Supplier, SupplierProductMap
 
         # 1. Parse do XML
         try:
