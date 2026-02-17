@@ -34,12 +34,10 @@ class TestProductLogic:
             product_type=ProductType.VARIABLE,
             tenant=tenant
         )
-        v1 = ProductVariantFactory(product=product, current_stock=10)
-        v2 = ProductVariantFactory(product=product, current_stock=5)
+        v1 = ProductVariantFactory(product=product)
+        v2 = ProductVariantFactory(product=product)
 
-        # We need to bypass the LOCKDOWN for testing or use a service
-        # But here we are setting it during creation via factory which calls save()
-        # Let's ensure they are updated correctly
+        # Update stock via filter to bypass signals if necessary, but here we can just set it
         ProductVariant.objects.filter(pk=v1.pk).update(current_stock=10)
         ProductVariant.objects.filter(pk=v2.pk).update(current_stock=5)
 
@@ -57,22 +55,24 @@ class TestProductLogic:
         assert Product.objects.filter(tenant=t1).count() == 1
         assert Product.objects.filter(tenant=t2).count() == 1
 
-    def test_stock_lockdown(self, tenant):
-        """Verify stock cannot be changed without internal flag"""
-        product = ProductFactory(current_stock=10, tenant=tenant)
+    def test_variant_stock_lockdown(self, tenant):
+        """Verify variant stock cannot be changed without internal flag"""
+        variant = ProductVariantFactory(tenant=tenant)
+        ProductVariant.objects.filter(pk=variant.pk).update(current_stock=10)
+        variant.refresh_from_db()
 
         # Attempt to change stock directly
-        product.current_stock = 20
-        product.save()
+        variant.current_stock = 20
+        variant.save()
 
         # Should revert to 10
-        product.refresh_from_db()
-        assert product.current_stock == 10
+        variant.refresh_from_db()
+        assert variant.current_stock == 10
 
         # With flag
-        product.current_stock = 20
-        product._allow_stock_change = True
-        product.save()
+        variant.current_stock = 20
+        variant._allow_stock_change = True
+        variant.save()
 
-        product.refresh_from_db()
-        assert product.current_stock == 20
+        variant.refresh_from_db()
+        assert variant.current_stock == 20

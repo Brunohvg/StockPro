@@ -75,10 +75,10 @@ class ProductVariantFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = ProductVariant
 
-    product = factory.SubFactory(ProductFactory, product_type=ProductType.VARIABLE)
+    product = factory.SubFactory(ProductFactory)
     tenant = factory.SelfAttribute('product.tenant')
     name = factory.LazyAttribute(lambda o: f"{o.product.name} Variant")
-    sku = None  # Will be generated on save
+    sku = factory.Sequence(lambda n: f"SKU-VAR-{n}")
 
 class SupplierFactory(factory.django.DjangoModelFactory):
     class Meta:
@@ -136,6 +136,8 @@ class StockMovementFactory(factory.django.DjangoModelFactory):
         model = StockMovement
 
     tenant = factory.SubFactory(TenantFactory)
+    variant = factory.SubFactory(ProductVariantFactory, tenant=factory.SelfAttribute('..tenant'))
+    product = factory.SelfAttribute('variant.product')
     user = factory.SubFactory(UserFactory)
     location = factory.SubFactory(LocationFactory, tenant=factory.SelfAttribute('..tenant'))
     type = 'IN'

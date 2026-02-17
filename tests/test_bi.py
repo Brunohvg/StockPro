@@ -24,9 +24,9 @@ class TestBILogic:
 
         abc = BIService.calculate_abc_analysis(tenant)
 
-        assert abc[f"P-{p1.id}"] == "A"
-        assert abc[f"P-{p2.id}"] == "B"
-        assert abc[f"P-{p3.id}"] == "C"
+        assert abc[f"V-{p1.variants.first().id}"] == "A"
+        assert abc[f"V-{p2.variants.first().id}"] == "B"
+        assert abc[f"V-{p3.variants.first().id}"] == "C"
 
     def test_stock_health_dead_stock(self, tenant, user):
         """Verify that items with no OUT movements are flagged as dead stock"""
@@ -51,10 +51,10 @@ class TestBILogic:
 
         health = BIService.get_inventory_health(tenant)
 
-        # Check if p_dead is in dead stock list
-        dead_ids = [item['item'].id for item in health['dead_stock'] if item['type'] == 'product']
-        assert p_dead.id in dead_ids
-        assert p_active.id not in dead_ids
+        # Check if p_dead variant is in dead stock list
+        dead_ids = [item['item'].id for item in health['dead_stock'] if item['type'] == 'variant']
+        assert p_dead.variants.first().id in dead_ids
+        assert p_active.variants.first().id not in dead_ids
 
         # p_dead: 10 units * 100 cost = 1000.0
         assert health['dead_stock_value'] == Decimal('1000.0')

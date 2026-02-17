@@ -16,25 +16,16 @@ class BIService:
         # Get all products/variants with stock and value
         items = []
 
-        # Simple products
-        simple_products = Product.objects.filter(
-            tenant=tenant,
-            product_type=ProductType.SIMPLE,
-            is_active=True
-        ).exclude(current_stock=0)
-        for p in simple_products:
-            val = Decimal(p.current_stock or 0) * Decimal(p.avg_unit_cost or 0)
-            if val > 0:
-                items.append({'id': f"P-{p.id}", 'value': val, 'obj': p})
-
-        # Variants
+        # Use variants as the sole source of truth for stock value
         variants = ProductVariant.objects.filter(
             tenant=tenant,
             is_active=True
-        ).exclude(current_stock=0)
+        ).exclude(current_stock=0).select_related('product')
+
         for v in variants:
             val = Decimal(v.current_stock or 0) * Decimal(v.avg_unit_cost or 0)
             if val > 0:
+                # Use a specific ID format that identifies the variant
                 items.append({'id': f"V-{v.id}", 'value': val, 'obj': v})
 
         if not items:
@@ -82,26 +73,17 @@ class BIService:
 
         dead_stock = []
 
-        # Check simple products
-        candidates_p = Product.objects.filter(
-            tenant=tenant,
-            product_type=ProductType.SIMPLE,
-            is_active=True,
-            current_stock__gt=0
-        ).exclude(id__in=moved_product_ids)
-
-        for p in candidates_p:
-            dead_stock.append({'type': 'product', 'item': p, 'value': p.total_stock_value})
-
-        # Check variants
+        # Check variants (covers both simple and variable product variants)
         candidates_v = ProductVariant.objects.filter(
             tenant=tenant,
             is_active=True,
             current_stock__gt=0
-        ).exclude(id__in=moved_variant_ids)
+        ).exclude(id__in=moved_variant_ids).select_related('product')
 
         for v in candidates_v:
-            dead_stock.append({'type': 'variant', 'item': v, 'value': v.total_stock_value})
+            # Calculate value for this specific variant
+            val = Decimal(v.current_stock or 0) * Decimal(v.avg_unit_cost or 0)
+            dead_stock.append({'type': 'variant', 'item': v, 'value': val})
 
         return {
             'dead_stock': dead_stock,

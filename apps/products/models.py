@@ -99,11 +99,12 @@ class Product(TenantMixin):
         verbose_name="Local de Estoque Padrão"
     )
 
-    # Campos para SIMPLE - ignorados se VARIABLE
-    barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")
-    current_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Atual")
-    minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo")
-    avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio")
+    # Campos Legados - Operacionalmente migrados para ProductVariant
+    # NÃO remover colunas, mas evitar uso em lógica de negócio
+    barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras (Legado)")
+    current_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Atual (Legado)")
+    minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo (Legado)")
+    avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio (Legado)")
 
     requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
     ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")
@@ -135,21 +136,27 @@ class Product(TenantMixin):
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
-
-        # LOCKDOWN: Se não for novo e o estoque mudou sem a flag, bloqueia
-        if not is_new and hasattr(self, 'id'):
-            old_instance = Product.objects.get(pk=self.id)
-            if old_instance.current_stock != self.current_stock and not getattr(self, '_allow_stock_change', False):
-                # Reverte e avisa
-                self.current_stock = old_instance.current_stock
-                # Em produção poderíamos dar raise ValidationError, mas para evitar quebrar o Admin por completo,
-                # apenas revertemos silenciosamente ou logamos. Vamos de Reversão Silenciosa + Flag interna para o Admin saber.
-
         super().save(*args, **kwargs)
+
+        # Atualiza SKU se for padrão antigo ou vazio
         if (is_new and not self.sku) or (self.sku and (self.sku.startswith('PROD-') or '-' not in self.sku)):
-            # Se for novo ou tiver o padrão antigo 'PROD-...'
             self.sku = self.generate_sku()
             Product.objects.filter(pk=self.pk).update(sku=self.sku)
+
+        # V2: Garantir que produtos SIMPLE tenham exatamente uma variante
+        if self.is_simple:
+            if not self.variants.exists():
+                ProductVariant.objects.create(
+                    product=self,
+                    tenant=self.tenant,
+                    sku=self.sku,
+                    name="Padrão",
+                    barcode=self.barcode,
+                    current_stock=self.current_stock,
+                    minimum_stock=self.minimum_stock,
+                    avg_unit_cost=self.avg_unit_cost,
+                    is_active=self.is_active
+                )
 
     @property
     def ai_confidence_percent(self):
@@ -168,17 +175,13 @@ class Product(TenantMixin):
 
     @property
     def total_stock(self):
-        """Retorna estoque total (próprio se SIMPLE, soma se VARIABLE)"""
-        if self.is_variable:
-            return sum(v.current_stock for v in self.variants.all())
-        return self.current_stock
+        """Retorna estoque total (soma de todas as variantes)"""
+        return sum(variant.current_stock for variant in self.variants.all())
 
     @property
     def total_stock_value(self):
-        """Valor total em estoque"""
-        if self.is_variable:
-            return sum(v.stock_value for v in self.variants.all())
-        return (self.current_stock or 0) * (self.avg_unit_cost or 0)
+        """Valor total em estoque (soma de todas as variantes)"""
+        return sum(variant.stock_value for variant in self.variants.all())
 
     @property
     def variants_count(self):
@@ -186,9 +189,8 @@ class Product(TenantMixin):
 
     @property
     def is_low_stock(self):
-        if self.is_variable:
-            return any(v.is_low_stock for v in self.variants.all())
-        return self.current_stock <= self.minimum_stock
+        """Verifica se qualquer variante está com estoque baixo"""
+        return any(variant.is_low_stock for variant in self.variants.all())
 
     @property
     def can_be_safely_deleted(self):
@@ -201,15 +203,11 @@ class Product(TenantMixin):
         """
         from apps.inventory.models import StockMovement
 
-        if self.is_variable:
-            # Para VARIABLE, verificar todas as variantes
-            for variant in self.variants.all():
-                if StockMovement.objects.filter(variant=variant, type='OUT').exists():
-                    return False
-            return True
-        else:
-            # Para SIMPLE, verificar movimentações do próprio produto
-            return not StockMovement.objects.filter(product=self, type='OUT').exists()
+        # Verificar todas as variantes para qualquer tipo de produto
+        for variant in self.variants.all():
+            if StockMovement.objects.filter(variant=variant, type='OUT').exists():
+                return False
+        return True
 
     @property
     def delete_block_reason(self):
@@ -229,9 +227,8 @@ class ProductVariant(TenantMixin):
         Product,
         on_delete=models.CASCADE,
         related_name='variants',
-        limit_choices_to={'product_type': ProductType.VARIABLE}
     )
-    sku = models.CharField(max_length=50, null=True, blank=True, verbose_name="SKU Variação")
+    sku = models.CharField(max_length=50, verbose_name="SKU Variação")
     _allow_stock_change = False
     name = models.CharField(max_length=255, blank=True, verbose_name="Nome da Variação")
     barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")

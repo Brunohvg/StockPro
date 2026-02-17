@@ -39,15 +39,16 @@ class TestAPIOrders:
 
         # Verify Stock Movement
         product.refresh_from_db()
-        assert product.current_stock == 90
+        assert product.total_stock == 90
 
         movement = StockMovement.objects.get(external_order__external_order_id="12345")
         assert movement.quantity == 10
         assert movement.type == 'OUT'
         assert movement.source == 'NUVEMSHOP'
 
-        # Verify Visual Audit
-        audit = VisualAuditLog.objects.filter(entity_id=str(product.pk), external_ref="12345").first()
+        # Verify Visual Audit (Should be on the Variant)
+        variant = product.variants.first()
+        audit = VisualAuditLog.objects.filter(entity_id=str(variant.pk), external_ref="12345").first()
         assert audit is not None
         assert audit.diff['stock_change'] == -10.0
         assert audit.before_state['current_stock'] == 100.0

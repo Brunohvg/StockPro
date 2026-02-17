@@ -158,30 +158,29 @@ class StockService:
             if not product and not variant:
                 raise ValueError(f"Produto/variação com SKU '{product_sku}' não encontrado.")
 
-        # Determine target
-        if variant:
-            target = variant
-            target_type = 'variant'
-        elif product:
-            if product.is_variable:
-                raise ValueError(f"O produto '{product.sku}' ({product.name}) é variável e exige a especificação de uma variação (tamanho, cor, etc.) para movimentar estoque.")
-            target = product
-            target_type = 'product'
-        else:
-            raise ValueError("Deve especificar product, variant ou product_sku.")
+        # Determine target - ALWAYS resolve to variant
+        if not variant and product:
+            # If product is SIMPLE, it must have at least one variant (auto-created by save)
+            variant = product.variants.first()
+            if not variant:
+                # Fallback for unexpected state where variant missing
+                if product.is_simple:
+                    variant = ProductVariant.objects.create(
+                        product=product, tenant=tenant, sku=product.sku, name="Padrão"
+                    )
+                else:
+                    raise ValueError(f"O produto '{product.sku}' é variável e exige a especificação de uma variação.")
 
-        # Lock for update
-        if target_type == 'product':
-            target = Product.objects.select_for_update().get(pk=target.pk)
-        else:
-            target = ProductVariant.objects.select_for_update().get(pk=target.pk)
+        if not variant:
+            raise ValueError("Deve especificar uma variante válida ou um produto simples com SKU.")
+
+        # Lock variant for update
+        target = ProductVariant.objects.select_for_update().get(pk=variant.pk)
 
         # Fallback for location_id
         if not location_id:
             from apps.inventory.models import Location
-            if target_type == 'product' and target.default_location_id:
-                location_id = target.default_location_id
-            elif target_type == 'variant' and target.product.default_location_id:
+            if target.product.default_location_id:
                 location_id = target.product.default_location_id
             else:
                 default_loc = Location.get_default_for_tenant(tenant)
@@ -225,26 +224,21 @@ class StockService:
         target.save()
 
         # Create immutable movement record
-        movement_data = {
-            'tenant': tenant,
-            'user': user,
-            'type': movement_type,
-            'quantity': quantity,
-            'balance_after': new_stock,
-            'reason': reason,
-            'source': source,
-            'unit_cost': unit_cost,
-            'source_doc': source_doc,
-            'location_id': location_id,
-            'external_order': external_order,
-        }
-
-        if target_type == 'variant':
-            movement_data['variant'] = target
-        else:
-            movement_data['product'] = target
-
-        movement = StockMovement.objects.create(**movement_data)
+        movement = StockMovement.objects.create(
+            tenant=tenant,
+            user=user,
+            variant=target,
+            product=target.product,
+            type=movement_type,
+            quantity=quantity,
+            balance_after=new_stock,
+            reason=reason,
+            source=source,
+            unit_cost=unit_cost,
+            source_doc=source_doc,
+            location_id=location_id,
+            external_order=external_order,
+        )
 
         # Visual Audit (After & Diff)
         after_state = {
@@ -274,24 +268,14 @@ class StockService:
 
     @staticmethod
     def get_stock_for_product(product):
-        """Retorna estoque total para um produto (agregado se variável)"""
-        if product.is_simple:
-            return product.current_stock
-        return sum(v.current_stock for v in product.variants.filter(is_active=True))
+        """Retorna estoque total para um produto (agregado de todas as variantes)"""
+        return sum(v.current_stock for v in product.variants.all())
 
     @staticmethod
     def get_low_stock_items(tenant, threshold=None):
-        """Retorna itens com estoque baixo"""
+        """Retorna variantes com estoque baixo"""
         low_stock = []
-
-        # Simple products
-        for p in Product.objects.filter(tenant=tenant, product_type=ProductType.SIMPLE, is_active=True):
-            if p.current_stock <= p.minimum_stock:
-                low_stock.append({'type': 'product', 'item': p})
-
-        # Variants
         for v in ProductVariant.objects.filter(tenant=tenant, is_active=True):
             if v.current_stock <= v.minimum_stock:
                 low_stock.append({'type': 'variant', 'item': v})
-
         return low_stock

@@ -78,8 +78,8 @@ class Location(TenantMixin):
 class StockMovement(TenantMixin):
     """Immutable record of any stock change"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='movements', null=True, blank=True)
-    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='movements', null=True, blank=True)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='movements', null=True, blank=True, verbose_name="Produto (Opcional)")
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='movements', verbose_name="Variante/SKU")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name='movements', null=True, blank=True)
     type = models.CharField(max_length=3, choices=MovementType.choices)
@@ -98,11 +98,13 @@ class StockMovement(TenantMixin):
         verbose_name_plural = "Movimentações"
 
     def clean(self):
-        if not self.product and not self.variant:
-            raise ValidationError("Deve especificar produto ou variante.")
+        if not self.variant_id:
+            raise ValidationError("Toda movimentação deve estar vinculada a uma variante (SKU).")
+        if self.variant_id and not self.product_id:
+            self.product = self.variant.product
 
     def __str__(self):
-        target = self.variant.sku if self.variant else (self.product.sku if self.product else "?")
+        target = self.variant.sku if self.variant_id else (self.product.sku if self.product_id else "?")
         return f"{self.get_type_display()} {self.quantity}x {target}"
 
 # ==========================================

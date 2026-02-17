@@ -4,10 +4,9 @@ import pytest
 
 from apps.core.services import StockService
 from apps.inventory.models import StockMovement
-from tests.factories import (
-    ProductFactory,
-    ProductVariantFactory,
-)
+from apps.products.models import Product, ProductType, ProductVariant
+from apps.tenants.models import Tenant
+from tests.factories import ProductFactory, ProductVariantFactory
 
 
 @pytest.mark.django_db
@@ -29,9 +28,9 @@ class TestInventoryLogic:
         )
 
         product.refresh_from_db()
-        assert product.current_stock == 20
-        # Average: (10*5 + 10*15) / 20 = 200 / 20 = 10.0
-        assert product.avg_unit_cost == Decimal('10.0')
+        assert product.total_stock == 20
+        # Average cost is also centralized in variants
+        assert product.variants.first().avg_unit_cost == Decimal('10.0')
 
     def test_stock_out_and_protection(self, tenant, user):
         """Verify OUT movement decreases stock and blocks insufficient balance"""
@@ -47,7 +46,7 @@ class TestInventoryLogic:
         )
 
         product.refresh_from_db()
-        assert product.current_stock == 6
+        assert product.total_stock == 6
 
         # Insufficient balance
         with pytest.raises(ValueError, match="Estoque insuficiente"):
@@ -72,7 +71,7 @@ class TestInventoryLogic:
         )
 
         product.refresh_from_db()
-        assert product.current_stock == 42
+        assert product.total_stock == 42
 
     def test_movement_immutability(self, tenant, user):
         """Verify that StockMovement records are considered immutable by convention"""
@@ -109,7 +108,9 @@ class TestInventoryLogic:
 
     def test_safe_delete_protection(self, tenant, user):
         """Verify that products with OUT movements cannot be safely deleted"""
-        product = ProductFactory(tenant=tenant, current_stock=10)
+        product = ProductFactory(tenant=tenant)
+        variant = product.variants.first()
+        ProductVariant.objects.filter(pk=variant.pk).update(current_stock=10)
 
         # Initially can be deleted (no movements yet, or only IN/ADJ)
         assert product.can_be_safely_deleted is True
