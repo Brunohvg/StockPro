@@ -22,17 +22,7 @@ if not DEBUG and SECRET_KEY == 'django-insecure-secret-key-replace-me':
     print("ERRO FATAL: Configure SECRET_KEY no .env antes de rodar em produção!", file=sys.stderr)
     sys.exit(1)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
-if not isinstance(ALLOWED_HOSTS, list):
-    ALLOWED_HOSTS = list(ALLOWED_HOSTS)
-
-# Garantir que hosts locais sempre existam para healthchecks internos
-for host in ['localhost', '127.0.0.1', 'web', '0.0.0.0']:
-    if host not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(host)
-
-if DEBUG:
-    ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*'] if DEBUG else config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/app/'
@@ -77,7 +67,6 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'apps.core.middleware.HealthCheckMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
