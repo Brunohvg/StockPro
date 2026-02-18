@@ -106,7 +106,7 @@ services:
   # --------------------------------------------------------------------------
   stockpro_worker:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
-    command: celery -A stock_control worker -l info -Q default --without-gossip --without-mingle --without-heartbeat -Ofair
+    command: celery -A stock_control worker -l info -Q default --concurrency=2
     environment: *env
     networks:
       - app_network
@@ -126,6 +126,7 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
+    user: root
     healthcheck:
       disable: true
     depends_on:
@@ -136,6 +137,7 @@ services:
   # --------------------------------------------------------------------------
   stockpro_beat:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
+    user: root
     command: celery -A stock_control beat -l info
     environment: *env
     networks:
@@ -156,6 +158,7 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
+    user: root
     healthcheck:
       disable: true
     depends_on:

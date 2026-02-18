@@ -3,7 +3,6 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
-from celery.schedules import crontab
 from decouple import AutoConfig, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -156,17 +155,43 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Celery
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_ACKS_LATE = True
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-CELERY_TASK_REJECT_ON_WORKER_LOST = True
-CELERY_TIMEZONE = 'America/Sao_Paulo'
+# Celery — padrão Flowlog: só configura se broker estiver definido
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='')
+
+if CELERY_BROKER_URL:
+    from celery.schedules import crontab
+
+    CELERY_ACCEPT_CONTENT = ['json']
+    CELERY_TASK_SERIALIZER = 'json'
+    CELERY_RESULT_SERIALIZER = 'json'
+    CELERY_ENABLE_UTC = True
+    CELERY_TIMEZONE = 'America/Sao_Paulo'
+    CELERY_TASK_ACKS_LATE = True
+    CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+    CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+    CELERY_REDIS_BACKEND_USE_SSL = False
+    CELERY_BROKER_TRANSPORT_OPTIONS = {
+        'socket_timeout': 30,
+        'socket_connect_timeout': 30,
+        'retry_policy': {
+            'timeout': 5.0,
+            'max_retries': 3,
+            'interval_start': 0,
+            'interval_step': 0.2,
+            'interval_max': 0.5,
+        }
+    }
+    CELERY_BEAT_SCHEDULE = {
+        'cleanup-expired-trials-daily': {
+            'task': 'apps.tenants.tasks.cleanup_expired_trials',
+            'schedule': crontab(hour=3, minute=0),
+        },
+        'daily-backup': {
+            'task': 'apps.tenants.backup_task.daily_backup',
+            'schedule': crontab(hour=3, minute=30),
+        },
+    }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -174,31 +199,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
-
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_REDIS_BACKEND_USE_SSL = False
-CELERY_BROKER_TRANSPORT_OPTIONS = {
-    'socket_timeout': 30,
-    'socket_connect_timeout': 30,
-    'retry_policy': {
-        'timeout': 5.0,
-        'max_retries': 3,
-        'interval_start': 0,
-        'interval_step': 0.2,
-        'interval_max': 0.5,
-    }
-}
-
-CELERY_BEAT_SCHEDULE = {
-    'cleanup-expired-trials-daily': {
-        'task': 'apps.tenants.tasks.cleanup_expired_trials',
-        'schedule': crontab(hour=3, minute=0),
-    },
-    'daily-backup': {
-        'task': 'apps.tenants.backup_task.daily_backup',
-        'schedule': crontab(hour=3, minute=30),
-    },
-}
 
 # Logging — garante que erros do Celery aparecem nos logs do Docker
 LOGGING = {

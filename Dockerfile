@@ -1,62 +1,40 @@
 # ===========================================
 # StockPro V16 - Dockerfile
-# ===========================================
-
-# Build stage — python:3.11-slim com uv instalado
-FROM python:3.11-slim AS build
-
-# Instala uv via pip (não usa a imagem distroless)
-RUN pip install uv --no-cache-dir
-
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
-WORKDIR /app
-
-# Instala dependências primeiro (cache layer)
-COPY pyproject.toml uv.lock* /app/
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project --no-dev
-
-# Copia o projeto e instala
-COPY . /app
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev
-
-
-# ===========================================
-# Final stage
+# Padrão: UV_SYSTEM_PYTHON=1 (igual ao Flowlog que funciona em aarch64)
 # ===========================================
 FROM python:3.11-slim
-
-WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TZ=America/Sao_Paulo \
-    PATH="/app/.venv/bin:$PATH"
+    UV_SYSTEM_PYTHON=1
 
 # Dependências de sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
+    libpq-dev \
+    gcc \
     libjpeg62-turbo \
     zlib1g \
     libxml2 \
     libxslt1.1 \
     postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia o venv do build stage
-COPY --from=build /app/.venv /app/.venv
+# Instala uv (igual ao Flowlog)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+
+# Instala dependências no Python do sistema (sem .venv — igual ao Flowlog)
+COPY requirements.txt ./
+RUN uv pip install -r requirements.txt --no-cache
 
 # Copia o projeto
 COPY . /app
 
-# Diretórios e usuário não-root
-RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data/backups && \
-    adduser --disabled-password --gecos "" appuser && \
-    chown -R appuser:appuser /app /data && \
-    chmod -R 755 /app /data
-
-USER appuser
+# Diretórios necessários
+RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data/backups
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck/')" || exit 1
