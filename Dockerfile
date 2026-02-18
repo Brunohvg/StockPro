@@ -39,8 +39,5 @@ RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data && \
     chmod -R 755 /app /data
 
 USER appuser
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthcheck/')" || exit 1
-
 EXPOSE 8000
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "stock_control.wsgi:application"]
