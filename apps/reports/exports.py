@@ -257,3 +257,45 @@ class ProductExporter:
             result.append(item)
 
         return json.dumps(result, indent=2, cls=DecimalEncoder, ensure_ascii=False)
+
+    def export_movements_csv(self, days=30):
+        """Export stock movements to CSV"""
+        from django.utils import timezone
+        from apps.inventory.models import StockMovement
+
+        start_date = timezone.now().date() - timezone.timedelta(days=days)
+
+        movements = StockMovement.objects.filter(
+            tenant=self.tenant,
+            created_at__date__gte=start_date
+        ).select_related('product', 'variant', 'variant__product', 'user').order_by('-created_at')
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Data', 'Hora', 'Tipo', 'SKU', 'Produto', 'Quantidade', 'Saldo', 'Custo Unit.', 'Operador', 'Motivo'])
+
+        for mov in movements:
+            if mov.variant:
+                sku = mov.variant.sku
+                name = mov.variant.display_name
+            elif mov.product:
+                sku = mov.product.sku
+                name = mov.product.name
+            else:
+                sku = '-'
+                name = '(Removido)'
+
+            writer.writerow([
+                mov.created_at.strftime('%Y-%m-%d'),
+                mov.created_at.strftime('%H:%M:%S'),
+                mov.get_type_display(),
+                sku,
+                name,
+                mov.quantity,
+                mov.balance_after,
+                float(mov.unit_cost) if mov.unit_cost else '',
+                mov.user.username if mov.user else 'Sistema',
+                mov.reason or ''
+            ])
+
+        return output.getvalue()

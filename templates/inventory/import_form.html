@@ -51,59 +51,33 @@
                 <div class="space-y-4">
                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Natureza do Lote</label>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-indigo-50 transition-all border-slate-100 has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50/50 group">
-                            <input type="radio" name="type" value="CSV_PRODUCTS" checked class="hidden" onchange="toggleTemplateLink(this.value)">
+                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-slate-50 transition-all border-slate-100 has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50/50 group">
+                            <input type="radio" name="type" value="CATALOG_DIRECT" checked class="hidden" onchange="toggleTemplateLink(this.value)">
                             <div class="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-has-[:checked]:text-indigo-600 group-has-[:checked]:border-indigo-200 group-hover:scale-110 transition-all shadow-sm">
                                 <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
                             </div>
                             <div>
-                                <span class="block text-sm font-black text-slate-900 leading-tight">Planilha CSV</span>
-                                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-tight">Carga de Produtos</span>
+                                <span class="block text-sm font-black text-slate-900 leading-tight">Carga de Catálogo</span>
+                                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-tight">Cadastro + Saldo Absoluto</span>
                             </div>
                         </label>
 
-                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-emerald-50 transition-all border-slate-100 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/50 group border-dashed">
-                            <input type="radio" name="type" value="CSV_INVENTORY" class="hidden" onchange="toggleTemplateLink(this.value)">
+                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-slate-50 transition-all border-slate-100 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/50 group">
+                            <input type="radio" name="type" value="STOCK_SYNC" class="hidden" onchange="toggleTemplateLink(this.value)">
                             <div class="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-has-[:checked]:text-emerald-600 group-has-[:checked]:border-emerald-200 group-hover:scale-110 transition-all shadow-sm">
-                                <i data-lucide="clipboard-check" class="w-6 h-6"></i>
+                                <i data-lucide="arrow-left-right" class="w-6 h-6"></i>
                             </div>
                             <div>
-                                <span class="block text-sm font-black text-slate-900 leading-tight">Modo Inventário</span>
-                                <span class="block text-[10px] text-emerald-500 font-black uppercase tracking-tight italic">Sobrescreve Estoque</span>
+                                <span class="block text-sm font-black text-slate-900 leading-tight">Movimentação</span>
+                                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-tight">Soma/Subtração (SKU Simples)</span>
                             </div>
                         </label>
-
-                        <label class="relative flex items-center gap-4 p-5 border-2 rounded-[2rem] cursor-pointer hover:bg-amber-50 transition-all border-slate-100 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 group md:col-span-2">
-                            <input type="radio" name="type" value="XML_NFE" class="hidden" onchange="toggleTemplateLink(this.value)">
-                            <div class="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-has-[:checked]:text-amber-600 group-has-[:checked]:border-amber-200 group-hover:scale-110 transition-all shadow-sm">
-                                <i data-lucide="file-code" class="w-6 h-6"></i>
-                            </div>
-                            <div>
-                                <span class="block text-sm font-black text-slate-900 leading-tight">Nota Fiscal XML</span>
-                                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-tight">Importação de NF-e</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <div id="inventory-alert" class="hidden mt-6 p-6 bg-emerald-50 border border-emerald-100 rounded-[2rem] border-dashed animate-in zoom-in duration-300">
-                        <div class="flex gap-4">
-                            <div class="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
-                                <i data-lucide="zap" class="w-6 h-6"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-sm font-black text-emerald-900 mb-1 tracking-tight">MODO INVENTÁRIO ATIVADO</h4>
-                                <p class="text-[11px] text-emerald-700/80 font-bold leading-relaxed">
-                                    Atenção: Os valores desta planilha **substituirão** o saldo atual.
-                                    O sistema ajustará as diferenças automaticamente para bater com seu arquivo.
-                                </p>
-                            </div>
-                        </div>
                     </div>
 
                     <div id="template-link-container" class="mt-4 flex animate-in fade-in duration-500">
-                        <a href="{% url 'inventory:download_csv_template' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                        <a id="btn-download-template" href="{% url 'inventory:download_csv_template' %}?type=CATALOG_DIRECT" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                             <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                            Baixar Planilha Modelo
+                            <span id="txt-download-template">Baixar Modelo de Catálogo</span>
                         </a>
                     </div>
                 </div>
@@ -158,12 +132,12 @@
                             </div>
                         </li>
                         <li class="flex items-start gap-4">
-                            <div class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-amber-400 flex-shrink-0 mt-1">
-                                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                            <div class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-emerald-400 flex-shrink-0 mt-1">
+                                <i data-lucide="check" class="w-4 h-4"></i>
                             </div>
                             <div>
-                                <h5 class="text-white text-xs font-black uppercase mb-1">Requisito NF-e</h5>
-                                <p class="text-slate-400 text-[10px] leading-relaxed font-medium">Os arquivos XML devem conter a tag de autorização de uso (NF-e completa).</p>
+                                <h5 class="text-white text-xs font-black uppercase mb-1">Mapeamento SKU Direto</h5>
+                                <p class="text-slate-400 text-[10px] leading-relaxed font-medium">Os produtos são identificados e atualizados estritamente pelo SKU da planilha.</p>
                             </div>
                         </li>
                     </ul>
@@ -191,21 +165,14 @@
     const dropZone = document.getElementById('drop-zone');
 
     function toggleTemplateLink(value) {
-        const container = document.getElementById('template-link-container');
-        const alert = document.getElementById('inventory-alert');
-
-        if (value === 'CSV_PRODUCTS' || value === 'CSV_INVENTORY') {
-            container.classList.remove('hidden');
-            container.classList.add('flex');
+        const btn = document.getElementById('btn-download-template');
+        const txt = document.getElementById('txt-download-template');
+        if (value === 'STOCK_SYNC') {
+            btn.href = "{% url 'inventory:download_csv_template' %}?type=STOCK_SYNC";
+            txt.textContent = "Baixar Modelo de Movimentação";
         } else {
-            container.classList.add('hidden');
-            container.classList.remove('flex');
-        }
-
-        if (value === 'CSV_INVENTORY') {
-            alert.classList.remove('hidden');
-        } else {
-            alert.classList.add('hidden');
+            btn.href = "{% url 'inventory:download_csv_template' %}?type=CATALOG_DIRECT";
+            txt.textContent = "Baixar Modelo de Catálogo";
         }
     }
 

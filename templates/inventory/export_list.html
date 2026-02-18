@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load core_tags %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.4);
+        --premium-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+        --accent-indigo: #6366f1;
+    }
+
+    .glass-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 1.5rem;
+        box-shadow: var(--premium-shadow);
+    }
+
+    .stat-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: default;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        background: white;
+    }
+
+    .status-badge {
+        font-weight: 700;
+        letter-spacing: 0.025em;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.75rem;
+        font-size: 0.55rem;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .status-completed { background: #f0fdf4; color: #16a34a; border: 1px solid #dcfce7; }
+    .status-processing { background: #eef2ff; color: #4f46e5; border: 1px solid #e0e7ff; }
+    .status-error { background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
+    .status-pending { background: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
+
+    .table-row-hover {
+        transition: all 0.2s ease;
+    }
+
+    .table-row-hover:hover {
+        background-color: rgba(241, 245, 249, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+        <div>
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-bold uppercase tracking-widest border border-indigo-100">Enterprise Data Suite</span>
+                <span class="text-slate-400 text-[9px] font-bold uppercase tracking-widest">Saída de Dados</span>
+            </div>
+            <h1 class="text-4xl font-black text-slate-900 tracking-tight">Exportações</h1>
+            <p class="text-slate-500 mt-2 text-base font-medium max-w-xl">Histórico de arquivos gerados e downloads disponíveis.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+             <a href="{% url 'products:product_list' %}" class="px-6 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all text-sm">
+                Voltar
+            </a>
+            <form action="{% url 'inventory:export_create' %}" method="POST">
+                {% csrf_token %}
+                <button type="submit" class="flex items-center gap-2 px-6 py-3 bg-slate-900 hover:bg-indigo-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-slate-900/10 active:scale-95 group text-sm">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    Nova Exportação
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="glass-card stat-card p-6 relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                    <i data-lucide="layers" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total Geral</span>
+            </div>
+            <div class="text-3xl font-black text-slate-900 tracking-tight">{{ exports|length }}</div>
+            <div class="text-[10px] text-slate-400 font-bold mt-1">Exportações Geradas</div>
+        </div>
+
+        <div class="glass-card stat-card p-6 relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
+                    <i data-lucide="check-circle" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Sucesso</span>
+            </div>
+            <div class="text-3xl font-black text-slate-900 tracking-tight">{{ completed_count }}</div>
+            <div class="text-[10px] text-slate-400 font-bold mt-1">Disponíveis para Download</div>
+        </div>
+
+        <div class="glass-card stat-card p-6 relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+                    <i data-lucide="refresh-cw" class="w-5 h-5 animate-spin-slow"></i>
+                </div>
+                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Processando</span>
+            </div>
+            <div class="text-3xl font-black text-slate-900 tracking-tight">
+                {% with processing=exports|select_attr:"status"|equalto:"PROCESSING"|length %}
+                {{ processing|default:0 }}
+                {% endwith %}
+            </div>
+            <div class="text-[10px] text-slate-400 font-bold mt-1">Em Andamento</div>
+        </div>
+
+        <div class="glass-card stat-card p-6 relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
+                    <i data-lucide="alert-octagon" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Falhas</span>
+            </div>
+            <div class="text-3xl font-black text-slate-900 tracking-tight">{{ error_count }}</div>
+            <div class="text-[10px] text-slate-400 font-bold mt-1">Erros de Geração</div>
+        </div>
+    </div>
+
+    <!-- Main Content Table -->
+    <div class="glass-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50/20">
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Arquivo</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tamanho</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Data</th>
+                        <th class="px-6 py-4 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for export in exports %}
+                    <tr class="group table-row-hover">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+                                    <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Exportação #{{ export.id|stringformat:".8s" }}</div>
+                                    <div class="text-[10px] text-slate-400 font-medium">CSV (Catálogo)</div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <td class="px-6 py-4">
+                            <div class="flex flex-col gap-2 min-w-[140px]">
+                                <span class="status-badge
+                                    {% if export.status == 'COMPLETED' %}status-completed
+                                    {% elif export.status == 'PROCESSING' %}status-processing
+                                    {% elif export.status == 'FAILED' %}status-error
+                                    {% else %}status-pending{% endif %}">
+                                    {% if export.status == 'PROCESSING' %}<i data-lucide="refresh-cw" class="w-3 h-3 animate-spin"></i>{% endif %}
+                                    {{ export.get_status_display }}
+                                </span>
+                                {% if export.status == 'PROCESSING' %}
+                                <div class="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                                    <div class="h-full bg-indigo-500 animate-pulse w-2/3"></div>
+                                </div>
+                                <span class="text-[9px] font-bold text-slate-400">{{ export.total_rows }} itens processados...</span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <td class="px-6 py-4 text-slate-900 font-medium text-xs">
+                             {% if export.file %}
+                                {{ export.file.size|filesizeformat }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+
+                        <td class="px-6 py-4">
+                            <div class="text-xs font-bold text-slate-900">{{ export.created_at|date:"d M, Y" }}</div>
+                            <div class="text-[9px] text-slate-400 uppercase font-medium">{{ export.created_at|date:"H:i" }}</div>
+                        </td>
+
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                {% if export.status == 'COMPLETED' and export.file %}
+                                <a href="{% url 'inventory:export_download' export.pk %}" class="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                    Baixar
+                                </a>
+                                {% endif %}
+
+                                <form action="{% url 'inventory:delete_export' export.pk %}" method="POST" class="inline" onsubmit="return confirm('Tem certeza que deseja apagar esta exportação?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Excluir">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-24 text-center">
+                            <div class="max-w-xs mx-auto">
+                                <div class="w-20 h-20 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200 mx-auto mb-6">
+                                    <i data-lucide="download-cloud" class="w-10 h-10"></i>
+                                </div>
+                                <h3 class="text-xl font-bold text-slate-900 mb-2">Sem exportações</h3>
+                                <p class="text-slate-500 text-sm">Gere um arquivo CSV do seu catálogo para backup ou edição em massa.</p>
+                                <form action="{% url 'inventory:export_create' %}" method="POST" class="mt-6">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all text-sm">
+                                        Gerar Primeira Exportação
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+
+    // Auto-refresh via JS simples para garantir compatibilidade se HTMX falhar
+    {% if exports.first.status == 'PENDING' or exports.first.status == 'PROCESSING' %}
+        setTimeout(function(){
+            window.location.reload(1);
+        }, 5000);
+    {% endif %}
+</script>
+{% endblock %}

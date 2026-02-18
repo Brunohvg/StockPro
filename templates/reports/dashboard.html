@@ -31,73 +31,81 @@
     </div>
 
     <!-- Premium Stats Grid -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6">
 
         <!-- Total Products Card -->
-        <div class="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 relative overflow-hidden">
+        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 relative overflow-hidden">
             <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
             <div class="relative">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/30">
-                    <i data-lucide="package" class="w-6 h-6 text-white"></i>
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/30">
+                    <i data-lucide="package" class="w-5 h-5 text-white"></i>
                 </div>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Produtos</p>
-                <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_products }}</h3>
-                <div class="mt-3 flex items-center gap-2 text-[10px]">
-                    <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-bold">{{ total_simple }} simples</span>
-                    <span class="px-2 py-0.5 bg-purple-50 text-purple-600 rounded-full font-bold">{{ total_variable }} variáveis</span>
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Produtos</p>
+                <h3 class="text-2xl font-black text-slate-900 mt-1">{{ total_products }}</h3>
+                <div class="mt-2 flex flex-wrap gap-1 text-[8px]">
+                    <span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold">{{ total_simple }} SIM</span>
+                    <span class="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-lg font-bold">{{ total_variable }} VAR</span>
                 </div>
             </div>
         </div>
 
         <!-- Stock Value Card -->
-        <div class="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 relative overflow-hidden">
+        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 relative overflow-hidden">
             <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
             <div class="relative">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/30">
-                    <i data-lucide="banknote" class="w-6 h-6 text-white"></i>
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/30">
+                    <i data-lucide="banknote" class="w-5 h-5 text-white"></i>
                 </div>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor em Estoque</p>
-                <div class="flex flex-col mt-1">
-                    <span class="text-xs font-black text-slate-400 tracking-tighter">R$</span>
-                    <h3 class="text-2xl md:text-3xl font-black text-slate-900 leading-none">{{ total_stock_value|floatformat:2|intcomma }}</h3>
-                </div>
-                <div class="mt-3 text-[10px] font-medium text-slate-400">
-                    {{ total_units|default:0|intcomma }} unidades no total
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estoque R$</p>
+                <h3 class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ total_stock_value|floatformat:0|intcomma }}</h3>
+                <div class="mt-2 text-[8px] font-medium text-slate-400">
+                    {{ total_units|default:0|intcomma }} un totais
                 </div>
             </div>
         </div>
 
         <!-- Today's Flow Card -->
-        <div class="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 transition-all duration-300 relative overflow-hidden">
+        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 transition-all duration-300 relative overflow-hidden">
             <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
             <div class="relative">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-4 shadow-lg shadow-amber-500/30">
-                    <i data-lucide="activity" class="w-6 h-6 text-white"></i>
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-4 shadow-lg shadow-amber-500/30">
+                    <i data-lucide="activity" class="w-5 h-5 text-white"></i>
                 </div>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Giro Hoje</p>
-                <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_movements_today|intcomma }}</h3>
-                <div class="mt-3 flex items-center gap-2 text-[10px]">
-                    <span class="flex items-center gap-1 text-emerald-600 font-bold">
-                        <i data-lucide="arrow-up" class="w-3 h-3 mr-1"></i>+{{ entries_today|intcomma }}
-                    </span>
-                    <span class="flex items-center gap-1 text-rose-600 font-bold">
-                        <i data-lucide="arrow-down" class="w-3 h-3 mr-1"></i>-{{ exits_today|intcomma }}
-                    </span>
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Giro Hoje</p>
+                <h3 class="text-2xl font-black text-slate-900 mt-1">{{ total_movements_today|intcomma }}</h3>
+                <div class="mt-2 flex items-center gap-2 text-[8px]">
+                    <span class="text-emerald-600 font-bold">+{{ entries_today|intcomma }}</span>
+                    <span class="text-rose-600 font-bold">-{{ exits_today|intcomma }}</span>
                 </div>
             </div>
         </div>
 
-        <!-- Alerts Card -->
-        <div class="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/10 transition-all duration-300 relative overflow-hidden {% if low_stock_count > 0 %}border-rose-200{% endif %}">
+        <!-- Alertas Card -->
+        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/10 transition-all duration-300 relative overflow-hidden">
             <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-rose-100 to-pink-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
             <div class="relative">
-                <div class="w-12 h-12 rounded-2xl {% if low_stock_count > 0 %}bg-gradient-to-br from-rose-500 to-pink-600 animate-pulse{% else %}bg-gradient-to-br from-slate-400 to-slate-500{% endif %} flex items-center justify-center mb-4 shadow-lg {% if low_stock_count > 0 %}shadow-rose-500/30{% else %}shadow-slate-400/30{% endif %}">
-                    <i data-lucide="alert-triangle" class="w-6 h-6 text-white"></i>
+                <div class="w-10 h-10 rounded-2xl {% if low_stock_count > 0 %}bg-gradient-to-br from-rose-500 to-pink-600 animate-pulse{% else %}bg-gradient-to-br from-slate-400 to-slate-500{% endif %} flex items-center justify-center mb-4 shadow-lg">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-white"></i>
                 </div>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Alertas</p>
-                <h3 class="text-3xl font-black {% if low_stock_count > 0 %}text-rose-600{% else %}text-slate-900{% endif %} mt-1">{{ low_stock_count }}</h3>
-                <div class="mt-3 text-[10px] font-medium {% if low_stock_count > 0 %}text-rose-500{% else %}text-slate-400{% endif %}">
-                    {% if low_stock_count > 0 %}Itens em estoque crítico{% else %}Tudo em ordem!{% endif %}
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Crítico</p>
+                <h3 class="text-2xl font-black {% if low_stock_count > 0 %}text-rose-600{% else %}text-slate-900{% endif %} mt-1">{{ low_stock_count }}</h3>
+                <div class="mt-2 text-[8px] font-medium {% if low_stock_count > 0 %}text-rose-500{% else %}text-slate-400{% endif %}">
+                    {% if low_stock_count > 0 %}Reposição necessária{% else %}Estoque saudável{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Stock Integrity Card -->
+        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 relative overflow-hidden">
+            <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
+            <div class="relative">
+                <div class="w-10 h-10 rounded-2xl {% if divergent_count > 0 %}bg-gradient-to-br from-amber-500 to-orange-500 animate-bounce{% else %}bg-gradient-to-br from-indigo-500 to-blue-600{% endif %} flex items-center justify-center mb-4 shadow-lg">
+                    <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
+                </div>
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Integridade</p>
+                <h3 class="text-2xl font-black {% if divergent_count > 0 %}text-amber-600{% else %}text-slate-900{% endif %} mt-1">{% if divergent_count > 0 %}{{ divergent_count }}{% else %}100%{% endif %}</h3>
+                <div class="mt-2 text-[8px] font-medium {% if divergent_count > 0 %}text-amber-600{% else %}text-emerald-600{% endif %}">
+                    {% if divergent_count > 0 %}Divergências detectadas!{% else %}Auditoria em OK{% endif %}
                 </div>
             </div>
         </div>

@@ -56,19 +56,16 @@
 
             <div class="relative">
                 <i data-lucide="search" class="absolute left-4 top-3.5 w-5 h-5 text-slate-400"></i>
-                <input type="text" id="product_search" name="sku" required autocomplete="off"
-                       list="products-datalist"
+                <input type="text" id="product_search" autocomplete="off"
                        class="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-transparent rounded-xl text-base font-bold focus:bg-white focus:border-indigo-500 transition-all outline-none"
-                       placeholder="SKU, Nome ou Código de Barras...">
+                       placeholder="Buscar por nome do produto...">
+                <input type="hidden" name="sku" id="sku_input">
+                <input type="hidden" name="variant_id" id="variant_id_input">
+            </div>
 
-                <datalist id="products-datalist">
-                    {% for prod in simple_products %}
-                    <option value="{{ prod.sku }}">{{ prod.name }} (Est: {{ prod.current_stock }})</option>
-                    {% endfor %}
-                    {% for var in variants %}
-                    <option value="{{ var.sku }}">{{ var.display_name }} (Est: {{ var.current_stock }})</option>
-                    {% endfor %}
-                </datalist>
+            <!-- Search Results / Variant List (DYNAMIC) -->
+            <div id="search-results" class="hidden space-y-2 mt-2 max-h-60 overflow-y-auto pr-1">
+                <!-- Results will be injected here -->
             </div>
 
             <!-- Selected Product Display -->
@@ -160,7 +157,66 @@
 
     function clearSelection() {
         document.getElementById('product_search').value = '';
+        document.getElementById('sku_input').value = '';
+        document.getElementById('variant_id_input').value = '';
         document.getElementById('selected-product').classList.add('hidden');
+        document.getElementById('search-results').classList.add('hidden');
+    }
+
+    // Simplified AJAX Search & Variant Selection
+    const searchInput = document.getElementById('product_search');
+    const resultsDiv = document.getElementById('search-results');
+
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        if (query.length < 2) {
+            resultsDiv.classList.add('hidden');
+            return;
+        }
+
+        // Fetch items via API (using current location for simplicity)
+        fetch(`/inventory/api/products/search/?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+                resultsDiv.innerHTML = '';
+                if (data.results.length === 0) {
+                    resultsDiv.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">Nenhum item encontrado</p>';
+                } else {
+                    data.results.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = "p-3 bg-white border border-slate-100 rounded-xl active:bg-indigo-50 transition-colors";
+                        div.innerHTML = `
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm font-bold text-slate-900">${item.display_name}</p>
+                                    <p class="text-[10px] font-mono text-slate-500">SKU: ${item.sku}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs font-black ${item.stock > 0 ? 'text-emerald-600' : 'text-rose-500'}">Est: ${item.stock}</p>
+                                </div>
+                            </div>
+                        `;
+                        div.onclick = () => selectItem(item);
+                        resultsDiv.appendChild(div);
+                    });
+                }
+                resultsDiv.classList.remove('hidden');
+            });
+    });
+
+    function selectItem(item) {
+        document.getElementById('product_search').value = item.display_name;
+        document.getElementById('sku_input').value = item.sku;
+        document.getElementById('variant_id_input').value = item.variant_id;
+
+        document.getElementById('selected-name').innerText = item.display_name;
+        document.getElementById('selected-sku').innerText = `SKU: ${item.sku} | Saldo: ${item.stock}`;
+        document.getElementById('selected-product').classList.remove('hidden');
+        resultsDiv.classList.add('hidden');
+
+        // Focus on quantity for fast thumb action
+        document.getElementById('qty_input').focus();
+        document.getElementById('qty_input').select();
     }
 
     // Scanner functions
@@ -188,14 +244,20 @@
 
     function onScanSuccess(decodedText) {
         closeScanner();
+        // For scanner, iterate by SKU directly
         document.getElementById('product_search').value = decodedText;
+        // Trigger a lookup
+        fetch(`/inventory/api/products/search/?q=${encodeURIComponent(decodedText)}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.results.length === 1) {
+                    selectItem(data.results[0]);
+                } else {
+                    searchInput.dispatchEvent(new Event('input'));
+                }
+            });
 
-        // Vibrate for feedback
         if (navigator.vibrate) navigator.vibrate(100);
-
-        // Focus on quantity
-        document.getElementById('qty_input').focus();
-        document.getElementById('qty_input').select();
     }
 
     // Event listeners

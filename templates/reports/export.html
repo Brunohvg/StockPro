@@ -107,13 +107,196 @@
         </div>
     </div>
 
+    <!-- Export History Section -->
+    <div class="mt-12">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-slate-900">Histórico de Arquivos</h2>
+                <p class="text-slate-500 text-sm">Downloads recentes gerados pelo sistema.</p>
+            </div>
+        </div>
+
+        <div class="glass-card overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <form id="bulk-delete-form" action="{% url 'reports:delete_exports_batch' %}" method="POST">
+                {% csrf_token %}
+
+                <!-- Bulk Actions Toolbar (Hidden by default) -->
+                <div id="bulk-actions" class="hidden bg-slate-50 px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+                    <span class="text-sm text-slate-600 font-medium">
+                        <span id="selected-count">0</span> itens selecionados
+                    </span>
+                    <button type="submit" class="text-rose-600 hover:text-rose-700 text-sm font-bold flex items-center gap-2" onclick="return confirm('Tem certeza que deseja excluir os itens selecionados?')">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        Excluir Selecionados
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/50 border-b border-slate-100">
+                                <th class="px-6 py-4 w-10">
+                                    <input type="checkbox" id="select-all" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                </th>
+                                <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Arquivo</th>
+                                <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Formato</th>
+                                <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                                <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Data</th>
+                                <th class="px-6 py-4 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for export in exports %}
+                            <tr class="group hover:bg-slate-50 transition-colors">
+                                <td class="px-6 py-4">
+                                    <input type="checkbox" name="selected_ids" value="{{ export.id }}" class="item-checkbox rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                                            {% if export.export_type == 'EXCEL' %}
+                                                <i data-lucide="table" class="w-5 h-5"></i>
+                                            {% elif export.export_type == 'JSON' %}
+                                                <i data-lucide="braces" class="w-5 h-5"></i>
+                                            {% else %}
+                                                <i data-lucide="file-text" class="w-5 h-5"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-bold text-slate-900">
+                                                {% if export.resource == 'MOVEMENTS' %}Movimentações{% else %}Catálogo de Produtos{% endif %}
+                                            </div>
+                                            <div class="text-[10px] text-slate-400 font-medium">#{{ export.id|stringformat:".8s" }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td class="px-6 py-4">
+                                    <span class="px-2 py-1 rounded-md text-[10px] font-bold border
+                                        {% if export.export_type == 'EXCEL' %}bg-green-50 text-green-700 border-green-100
+                                        {% elif export.export_type == 'JSON' %}bg-slate-100 text-slate-700 border-slate-200
+                                        {% else %}bg-emerald-50 text-emerald-700 border-emerald-100{% endif %}">
+                                        {{ export.export_type }}
+                                    </span>
+                                </td>
+
+                                <td class="px-6 py-4">
+                                    <div class="flex flex-col gap-1">
+                                        {% if export.status == 'COMPLETED' %}
+                                            <span class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Concluído
+                                            </span>
+                                            {% if export.file %}
+                                            <span class="text-[10px] text-slate-400">{{ export.file.size|filesizeformat }}</span>
+                                            {% endif %}
+                                        {% elif export.status == 'PROCESSING' %}
+                                            <span class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 animate-pulse">
+                                                <i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Processando
+                                            </span>
+                                        {% elif export.status == 'FAILED' %}
+                                            <span class="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600">
+                                                <i data-lucide="alert-circle" class="w-3 h-3"></i> Falha
+                                            </span>
+                                        {% else %}
+                                            <span class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Na Fila
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <td class="px-6 py-4">
+                                    <div class="text-xs font-bold text-slate-900">{{ export.created_at|date:"d M, Y" }}</div>
+                                    <div class="text-[10px] text-slate-400 uppercase font-medium">{{ export.created_at|date:"H:i" }}</div>
+                                </td>
+
+                                <td class="px-6 py-4 text-right">
+                                    <div class="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-all">
+                                        {% if export.status == 'COMPLETED' and export.file %}
+                                        <a href="{% url 'inventory:export_download' export.pk %}" class="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors">
+                                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                            Baixar
+                                        </a>
+                                        {% endif %}
+
+                                        <button type="button"
+                                            onclick="if(confirm('Tem certeza?')) { document.getElementById('delete-form-{{ export.id }}').submit(); }"
+                                            class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Excluir">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+
+                                        {% if export.status == 'FAILED' %}
+                                        <span class="text-xs text-red-400" title="{{ export.log }}">Erro</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center text-slate-400">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <i data-lucide="file-spreadsheet" class="w-8 h-8 opacity-20"></i>
+                                        <p>Nenhuma exportação realizada ainda.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+
+            <!-- Individual Delete Forms (Hidden) -->
+            {% for export in exports %}
+            <form id="delete-form-{{ export.id }}" action="{% url 'reports:delete_export' export.pk %}" method="POST" class="hidden">
+                 {% csrf_token %}
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+
 </div>
 
+<!-- Auto-refresh logic -->
+{% if exports.first.status == 'PENDING' or exports.first.status == 'PROCESSING' %}
+    <meta http-equiv="refresh" content="5">
+{% endif %}
+
 <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Bulk Selection Logic
+        const selectAll = document.getElementById('select-all');
+        const checkboxes = document.querySelectorAll('.item-checkbox');
+        const bulkActions = document.getElementById('bulk-actions');
+        const selectedCount = document.getElementById('selected-count');
+
+        function updateToolbar() {
+            const count = document.querySelectorAll('.item-checkbox:checked').length;
+            selectedCount.textContent = count;
+            if (count > 0) {
+                bulkActions.classList.remove('hidden');
+            } else {
+                bulkActions.classList.add('hidden');
+            }
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                checkboxes.forEach(cb => cb.checked = selectAll.checked);
+                updateToolbar();
+            });
+        }
+
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', updateToolbar);
+        });
+    });
+
     function downloadProducts(format) {
         const variants = document.getElementById('include-variants').checked;
         const inactive = document.getElementById('include-inactive').checked;
 
+        // Use the correct URL pattern defined in reports/urls.py
         let url = `/app/export/products/${format}/?variants=${variants}&inactive=${inactive}`;
         window.location.href = url;
     }

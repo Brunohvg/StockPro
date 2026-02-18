@@ -16,5 +16,7 @@ urlpatterns = [
     path('export/products/excel/', views.export_products_excel, name='export_products_excel'),
     path('export/products/json/', views.export_products_json, name='export_products_json'),
     path('export/movements/csv/', views.export_movements_csv, name='export_movements_csv'),
+    path('export/<uuid:pk>/delete/', views.delete_export, name='delete_export'),
+    path('export/delete-batch/', views.delete_exports_batch, name='delete_exports_batch'),
 ]
 

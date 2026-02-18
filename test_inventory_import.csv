@@ -1,0 +1,5 @@
+sku,name,quantity,avg_unit_cost
+SKU-01,Nome Errado 1,10,5.5
+SKU-02-BL,Nome Errado 2,20,10.0
+SKU-MISSING,Nao Existe,100,99.99
+SKU-01,Ajuste Negativo,-15,5.0

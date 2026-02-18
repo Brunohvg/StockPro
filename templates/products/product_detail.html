@@ -139,7 +139,14 @@
                             <div class="font-bold text-lg {% if variant.current_stock > variant.minimum_stock %}text-emerald-600{% elif variant.current_stock > 0 %}text-amber-600{% else %}text-rose-500{% endif %}">
                                 {{ variant.current_stock }}
                             </div>
-                            <div class="text-[10px] text-slate-400">mín: {{ variant.minimum_stock }}</div>
+                            {% if variant.inventory_status == 'DIVERGENT' %}
+                            <span class="px-2 py-0.5 bg-rose-100 text-rose-600 text-[9px] font-black uppercase rounded-lg animate-pulse">Divergente</span>
+                            {% elif variant.inventory_status == 'RECONCILED' %}
+                            <span class="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-[9px] font-black uppercase rounded-lg">Auditado</span>
+                            {% else %}
+                            <span class="text-[10px] text-slate-400 font-bold uppercase opacity-50">OK</span>
+                            {% endif %}
+                            <div class="text-[10px] text-slate-400 mt-1">mín: {{ variant.minimum_stock }}</div>
                         </td>
                         <td class="px-6 py-4 text-right">
                             <div class="text-sm font-bold text-slate-700">R$ {{ variant.avg_unit_cost|floatformat:2|default:'-' }}</div>
@@ -206,8 +213,8 @@
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-slate-50 rounded-xl p-4 text-center">
-                        <div class="text-3xl font-black {% if product.current_stock > product.minimum_stock %}text-emerald-600{% elif product.current_stock > 0 %}text-amber-600{% else %}text-rose-500{% endif %}">
-                            {{ product.current_stock }}
+                        <div class="text-3xl font-black {% if product.total_stock > product.minimum_stock %}text-emerald-600{% elif product.total_stock > 0 %}text-amber-600{% else %}text-rose-500{% endif %}">
+                            {{ product.total_stock }}
                         </div>
                         <div class="text-[10px] font-bold text-slate-400 uppercase">Atual</div>
                     </div>
@@ -216,6 +223,18 @@
                         <div class="text-[10px] font-bold text-slate-400 uppercase">Mínimo</div>
                     </div>
                 </div>
+
+                {% with variant=product.variants.first %}
+                {% if variant.inventory_status != 'OK' %}
+                <div class="p-3 {% if variant.inventory_status == 'DIVERGENT' %}bg-rose-50 border-rose-100 text-rose-700{% else %}bg-indigo-50 border-indigo-100 text-indigo-700{% endif %} bg-opacity-50 border rounded-xl flex items-center gap-3">
+                    <i data-lucide="{% if variant.inventory_status == 'DIVERGENT' %}alert-triangle{% else %}shield-check{% endif %}" class="w-5 h-5"></i>
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-wider">Status de Auditoria</p>
+                        <p class="text-xs font-bold">{% if variant.inventory_status == 'DIVERGENT' %}Saldo diverge do histórico!{% else %}Saldo reconciliado matematicamente.{% endif %}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% endwith %}
 
                 <div class="pt-4 border-t border-slate-100 space-y-3">
                     <div class="flex items-center justify-between">

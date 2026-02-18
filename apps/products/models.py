@@ -2,6 +2,7 @@
 Products App - Product Catalog Management (V10 - Normalized Architecture)
 """
 from django.db import models
+from django.db.models import Q, CheckConstraint, UniqueConstraint
 
 from apps.tenants.models import TenantMixin
 
@@ -120,7 +121,9 @@ class Product(TenantMixin):
     class Meta:
         verbose_name = "Produto"
         verbose_name_plural = "Produtos"
-        unique_together = ['tenant', 'sku']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'sku'], name='unique_product_sku_per_tenant')
+        ]
         ordering = ['name']
 
     def generate_sku(self):
@@ -152,9 +155,11 @@ class Product(TenantMixin):
                     sku=self.sku,
                     name="Padrão",
                     barcode=self.barcode,
-                    current_stock=self.current_stock,
-                    minimum_stock=self.minimum_stock,
-                    avg_unit_cost=self.avg_unit_cost,
+                    # Estoque INICIAL deve ser zero.
+                    # Qualquer entrada deve vir via StockSync/CSV_DIRECT que gera StockMovements.
+                    current_stock=0,
+                    minimum_stock=0,
+                    avg_unit_cost=0,
                     is_active=self.is_active
                 )
 
@@ -232,6 +237,19 @@ class ProductVariant(TenantMixin):
     _allow_stock_change = False
     name = models.CharField(max_length=255, blank=True, verbose_name="Nome da Variação")
     barcode = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")
+
+    class InventoryStatus(models.TextChoices):
+        OK = 'OK', 'OK'
+        DIVERGENT = 'DIVERGENT', 'Divergente'
+        RECONCILED = 'RECONCILED', 'Reconciliado'
+
+    inventory_status = models.CharField(
+        max_length=20,
+        choices=InventoryStatus.choices,
+        default=InventoryStatus.OK,
+        verbose_name="Status de Inventário"
+    )
+
     photo = models.ImageField(upload_to='products/variants/', blank=True, null=True)
 
     current_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque")
@@ -252,8 +270,11 @@ class ProductVariant(TenantMixin):
     class Meta:
         verbose_name = "Variação de Produto"
         verbose_name_plural = "Variações de Produtos"
-        unique_together = ['tenant', 'sku']
         ordering = ['product', 'name']
+        constraints = [
+            UniqueConstraint(fields=['tenant', 'sku'], name='unique_sku_per_tenant'),
+            CheckConstraint(check=Q(current_stock__gte=0), name='stock_non_negative'),
+        ]
 
     def generate_sku(self):
         """Gera SKU padronizado: [SKU_PAI]-[ATTR_VALS]"""

@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import F, Sum
-from django.shortcuts import render
+from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
 from apps.inventory.models import StockMovement
@@ -61,6 +61,9 @@ def dashboard(request):
 
     low_stock_count = low_stock_simple.count() + low_stock_variants.count()
 
+    # Integrity Health (Divergent variants)
+    divergent_count = variants.filter(inventory_status='DIVERGENT').count()
+
     # Today's Movements
     today_movements = StockMovement.objects.filter(tenant=tenant, created_at__date=today)
     total_movements_today = today_movements.count()
@@ -92,6 +95,7 @@ def dashboard(request):
         'entries_today': entries_today,
         'exits_today': exits_today,
         'recent_movements': recent_movements,
+        'divergent_count': divergent_count,
     })
 
 
@@ -321,116 +325,114 @@ def employee_detail(request, user_id):
 
 @login_required
 def export_products_csv(request):
-    """Export products to CSV"""
-    from django.http import HttpResponse
+    """Trigger Async CSV Export"""
+    from apps.inventory.models import ExportBatch
+    from apps.inventory.tasks import process_export_catalog
 
-    from .exports import ProductExporter
-
-    exporter = ProductExporter(request.tenant)
-    include_variants = request.GET.get('variants', 'true').lower() == 'true'
-    include_inactive = request.GET.get('inactive', 'false').lower() == 'true'
-
-    csv_content = exporter.export_csv(include_variants=include_variants, include_inactive=include_inactive)
-
-    response = HttpResponse(csv_content, content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="produtos_{timezone.now().strftime("%Y%m%d_%H%M")}.csv"'
-    return response
+    batch = ExportBatch.objects.create(
+        tenant=request.tenant,
+        user=request.user,
+        status='PENDING',
+        export_type='CSV',
+        resource='PRODUCTS'
+    )
+    process_export_catalog.delay(str(batch.id))
+    return redirect('reports:export_page')
 
 
 @login_required
 def export_products_excel(request):
-    """Export products to Excel"""
-    from django.http import HttpResponse
+    """Trigger Async Excel Export"""
+    from apps.inventory.models import ExportBatch
+    from apps.inventory.tasks import process_export_catalog
 
-    from .exports import ProductExporter
-
-    exporter = ProductExporter(request.tenant)
-    include_variants = request.GET.get('variants', 'true').lower() == 'true'
-    include_inactive = request.GET.get('inactive', 'false').lower() == 'true'
-
-    try:
-        excel_content = exporter.export_excel(include_variants=include_variants, include_inactive=include_inactive)
-        response = HttpResponse(
-            excel_content,
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="produtos_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx"'
-        return response
-    except ImportError as e:
-        from django.http import JsonResponse
-        return JsonResponse({'error': str(e)}, status=500)
+    batch = ExportBatch.objects.create(
+        tenant=request.tenant,
+        user=request.user,
+        status='PENDING',
+        export_type='EXCEL',
+        resource='PRODUCTS'
+    )
+    process_export_catalog.delay(str(batch.id))
+    return redirect('reports:export_page')
 
 
 @login_required
 def export_products_json(request):
-    """Export products to JSON"""
-    from django.http import HttpResponse
+    """Trigger Async JSON Export"""
+    from apps.inventory.models import ExportBatch
+    from apps.inventory.tasks import process_export_catalog
 
-    from .exports import ProductExporter
-
-    exporter = ProductExporter(request.tenant)
-    include_variants = request.GET.get('variants', 'true').lower() == 'true'
-    include_inactive = request.GET.get('inactive', 'false').lower() == 'true'
-
-    json_content = exporter.export_json(include_variants=include_variants, include_inactive=include_inactive)
-
-    response = HttpResponse(json_content, content_type='application/json; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="produtos_{timezone.now().strftime("%Y%m%d_%H%M")}.json"'
-    return response
+    batch = ExportBatch.objects.create(
+        tenant=request.tenant,
+        user=request.user,
+        status='PENDING',
+        export_type='JSON',
+        resource='PRODUCTS'
+    )
+    process_export_catalog.delay(str(batch.id))
+    return redirect('reports:export_page')
 
 
 @login_required
 def export_movements_csv(request):
-    """Export stock movements to CSV"""
-    import csv
-    import io
+    """Trigger Async Movements Export"""
+    from apps.inventory.models import ExportBatch
+    from apps.inventory.tasks import process_export_catalog
+    import json
 
-    from django.http import HttpResponse
-
-    tenant = request.tenant
     days = int(request.GET.get('days', 30))
-    start_date = timezone.now().date() - timezone.timedelta(days=days)
+    params = {'days': days}
 
-    movements = StockMovement.objects.filter(
-        tenant=tenant,
-        created_at__date__gte=start_date
-    ).select_related('product', 'variant', 'variant__product', 'user').order_by('-created_at')
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['Data', 'Hora', 'Tipo', 'SKU', 'Produto', 'Quantidade', 'Saldo', 'Custo Unit.', 'Operador', 'Motivo'])
-
-    for mov in movements:
-        if mov.variant:
-            sku = mov.variant.sku
-            name = mov.variant.display_name
-        elif mov.product:
-            sku = mov.product.sku
-            name = mov.product.name
-        else:
-            sku = '-'
-            name = '(Removido)'
-
-        writer.writerow([
-            mov.created_at.strftime('%Y-%m-%d'),
-            mov.created_at.strftime('%H:%M:%S'),
-            mov.get_type_display(),
-            sku,
-            name,
-            mov.quantity,
-            mov.balance_after,
-            float(mov.unit_cost) if mov.unit_cost else '',
-            mov.user.username if mov.user else 'Sistema',
-            mov.reason or ''
-        ])
-
-    response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="movimentacoes_{timezone.now().strftime("%Y%m%d_%H%M")}.csv"'
-    return response
+    batch = ExportBatch.objects.create(
+        tenant=request.tenant,
+        user=request.user,
+        status='PENDING',
+        export_type='CSV',
+        resource='MOVEMENTS',
+        params=json.dumps(params)
+    )
+    process_export_catalog.delay(str(batch.id))
+    return redirect('reports:export_page')
 
 
 @login_required
 def export_page(request):
-    """Export page with options"""
-    return render(request, 'reports/export.html')
+    """Export page with options and history"""
+    from apps.inventory.models import ExportBatch
+
+    exports = ExportBatch.objects.filter(tenant=request.tenant).order_by('-created_at')
+
+    completed_count = exports.filter(status='COMPLETED').count()
+    error_count = exports.filter(status='FAILED').count()
+
+    return render(request, 'reports/export.html', {
+        'exports': exports,
+        'completed_count': completed_count,
+        'error_count': error_count
+    })
+
+
+@login_required
+def delete_export(request, pk):
+    """Delete a single export batch"""
+    from apps.inventory.models import ExportBatch
+    if request.method == 'POST':
+        export = get_object_or_404(ExportBatch, pk=pk, tenant=request.tenant)
+        export.delete()
+    return redirect('reports:export_page')
+
+
+@login_required
+def delete_exports_batch(request):
+    """Delete multiple exports"""
+    from apps.inventory.models import ExportBatch
+    if request.method == 'POST':
+        ids = request.POST.getlist('selected_ids')
+        if ids:
+            ExportBatch.objects.filter(
+                tenant=request.tenant,
+                id__in=ids
+            ).delete()
+    return redirect('reports:export_page')
 

@@ -174,7 +174,7 @@
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-4">
                                     <div class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                                        <i data-lucide="file-{% if 'XML' in imp.type %}code{% else %}table{% endif %}" class="w-5 h-5"></i>
+                                        <i data-lucide="file-table" class="w-5 h-5"></i>
                                     </div>
                                     <div>
                                         <div class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">#{{ imp.id|stringformat:".8s" }}</div>
@@ -246,7 +246,7 @@
                                         <i data-lucide="database-zap" class="w-10 h-10"></i>
                                     </div>
                                     <h3 class="text-xl font-bold text-slate-900 mb-2">Sem importações</h3>
-                                    <p class="text-slate-500 text-sm">O sistema aguarda o upload de planilhas ou NF-e.</p>
+                                    <p class="text-slate-500 text-sm">O sistema aguarda o upload de planilhas de catálogo ou estoque.</p>
                                     <a href="{% url 'inventory:import_create' %}" class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold mt-6 hover:bg-indigo-700 transition-all text-sm">
                                         Iniciar Importação
                                     </a>

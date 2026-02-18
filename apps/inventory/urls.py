@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import api_views, views
 
 app_name = 'inventory'
 
@@ -16,15 +16,17 @@ urlpatterns = [
     path('imports/template/', views.download_csv_template, name='download_csv_template'),
     path('imports/<uuid:pk>/reprocess/', views.import_reprocess, name='import_reprocess'),
 
-    # AI Staging (V20)
-    path('pending/', views.pending_product_list, name='pending_product_list'),
-    path('pending/<int:pk>/approve/', views.pending_product_approve, name='pending_product_approve'),
-    path('pending/<int:pk>/reject/', views.pending_product_reject, name='pending_product_reject'),
-    path('pending/bulk-approve/', views.pending_product_bulk_approve, name='pending_product_bulk_approve'),
-    path('pending/bulk-reject/', views.pending_product_bulk_reject, name='pending_product_bulk_reject'),
-
     # Locations (V2)
     path('locations/', views.location_list, name='location_list'),
     path('locations/create/', views.location_create, name='location_create'),
     path('locations/<int:pk>/edit/', views.location_edit, name='location_edit'),
+
+    # Exports (Async)
+    path('exports/', views.export_list, name='export_list'),
+    path('exports/create/', views.export_create, name='export_create'),
+    path('exports/<uuid:pk>/download/', views.export_download, name='export_download'),
+    path('exports/<uuid:pk>/delete/', views.delete_export, name='delete_export'),
+
+    # API for Mobile/JS
+    path('api/products/search/', api_views.ProductSearchView.as_view(), name='api_product_search'),
 ]

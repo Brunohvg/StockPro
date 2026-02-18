@@ -25,7 +25,8 @@ from apps.products.models import (
 from apps.tenants.middleware import admin_required, trial_allows_read
 
 from .forms import ImportBatchForm, LocationForm
-from .models import ImportBatch, ImportItem, ImportLog, Location, StockMovement
+from .models import ImportBatch, ImportLog, StockMovement, Location, ExportBatch
+from .tasks import process_import_task
 
 
 @login_required
@@ -141,79 +142,70 @@ def create_movement(request):
 def create_movement_mobile(request):
     tenant = request.tenant
 
-    # Pre-fetch for autocomplete
-    simple_products = Product.objects.filter(
-        tenant=tenant,
-        product_type=ProductType.SIMPLE,
-        is_active=True
-    ).order_by('name')[:50]
-
-    variants = ProductVariant.objects.filter(
+    # Pre-fetch for the initial "Quick Pick" list (last products updated)
+    recent_products = Product.objects.filter(
         tenant=tenant,
         is_active=True
-    ).select_related('product').order_by('product__name')[:50]
+    ).order_by('-updated_at')[:10]
 
     if request.method == 'POST':
-        # Accept both 'sku' and 'product' field names for flexibility
-        sku = request.POST.get('sku', '') or request.POST.get('product', '')
-        sku = sku.strip()
-        movement_type = request.POST.get('type', 'IN')
+        # SKU can come from scanner or search selection
+        sku = request.POST.get('sku', '').strip()
+        movement_type = request.POST.get('type', 'OUT') # Default to OUT for mobile operational use
         quantity = int(request.POST.get('quantity', 1))
-        reason = request.POST.get('reason', '')
+        variant_id = request.POST.get('variant_id') # Explicit variant selection
 
         try:
-            if not sku:
+            if not sku and not variant_id:
                 raise Exception("Nenhum produto selecionado.")
 
-            # Try variant first
-            variant = ProductVariant.objects.filter(
-                Q(sku=sku) | Q(barcode=sku),
-                tenant=tenant
-            ).first()
-
+            variant = None
             product = None
-            if not variant:
-                product = Product.objects.filter(
-                    Q(sku=sku) | Q(barcode=sku),
-                    tenant=tenant,
-                    product_type=ProductType.SIMPLE
-                ).first()
 
-            # If not found by exact SKU, try by name
-            if not variant and not product:
+            if variant_id:
+                variant = ProductVariant.objects.get(pk=variant_id, tenant=tenant)
+            else:
+                # 1. Try exact SKU/Barcode match
                 variant = ProductVariant.objects.filter(
-                    Q(product__name__icontains=sku) | Q(name__icontains=sku),
+                    Q(sku=sku) | Q(barcode=sku),
                     tenant=tenant
                 ).first()
+
                 if not variant:
+                    # 2. Try Name case-insensitive
                     product = Product.objects.filter(
                         name__icontains=sku,
-                        tenant=tenant,
-                        product_type=ProductType.SIMPLE
+                        tenant=tenant
                     ).first()
 
             if not variant and not product:
-                raise Exception(f"Produto/variação '{sku}' não encontrado.")
+                raise Exception(f"Item '{sku}' não encontrado.")
+
+            # Resolve variant if only product was found (and it's SIMPLE)
+            if not variant and product:
+                if product.is_simple:
+                    variant = product.variants.first()
+                else:
+                    # Variable product found but no variant specified
+                    # This case should ideally be handled by JS selecting a variant before POST
+                    raise Exception(f"Produto '{product.name}' exige escolha de uma variação.")
 
             StockService.create_movement(
                 tenant=tenant,
                 user=request.user,
                 movement_type=movement_type,
                 quantity=quantity,
-                product=product,
                 variant=variant,
-                reason=reason or f"Mobile por {request.user.username}"
+                reason=f"Baixa Mobile por {request.user.username} (Mobile-Fast)"
             )
 
-            target_name = variant.display_name if variant else product.name
-            messages.success(request, f"✓ {movement_type}: {quantity}x {target_name}")
+            messages.success(request, f"✓ {movement_type}: {quantity}x {variant.display_name}")
             return redirect('inventory:create_movement_mobile')
         except Exception as e:
             messages.error(request, str(e))
 
     return render(request, 'inventory/movement_mobile.html', {
-        'simple_products': simple_products,
-        'variants': variants
+        'recent_products': recent_products,
     })
 
 
@@ -362,356 +354,108 @@ def location_edit(request, pk):
 @login_required
 @admin_required
 def download_csv_template(request):
-    """Gera um arquivo CSV modelo para importação de produtos"""
+    """Gera um arquivo CSV modelo para importação (Catalog ou Stock Sync)"""
+    import_type = request.GET.get('type', 'CATALOG_DIRECT')
+
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="modelo_importacao_produtos.csv"'
+    filename = "modelo_estoque_movimentacao.csv" if import_type == 'STOCK_SYNC' else "modelo_catalogo_produtos.csv"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
     writer = csv.writer(response)
-    # Header
-    writer.writerow(['nome', 'sku', 'codigo_barras', 'custo_medio', 'estoque_atual', 'estoque_minimo', 'categoria', 'marca'])
-    # Example rows
-    writer.writerow(['Produto Exemplo A', 'SKU-001', '7891234567890', '10.50', '100', '10', 'Ferramentas', 'Bosch'])
-    writer.writerow(['Produto Exemplo B', 'SKU-002', '7891234567891', '55.00', '50', '5', 'Elétrica', 'Tramontina'])
+
+    if import_type == 'STOCK_SYNC':
+        # Modelo Simplificado para Movimentação (Soma/Subtração)
+        # Header
+        header = ['sku', 'quantidade', 'nome_produto', 'custo_unitario']
+        writer.writerow(header)
+
+        # Exemplo 1: Entrada (Compra)
+        writer.writerow(['PAR-008', '100', 'Parafuso Sextavado (Ref. Visual)', '0.55'])
+
+        # Exemplo 2: Saída (Ajuste/Venda Correção)
+        writer.writerow(['CAM-BAS-BR-P', '-5', 'Camiseta Branca P (Ref. Visual)', ''])
+
+    else:
+        # Modelo Completo (Catálogo)
+        # Header - Alinhado com os aliases do tasks.py
+        header = [
+            'nome', 'sku', 'sku_pai', 'atributos', 'codigo_barras', 'unidade', 'custo_medio',
+            'estoque_atual', 'categoria', 'marca', 'fornecedor', 'cnpj', 'local'
+        ]
+        writer.writerow(header)
+
+        # Exemplo 1: Produto Simples completo
+        writer.writerow([
+            'Parafuso Sextavado 8mm', 'PAR-008', '', '', '789100000001', 'UN', '0.55',
+            '1000', 'Fixadores', 'Metalfix', 'Fornecedor Industrial LTDA', '03223361000131', 'Depósito Central'
+        ])
+
+        # Exemplo 2: Produto com Variações (Pai: Camiseta)
+        writer.writerow([
+            'Camiseta Básica - Branca P', 'CAM-BAS-BR-P', 'CAM-BASICA', 'Cor:Branca; Tamanho:P', '789100000002', 'PC', '25.90',
+            '50', 'Vestuário', 'Hering', 'Malharia Conforto', '33000160000138', 'Loja Principal'
+        ])
+
+        # Exemplo 3: Outra variação do mesmo pai
+        writer.writerow([
+            'Camiseta Básica - Azul M', 'CAM-BAS-AZ-M', 'CAM-BASICA', 'Cor:Azul; Tamanho:M', '789100000003', 'PC', '25.90',
+            '30', 'Vestuário', 'Hering', 'Malharia Conforto', '33000160000138', 'Loja Principal'
+        ])
 
     return response
 
 
-@login_required
-@admin_required
-def pending_product_list(request):
-    """Dashboard to review products flagged by AI (V3 Enhanced)"""
-    from apps.products.models import Product
-
-    from .models import ImportItem
-
-    pending_items = ImportItem.objects.filter(
-        tenant=request.tenant,
-        status='PENDING'
-    ).select_related('batch', 'matched_product', 'matched_variant')
-
-    # Get existing products for "add as variant" option
-    products = Product.objects.filter(
-        tenant=request.tenant,
-        is_active=True
-    ).order_by('name')[:100]
-
-    return render(request, 'inventory/pending_list.html', {
-        'pending_items': pending_items,
-        'products': products,
-    })
+# ==========================================
+# 5. Export Management (Async)
+# ==========================================
 
 @login_required
-@admin_required
-def pending_product_approve(request, pk):
-    # Approves an AI suggestion for a specific ImportItem (V3 Enhanced)
+def export_list(request):
+    """Redirect to new export page"""
+    return redirect('reports:export_page')
 
-    item = get_object_or_404(ImportItem, pk=pk, tenant=request.tenant)
+@login_required
+def export_create(request):
+    """Redirect to new export page"""
+    return redirect('reports:export_page')
 
+@login_required
+def export_download(request, pk):
+    """Secure download of exported file"""
+    batch = get_object_or_404(ExportBatch, pk=pk, tenant=request.tenant)
+
+    if not batch.file:
+        messages.error(request, "Arquivo não encontrado ou ainda não gerado.")
+        return redirect('inventory:export_list')
+
+    from django.http import FileResponse
+    import os
+
+    # Determine extension and filename
+    ext = 'csv'
+    if batch.export_type == 'EXCEL':
+        ext = 'xlsx'
+    elif batch.export_type == 'JSON':
+        ext = 'json'
+
+    # Use the original filename provided by the task if possible, else generate one
+    filename = os.path.basename(batch.file.name)
+    if not filename.endswith(ext):
+         filename = f"export_{batch.resource.lower()}_{batch.created_at.strftime('%Y%m%d')}.{ext}"
+
+    return FileResponse(batch.file.open(), as_attachment=True, filename=filename)
+
+@login_required
+def delete_export(request, pk):
+    """Delete an export job and its file"""
+    batch = get_object_or_404(ExportBatch, pk=pk, tenant=request.tenant)
     if request.method == 'POST':
-        try:
-            with transaction.atomic():
-                target_product = item.matched_product
-                target_variant = item.matched_variant
-
-                # Get form data for product type selection
-                product_action = request.POST.get('product_action', 'create_simple')
-                parent_product_id = request.POST.get('parent_product_id')
-                variant_attribute = request.POST.get('variant_attribute', '')
-                variant_value = request.POST.get('variant_value', '')
-
-                # If no match yet, create based on action
-                if not target_product and not target_variant:
-                    suggestion = item.ai_suggestion or {}
-                    # Fallback to description if AI suggested name is missing
-                    suggested_name = suggestion.get('suggested_name') or item.description or "Produto sem nome"
-
-                    # Use detected category or create default
-                    detected_cat = suggestion.get('detected_category')
-                    if detected_cat:
-                        cat_obj, _ = Category.objects.get_or_create(
-                            tenant=request.tenant,
-                            name=detected_cat,
-                            defaults={'rotation': 'B'}
-                        )
-                    else:
-                        cat_obj, _ = Category.objects.get_or_create(
-                            tenant=request.tenant,
-                            name="Importação",
-                            defaults={'rotation': 'B'}
-                        )
-
-                    # Use detected brand or create default
-                    detected_brand = suggestion.get('detected_brand')
-                    if detected_brand:
-                        brand_obj, _ = Brand.objects.get_or_create(
-                            tenant=request.tenant,
-                            name=detected_brand
-                        )
-                    else:
-                        brand_obj, _ = Brand.objects.get_or_create(
-                            tenant=request.tenant,
-                            name="Sem Marca"
-                        )
-
-                    if product_action == 'create_simple':
-                        # Create simple product
-                        target_product = Product.objects.create(
-                            tenant=request.tenant,
-                            name=suggested_name,
-                            sku=item.supplier_sku,
-                            product_type=ProductType.SIMPLE,
-                            barcode=item.ean,
-                            avg_unit_cost=item.unit_cost,
-                            category=cat_obj,
-                            brand=brand_obj,
-                            is_active=True
-                        )
-
-                    elif product_action == 'create_variable':
-                        # Create variable product + first variant
-                        target_product = Product.objects.create(
-                            tenant=request.tenant,
-                            name=suggested_name,
-                            sku=item.supplier_sku, # Base SKU for variable
-                            product_type=ProductType.VARIABLE,
-                            category=cat_obj,
-                            brand=brand_obj,
-                            is_active=True
-                        )
-
-                        # Create attribute type if provided
-                        attr_type = None
-                        if variant_attribute:
-                            attr_type, _ = AttributeType.objects.get_or_create(
-                                tenant=request.tenant,
-                                name=variant_attribute
-                            )
-
-                        # Create first variant
-                        target_variant = ProductVariant.objects.create(
-                            tenant=request.tenant,
-                            product=target_product,
-                            name=variant_value or item.description,
-                            sku=item.supplier_sku, # Variant SKU
-                            barcode=item.ean,
-                            avg_unit_cost=item.unit_cost,
-                            is_active=True
-                        )
-
-                        # Add attribute value if provided
-                        if attr_type and variant_value:
-                            VariantAttributeValue.objects.create(
-                                variant=target_variant,
-                                attribute_type=attr_type,
-                                value=variant_value
-                            )
-
-                    elif product_action == 'add_variant' and parent_product_id:
-                        # Add as variant to existing product
-                        target_product = Product.objects.filter(
-                            pk=parent_product_id,
-                            tenant=request.tenant
-                        ).first()
-
-                        if target_product:
-                            # Ensure product is VARIABLE type
-                            if target_product.product_type != ProductType.VARIABLE:
-                                target_product.product_type = ProductType.VARIABLE
-                                target_product.save()
-
-                            # Create attribute type if provided
-                            attr_type = None
-                            if variant_attribute:
-                                attr_type, _ = AttributeType.objects.get_or_create(
-                                    tenant=request.tenant,
-                                    name=variant_attribute
-                                )
-
-                            target_variant = ProductVariant.objects.create(
-                                tenant=request.tenant,
-                                product=target_product,
-                                name=variant_value or item.description,
-                                sku=item.supplier_sku,
-                                barcode=item.ean,
-                                avg_unit_cost=item.unit_cost,
-                                is_active=True
-                            )
-
-                            if attr_type and variant_value:
-                                VariantAttributeValue.objects.create(
-                                    variant=target_variant,
-                                    attribute_type=attr_type,
-                                    value=variant_value
-                                )
-
-                # Execute Stock Movement ONLY if quantity > 0 (XML/Invoice style)
-                # For API Staged Creation, quantity is usually 0
-                if item.quantity > 0:
-                    StockService.create_movement(
-                        tenant=request.tenant,
-                        user=request.user,
-                        product=target_product if not target_variant else None,
-                        variant=target_variant,
-                        movement_type='IN',
-                        quantity=item.quantity,
-                        reason=f"Aprovação Manual - Fonte {item.get_source_display()} (ID {item.id})",
-                        unit_cost=item.unit_cost
-                    )
-
-                item.status = 'DONE'
-                item.processed_at = timezone.now()
-                item.matched_product = target_product
-                item.matched_variant = target_variant
-                item.save()
-
-            if request.headers.get('HX-Request'):
-                return HttpResponse(status=204)
-
-            messages.success(request, "Item aprovado e estoque atualizado!")
-            return redirect('inventory:pending_product_list')
-        except Exception as e:
-            if request.headers.get('HX-Request'):
-                return HttpResponse(f"Erro: {str(e)}", status=400)
-            messages.error(request, str(e))
-
-    return redirect('inventory:pending_product_list')
-
-@login_required
-@admin_required
-def pending_product_reject(request, pk):
-    """Rejects an AI suggestion for an ImportItem"""
-    from django.utils import timezone
-
-    from .models import ImportItem
-    item = get_object_or_404(ImportItem, pk=pk, tenant=request.tenant)
-
-    item.status = 'REJECTED'
-    item.processed_at = timezone.now()
-    item.save()
-
-    if request.headers.get('HX-Request'):
-        return HttpResponse(status=204)
-
-    messages.info(request, "Sugestão rejeitada.")
-    return redirect('inventory:pending_product_list')
-
-
-@login_required
-@admin_required
-def pending_product_bulk_approve(request):
-    # Bulk approve multiple ImportItems at once
-
-    if request.method != 'POST':
-        return redirect('inventory:pending_product_list')
-
-    item_ids = request.POST.getlist('item_ids')
-    if not item_ids:
-        messages.warning(request, "Nenhum item selecionado.")
-        return redirect('inventory:pending_product_list')
-
-    # Defensive parsing: remove any thousand separators (dots) that might have leaked from localized templates
-    clean_ids = []
-    for oid in item_ids:
-        try:
-            clean_ids.append(int(str(oid).replace('.', '').replace(',', '')))
-        except ValueError:
-            continue
-
-    items = ImportItem.objects.filter(
-        pk__in=clean_ids,
-        tenant=request.tenant,
-        status='PENDING'
-    )
-
-    success_count = 0
-    error_count = 0
-
-    # Get or create default category/brand
-    cat_obj, _ = Category.objects.get_or_create(
-        tenant=request.tenant,
-        name="Importação",
-        defaults={'rotation': 'B'}
-    )
-    brand_obj, _ = Brand.objects.get_or_create(
-        tenant=request.tenant,
-        name="Sem Marca"
-    )
-
-    for item in items:
-        try:
-            with transaction.atomic():
-                target_product = item.matched_product
-                target_variant = item.matched_variant
-
-                # If no match, create simple product
-                if not target_product and not target_variant:
-                    suggestion = item.ai_suggestion or {}
-                    suggested_name = suggestion.get('suggested_name', item.description)
-
-                    target_product = Product.objects.create(
-                        tenant=request.tenant,
-                        name=suggested_name,
-                        product_type=ProductType.SIMPLE,
-                        barcode=item.ean,
-                        avg_unit_cost=item.unit_cost,
-                        category=cat_obj,
-                        brand=brand_obj,
-                        is_active=True
-                    )
-
-                # Execute Stock Movement
-                StockService.create_movement(
-                    tenant=request.tenant,
-                    user=request.user,
-                    product=target_product if not target_variant else None,
-                    variant=target_variant,
-                    movement_type='IN',
-                    quantity=item.quantity,
-                    reason=f"Aprovação em Lote (Lote {item.batch.id})",
-                    unit_cost=item.unit_cost
-                )
-
-                item.status = 'DONE'
-                item.processed_at = timezone.now()
-                item.matched_product = target_product
-                item.matched_variant = target_variant
-                item.save()
-                success_count += 1
-
-        except Exception as e:
-            error_count += 1
-            print(f"Bulk approve error for item {item.pk}: {e}")
-
-    if success_count > 0:
-        messages.success(request, f"✅ {success_count} item(s) aprovado(s) com sucesso!")
-    if error_count > 0:
-        messages.warning(request, f"⚠️ {error_count} item(s) com erro durante aprovação.")
-
-    return redirect('inventory:pending_product_list')
-
-
-@login_required
-@admin_required
-def pending_product_bulk_reject(request):
-    """Bulk reject multiple ImportItems at once"""
-    from django.utils import timezone
-
-    from .models import ImportItem
-
-    if request.method != 'POST':
-        return redirect('inventory:pending_product_list')
-
-    item_ids = request.POST.getlist('item_ids')
-    if not item_ids:
-        messages.warning(request, "Nenhum item selecionado.")
-        return redirect('inventory:pending_product_list')
-
-    count = ImportItem.objects.filter(
-        pk__in=item_ids,
-        tenant=request.tenant,
-        status='PENDING'
-    ).update(status='REJECTED', processed_at=timezone.now())
-
-    messages.info(request, f"🚫 {count} item(s) rejeitado(s).")
-    return redirect('inventory:pending_product_list')
+        # File is deleted via signal or manual cleanup if needed,
+        # but standard Django behavior on some storages might leave it.
+        # For safety/explicit cleanup:
+        if batch.file:
+            batch.file.delete(save=False)
+        batch.delete()
+        messages.success(request, "Exportação removida com sucesso.")
+    return redirect('inventory:export_list')
 

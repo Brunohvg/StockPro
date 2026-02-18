@@ -71,3 +71,45 @@ class OrderConsumptionView(views.APIView):
             "processed_items": results,
             "errors": errors
         }, status=status.HTTP_207_MULTI_STATUS if errors else status.HTTP_200_OK)
+
+
+class ProductSearchView(views.APIView):
+    """
+    Search endpoint for mobile outflow. Prioritizes Name, supports SKU/Barcode.
+    Returns variants with stock info.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        tenant = request.tenant
+
+        if len(query) < 2:
+            return Response({"results": []})
+
+        # Search priority:
+        # 1. Product Name contains
+        # 2. Variant SKU/Barcode matches exactly
+
+        results = []
+
+        # Search Variants directly (covers name and sku)
+        variants = ProductVariant.objects.filter(
+            Q(product__name__icontains=query) |
+            Q(name__icontains=query) |
+            Q(sku__icontains=query) |
+            Q(barcode=query),
+            tenant=tenant,
+            is_active=True
+        ).select_related('product').order_by('product__name', 'name')[:20]
+
+        for v in variants:
+            results.append({
+                "variant_id": v.id,
+                "sku": v.sku,
+                "display_name": v.display_name,
+                "stock": float(v.current_stock),
+                "type": v.product.product_type
+            })
+
+        return Response({"results": results})

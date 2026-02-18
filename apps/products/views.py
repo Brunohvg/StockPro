@@ -602,3 +602,5 @@ def consolidation_execute(request):
     except Exception as e:
         messages.error(request, f"Erro na consolidação: {str(e)}")
         return redirect('products:consolidation_suggestions')
+
+
