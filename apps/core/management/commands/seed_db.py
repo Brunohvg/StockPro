@@ -1,6 +1,6 @@
 # apps/core/management/commands/seed_db.py
+import os
 import sys
-from decouple import config
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
@@ -35,8 +35,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'✅ Tenant sistema verificado.'))
 
         # 3. Superuser via variáveis de ambiente
-        email = config('DJANGO_SUPERUSER_EMAIL', default='')
-        password = config('DJANGO_SUPERUSER_PASSWORD', default='')
+        email = os.environ.get('DJANGO_SUPERUSER_EMAIL', '').strip()
+        password = os.environ.get('DJANGO_SUPERUSER_PASSWORD', '').strip()
 
         if not email or not password:
             self.stdout.write(self.style.WARNING(
