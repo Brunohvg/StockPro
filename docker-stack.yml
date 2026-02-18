@@ -107,12 +107,13 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthcheck/')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    resources:
+      limits:
+        cpus: ${WEB_CPU_LIMIT:-1}
+        memory: ${WEB_MEMORY_LIMIT:-512M}
+      reservations:
+        cpus: "0.25"
+        memory: 256M
     depends_on:
       - migration
       - redis

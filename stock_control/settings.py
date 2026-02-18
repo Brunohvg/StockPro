@@ -22,15 +22,11 @@ if not DEBUG and SECRET_KEY == 'django-insecure-secret-key-replace-me':
     print("ERRO FATAL: Configure SECRET_KEY no .env antes de rodar em produção!", file=sys.stderr)
     sys.exit(1)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
-if DEBUG:
-    ALLOWED_HOSTS = ['*']
-else:
-    # Garantir que localhost e 127.0.0.1 sempre estejam presentes para healthchecks internos
-    if 'localhost' not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append('localhost')
-    if '127.0.0.1' not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append('127.0.0.1')
+# Em Docker/Swarm com Traefik, o Django pode aceitar '*' pois o Traefik
+# já valida o Host no nível da rede externa. Isso evita erros 400 no healthcheck.
+ALLOWED_HOSTS = ['*']
+
+print(f"🚀 StockPro ALLOWED_HOSTS: {ALLOWED_HOSTS}")
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/app/'
@@ -75,6 +71,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'apps.core.middleware.HealthCheckMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
