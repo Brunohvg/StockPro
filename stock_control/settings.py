@@ -162,6 +162,11 @@ CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localho
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TIMEZONE = 'America/Sao_Paulo'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -192,6 +197,33 @@ CELERY_BEAT_SCHEDULE = {
     'daily-backup': {
         'task': 'apps.tenants.backup_task.daily_backup',
         'schedule': crontab(hour=3, minute=30),
+    },
+}
+
+# Logging — garante que erros do Celery aparecem nos logs do Docker
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'celery': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
 }
 

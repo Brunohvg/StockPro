@@ -106,7 +106,7 @@ services:
   # --------------------------------------------------------------------------
   stockpro_worker:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
-    command: celery -A stock_control worker -l info -Q default --pool=gevent --concurrency=10
+    command: celery -A stock_control worker -l info -Q default --without-gossip --without-mingle --without-heartbeat -Ofair
     environment: *env
     networks:
       - app_network

@@ -238,9 +238,10 @@ def import_create(request):
                 process_import_task.delay(str(batch.id))
                 messages.info(request, "Arquivo enviado! O processamento iniciará em segundo plano.")
             except Exception as e:
-                # Se o Celery/Redis falhar, avisamos mas salvamos o lote (sem jargão técnico para o usuário)
-                messages.warning(request, "Arquivo recebido! O processamento automático está temporariamente indisponível, mas seu lote foi salvo. Ele será processado assim que o serviço for restabelecido.")
-                print(f"Celery Error: {e}")
+                import logging, traceback
+                logger = logging.getLogger(__name__)
+                logger.error("CELERY ERROR ao enfileirar task: %s\n%s", e, traceback.format_exc())
+                messages.warning(request, "Arquivo recebido! O processamento automático está temporariamente indisponível.")
 
             return redirect('inventory:import_list')
     else:
@@ -269,8 +270,10 @@ def import_reprocess(request, pk):
         process_import_task.delay(str(batch.id))
         messages.success(request, f"O reprocessamento do lote {batch.id} foi iniciado.")
     except Exception as e:
-        messages.warning(request, "Lote agendado, mas o serviço de fila está offline. O processamento ocorrerá assim que possível.")
-        print(f"Celery Error: {e}")
+        import logging, traceback
+        logger = logging.getLogger(__name__)
+        logger.error("CELERY ERROR ao reprocessar %s: %s\n%s", batch.id, e, traceback.format_exc())
+        messages.warning(request, "Lote agendado, mas o serviço de fila está offline.")
 
     return redirect('inventory:import_list')
 
