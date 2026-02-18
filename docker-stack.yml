@@ -97,15 +97,13 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-    depends_on:
-      - migration
-      - stockpro_redis
 
   # --------------------------------------------------------------------------
   # CELERY WORKER
   # --------------------------------------------------------------------------
   stockpro_worker:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
+    user: root
     command: celery -A stock_control worker -l info -Q default --concurrency=2
     environment: *env
     networks:
@@ -113,6 +111,8 @@ services:
     volumes:
       - stockpro_media:/app/media
       - stockpro_imports:/app/imports
+    healthcheck:
+      disable: true
     deploy:
       mode: replicated
       replicas: ${WORKER_REPLICAS:-1}
@@ -126,11 +126,6 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-    user: root
-    healthcheck:
-      disable: true
-    depends_on:
-      - stockpro_redis
 
   # --------------------------------------------------------------------------
   # CELERY BEAT
@@ -145,6 +140,8 @@ services:
     volumes:
       - stockpro_beat:/data
       - stockpro_backups:/data/backups
+    healthcheck:
+      disable: true
     deploy:
       mode: replicated
       replicas: 1
@@ -158,11 +155,6 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
-    user: root
-    healthcheck:
-      disable: true
-    depends_on:
-      - stockpro_redis
 
   # --------------------------------------------------------------------------
   # REDIS
@@ -181,6 +173,8 @@ services:
       - stockpro_redis:/data
     networks:
       - app_network
+    healthcheck:
+      disable: true
     deploy:
       mode: replicated
       replicas: 1
@@ -194,8 +188,6 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
-    healthcheck:
-      disable: true
 
 # ==============================================================================
 # VOLUMES
