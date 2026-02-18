@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # Instala gevent no venv (ARM/aarch64 Celery pool)
-RUN /app/.venv/bin/pip install gevent --no-cache-dir
+RUN uv pip install gevent --python /app/.venv
 
 # ===========================================
 # Final stage
