@@ -87,8 +87,8 @@ class ProductSearchView(views.APIView):
         results = []
         for v in variants:
             results.append({
-                "variant_id": v.id,
-                "product_id": v.product_id,
+                "variant_id": str(v.id),
+                "product_id": str(v.product_id),
                 "sku": v.sku,
                 "barcode": v.barcode or "",
                 "display_name": v.display_name if hasattr(v, 'display_name') else v.name,

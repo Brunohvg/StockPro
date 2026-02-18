@@ -91,7 +91,7 @@ def select_company(request):
             if membership:
                 request.session['active_tenant_id'] = int(tenant_id)
                 messages.success(request, f"Acessando {membership.tenant.name}")
-                return redirect('reports:dashboard')
+                return _redirect_after_join(membership)
             else:
                 messages.error(request, "Você não tem acesso a esta empresa.")
 
@@ -113,6 +113,7 @@ def switch_company(request, tenant_id):
     if membership:
         request.session['active_tenant_id'] = tenant_id
         messages.success(request, f"Trocado para {membership.tenant.name}")
+        return _redirect_after_join(membership)
     else:
         messages.error(request, "Você não tem acesso a esta empresa.")
 

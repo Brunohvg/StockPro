@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Optional
 
 import requests
-from decouple import config
+import os
 from django.db import transaction
 
 from apps.inventory.models import ExternalOrder, StockMovement
@@ -17,10 +17,10 @@ class AIService:
     @staticmethod
     def get_providers():
         return {
-            'groq': config('GROQ_API_KEY', default=''),
-            'gemini': config('GEMINI_API_KEY', default=''),
-            'openai': config('OPENAI_API_KEY', default=''),
-            'xai': config('XAI_API_KEY', default=''),
+            'groq': os.environ.get('GROQ_API_KEY', ''),
+            'gemini': os.environ.get('GEMINI_API_KEY', ''),
+            'openai': os.environ.get('OPENAI_API_KEY', ''),
+            'xai': os.environ.get('XAI_API_KEY', ''),
         }
 
     @classmethod
@@ -55,8 +55,8 @@ class AIService:
 
     @staticmethod
     def _call_groq(api_key, prompt, schema, max_tokens=None):
-        model = config('GROQ_MODEL', default='llama-3.1-8b-instant')
-        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        model = os.environ.get('GROQ_MODEL', 'llama-3.1-8b-instant')
+        tk = max_tokens or int(os.environ.get('AI_MAX_TOKENS', '500'))
         response = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
@@ -75,8 +75,8 @@ class AIService:
 
     @staticmethod
     def _call_gemini(api_key, prompt, schema, max_tokens=None):
-        model = config('GEMINI_MODEL', default='gemini-1.5-flash')
-        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        model = os.environ.get('GEMINI_MODEL', 'gemini-1.5-flash')
+        tk = max_tokens or int(os.environ.get('AI_MAX_TOKENS', '500'))
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         response = requests.post(url, json={
             "contents": [{"parts": [{"text": prompt}]}],
@@ -95,8 +95,8 @@ class AIService:
 
     @staticmethod
     def _call_openai(api_key, prompt, schema, max_tokens=None):
-        model = config('OPENAI_MODEL', default='gpt-4o-mini')
-        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        model = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
+        tk = max_tokens or int(os.environ.get('AI_MAX_TOKENS', '500'))
         response = requests.post("https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
@@ -110,8 +110,8 @@ class AIService:
 
     @staticmethod
     def _call_xai(api_key, prompt, schema, max_tokens=None):
-        model = config('XAI_MODEL', default='grok-2-latest')
-        tk = max_tokens or int(config('AI_MAX_TOKENS', default=500))
+        model = os.environ.get('XAI_MODEL', 'grok-2-latest')
+        tk = max_tokens or int(os.environ.get('AI_MAX_TOKENS', '500'))
         response = requests.post("https://api.x.ai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
