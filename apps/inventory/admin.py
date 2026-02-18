@@ -7,14 +7,8 @@ from django.utils.html import format_html
 from .models import (
     ExportBatch, ExternalOrder, ImportBatch, ImportItem,
     ImportKnowledge, ImportLog, InventoryAudit, InventoryAuditItem,
-    Location, PendingAssociation, StockMovement,
+    Location, StockMovement,
 )
-
-try:
-    from .models import AdjustmentReason
-    HAS_ADJUSTMENT_REASON = True
-except ImportError:
-    HAS_ADJUSTMENT_REASON = False
 
 
 @admin.register(StockMovement)
@@ -28,7 +22,7 @@ class StockMovementAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
 
     def has_add_permission(self, request):
-        return False  # Movimentos criados apenas pela aplicação
+        return False
 
 
 @admin.register(Location)
@@ -44,7 +38,6 @@ class LocationAdmin(admin.ModelAdmin):
 class ImportBatchAdmin(admin.ModelAdmin):
     list_display = ('created_at', 'tenant', 'type', 'status', 'progress_display', 'success_count', 'error_count', 'user')
     list_filter = ('type', 'status', 'created_at', 'tenant')
-    search_fields = ('error_log',)
     date_hierarchy = 'created_at'
     readonly_fields = ('id', 'created_at', 'completed_at', 'total_rows', 'processed_rows')
 
@@ -57,11 +50,11 @@ class ImportBatchAdmin(admin.ModelAdmin):
 
 @admin.register(ImportItem)
 class ImportItemAdmin(admin.ModelAdmin):
-    list_display = ('batch', 'status', 'supplier_sku', 'supplier_name', 'quantity', 'unit_cost', 'created_at')
-    list_filter = ('status', 'batch__tenant', 'created_at')
-    search_fields = ('supplier_sku', 'supplier_name', 'supplier_ean')
-    raw_id_fields = ('batch', 'resolved_product', 'resolved_variant')
-    readonly_fields = ('id', 'created_at')
+    list_display = ('batch', 'status', 'supplier_sku', 'description', 'quantity', 'unit_cost', 'ai_confidence', 'created_at')
+    list_filter = ('status', 'source', 'created_at')
+    search_fields = ('supplier_sku', 'description', 'ean')
+    raw_id_fields = ('batch', 'matched_product', 'matched_variant')
+    readonly_fields = ('id', 'created_at', 'ai_suggestion', 'ai_confidence')
 
     def has_add_permission(self, request):
         return False
@@ -83,40 +76,26 @@ class ImportLogAdmin(admin.ModelAdmin):
 
 @admin.register(ImportKnowledge)
 class ImportKnowledgeAdmin(admin.ModelAdmin):
-    list_display = ('tenant', 'supplier_sku', 'supplier_name', 'product', 'variant', 'confidence', 'updated_at')
-    list_filter = ('tenant', 'updated_at')
-    search_fields = ('supplier_sku', 'supplier_name', 'supplier_ean')
-    raw_id_fields = ('tenant', 'product', 'variant')
-    readonly_fields = ('created_at', 'updated_at')
-    ordering = ('-updated_at',)
-
-
-@admin.register(PendingAssociation)
-class PendingAssociationAdmin(admin.ModelAdmin):
-    list_display = ('supplier_sku', 'supplier_name', 'tenant', 'quantity', 'unit_cost', 'status', 'created_at')
-    list_filter = ('status', 'tenant', 'created_at')
-    search_fields = ('supplier_sku', 'supplier_ean', 'supplier_name')
-    date_hierarchy = 'created_at'
-    raw_id_fields = ('import_batch', 'import_item', 'resolved_product', 'resolved_variant')
-    readonly_fields = ('id', 'created_at', 'resolved_at')
-
-    def has_add_permission(self, request):
-        return False
+    list_display = ('tenant', 'pattern_type', 'pattern_value', 'supplier', 'confidence_score', 'times_confirmed', 'last_used')
+    list_filter = ('tenant', 'pattern_type', 'supplier')
+    search_fields = ('pattern_value',)
+    readonly_fields = ('last_used',)
+    ordering = ('-confidence_score',)
 
 
 @admin.register(ExternalOrder)
 class ExternalOrderAdmin(admin.ModelAdmin):
-    list_display = ('external_order_id', 'platform', 'tenant', 'status', 'created_at')
+    list_display = ('external_order_id', 'platform', 'tenant', 'status', 'customer_name', 'total_amount', 'created_at')
     list_filter = ('platform', 'status', 'tenant', 'created_at')
-    search_fields = ('external_order_id',)
+    search_fields = ('external_order_id', 'customer_name')
     date_hierarchy = 'created_at'
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('id', 'created_at', 'updated_at')
 
 
 @admin.register(ExportBatch)
 class ExportBatchAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'tenant', 'export_type', 'status', 'user')
-    list_filter = ('export_type', 'status', 'tenant', 'created_at')
+    list_display = ('created_at', 'tenant', 'export_type', 'resource', 'status', 'total_rows', 'user')
+    list_filter = ('export_type', 'resource', 'status', 'tenant', 'created_at')
     date_hierarchy = 'created_at'
     readonly_fields = ('id', 'created_at', 'completed_at')
 
@@ -124,23 +103,14 @@ class ExportBatchAdmin(admin.ModelAdmin):
 class InventoryAuditItemInline(admin.TabularInline):
     model = InventoryAuditItem
     extra = 0
-    readonly_fields = ('variant', 'system_qty', 'counted_qty', 'difference')
+    readonly_fields = ('variant', 'product', 'ledger_quantity', 'physical_quantity', 'adjustment_quantity')
     can_delete = False
 
 
 @admin.register(InventoryAudit)
 class InventoryAuditAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'tenant', 'location', 'status', 'user', 'completed_at')
+    list_display = ('created_at', 'tenant', 'location', 'status', 'user')
     list_filter = ('status', 'tenant', 'created_at')
     date_hierarchy = 'created_at'
-    readonly_fields = ('created_at', 'completed_at')
+    readonly_fields = ('id', 'created_at')
     inlines = [InventoryAuditItemInline]
-
-
-if HAS_ADJUSTMENT_REASON:
-    @admin.register(AdjustmentReason)
-    class AdjustmentReasonAdmin(admin.ModelAdmin):
-        list_display = ('code', 'name', 'impact_type', 'requires_note', 'is_active')
-        list_filter = ('impact_type', 'is_active', 'tenant')
-        search_fields = ('code', 'name')
-        list_editable = ('is_active',)
