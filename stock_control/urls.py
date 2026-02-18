@@ -8,8 +8,9 @@ from django.http import HttpResponse
 from django.urls import include, path
 
 urlpatterns = [
-    # Health check para Docker Swarm / load balancer
-    path('healthcheck/', lambda request: HttpResponse('ok', content_type='text/plain'), name='healthcheck'),
+    # Health check para Docker Swarm / load balancer (suporta com e sem barra)
+    path('healthcheck/', lambda r: HttpResponse('ok'), name='healthcheck'),
+    path('healthcheck', lambda r: HttpResponse('ok')),
 
     path(settings.ADMIN_URL, admin.site.urls),
 
