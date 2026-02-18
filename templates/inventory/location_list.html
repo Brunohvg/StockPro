@@ -15,67 +15,134 @@
     </a>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-    {% for location in locations %}
-    <div class="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative overflow-hidden group">
-        {% if location.is_default %}
-        <div class="absolute top-0 right-0 px-6 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-bl-3xl shadow-lg">
-            Padrão
+<form id="bulk-delete-form" action="{% url 'inventory:delete_locations_batch' %}" method="POST">
+    {% csrf_token %}
+
+    <!-- Bulk Actions Toolbar (Hidden by default) -->
+    <div id="bulk-actions" class="hidden mb-6 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <span class="text-sm text-slate-600 font-medium">
+                <span id="selected-count" class="font-bold text-slate-900">0</span> locais selecionados
+            </span>
+            <div class="h-4 w-px bg-slate-200"></div>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="select-all" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                <span class="text-sm font-medium text-slate-600">Selecionar Todos</span>
+            </label>
         </div>
-        {% endif %}
-
-        <div class="flex items-center gap-4 mb-6">
-            <div class="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
-                <i data-lucide="{% if location.location_type == 'WAREHOUSE' %}warehouse{% elif location.location_type == 'STORE' %}store{% else %}package{% endif %}" class="w-7 h-7"></i>
-            </div>
-            <div>
-                <h3 class="font-black text-slate-900 leading-tight">{{ location.name }}</h3>
-                <span class="inline-block px-2 py-0.5 bg-slate-100 rounded text-[10px] font-mono text-slate-500 mt-1 uppercase">{{ location.code }}</span>
-            </div>
-        </div>
-
-        <div class="space-y-4 mb-8">
-            <div class="flex items-start gap-3">
-                <i data-lucide="map" class="w-4 h-4 text-slate-300 mt-0.5"></i>
-                <p class="text-xs text-slate-500 leading-relaxed min-h-[3rem]">
-                    {{ location.address|default:"Nenhum endereço ou observação cadastrada para este local." }}
-                </p>
-            </div>
-
-            <div class="flex items-center gap-4 pt-4 border-t border-slate-50">
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo:</span>
-                    <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{{ location.get_location_type_display }}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status:</span>
-                    {% if location.is_active %}
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    {% else %}
-                    <span class="w-2 h-2 rounded-full bg-slate-300"></span>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <a href="{% url 'inventory:location_edit' location.pk %}" class="flex items-center justify-center gap-2 w-full py-3 bg-slate-50 hover:bg-slate-900 hover:text-white text-slate-600 font-bold rounded-xl transition-all text-sm group/btn">
-            Configurar Local
-            <i data-lucide="arrow-right" class="w-4 h-4 group-hover/btn:translate-x-1 transition-transform"></i>
-        </a>
+        <button type="submit"
+                class="px-4 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold rounded-xl transition-all text-sm flex items-center gap-2"
+                onclick="return confirm('Tem certeza que deseja excluir os locais selecionados?\n\nATENÇÃO: Produtos associados a estes locais podem ficar sem localização definida.')">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            Excluir Selecionados
+        </button>
     </div>
-    {% empty %}
-    <div class="col-span-full py-32 bg-slate-50/50 rounded-[3rem] border-2 border-dashed border-slate-200 text-center">
-        <div class="max-w-xs mx-auto">
-            <div class="w-20 h-20 rounded-[2.5rem] bg-indigo-50 flex items-center justify-center text-indigo-200 mx-auto mb-6">
-                <i data-lucide="layers" class="w-10 h-10"></i>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {% for location in locations %}
+        <div class="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative overflow-hidden group">
+
+            <!-- Checkbox (Absolute Position) -->
+            <div class="absolute top-6 right-6 z-10">
+                <input type="checkbox" name="selected_ids" value="{{ location.id }}" class="item-checkbox w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
             </div>
-            <h3 class="text-xl font-black text-slate-900 mb-2">Sem Localizações</h3>
-            <p class="text-slate-500 text-sm mb-8">Você ainda não definiu locais de estoque. Crie o primeiro para começar a organizar sua logística.</p>
-            <a href="{% url 'inventory:location_create' %}" class="inline-flex items-center gap-2 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl transition-all">
-                Criar Localização Principal
-            </a>
+
+            {% if location.is_default %}
+            <div class="absolute top-0 left-0 px-6 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-br-3xl shadow-lg z-0">
+                Padrão
+            </div>
+            {% endif %}
+
+            <div class="flex items-center gap-4 mb-6 mt-2">
+                <div class="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                    <i data-lucide="{% if location.location_type == 'WAREHOUSE' %}warehouse{% elif location.location_type == 'STORE' %}store{% else %}package{% endif %}" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-slate-900 leading-tight pr-8">{{ location.name }}</h3>
+                    <span class="inline-block px-2 py-0.5 bg-slate-100 rounded text-[10px] font-mono text-slate-500 mt-1 uppercase">{{ location.code }}</span>
+                </div>
+            </div>
+
+            <div class="space-y-4 mb-8">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="map" class="w-4 h-4 text-slate-300 mt-0.5"></i>
+                    <p class="text-xs text-slate-500 leading-relaxed min-h-[3rem]">
+                        {{ location.address|default:"Nenhum endereço ou observação cadastrada para este local." }}
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-4 pt-4 border-t border-slate-50">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo:</span>
+                        <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{{ location.get_location_type_display }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-[1fr,auto] gap-2">
+                <a href="{% url 'inventory:location_edit' location.pk %}" class="flex items-center justify-center gap-2 py-3 bg-slate-50 hover:bg-slate-900 hover:text-white text-slate-600 font-bold rounded-xl transition-all text-sm group/btn">
+                    Configurar
+                    <i data-lucide="arrow-right" class="w-4 h-4 group-hover/btn:translate-x-1 transition-transform"></i>
+                </a>
+
+                <button type="button"
+                        onclick="if(confirm('Excluir o local \'{{ location.name }}\'?')) { document.getElementById('delete-loc-{{ location.id }}').submit(); }"
+                        class="px-4 py-3 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl transition-colors" title="Excluir Local">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </div>
         </div>
+        {% empty %}
+        <div class="col-span-full py-32 bg-slate-50/50 rounded-[3rem] border-2 border-dashed border-slate-200 text-center">
+            <div class="max-w-xs mx-auto">
+                <div class="w-20 h-20 rounded-[2.5rem] bg-indigo-50 flex items-center justify-center text-indigo-200 mx-auto mb-6">
+                    <i data-lucide="layers" class="w-10 h-10"></i>
+                </div>
+                <h3 class="text-xl font-black text-slate-900 mb-2">Sem Localizações</h3>
+                <p class="text-slate-500 text-sm mb-8">Você ainda não definiu locais de estoque. Crie o primeiro para começar a organizar sua logística.</p>
+                <a href="{% url 'inventory:location_create' %}" class="inline-flex items-center gap-2 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl transition-all">
+                    Criar Localização Principal
+                </a>
+            </div>
+        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
+</form>
+
+{% for location in locations %}
+<form id="delete-loc-{{ location.id }}" action="{% url 'inventory:delete_location' location.pk %}" method="POST" class="hidden">
+    {% csrf_token %}
+</form>
+{% endfor %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Bulk Selection Logic
+        const selectAll = document.getElementById('select-all');
+        const checkboxes = document.querySelectorAll('.item-checkbox');
+        const bulkActions = document.getElementById('bulk-actions');
+        const selectedCount = document.getElementById('selected-count');
+
+        function updateToolbar() {
+            const count = document.querySelectorAll('.item-checkbox:checked').length;
+            selectedCount.textContent = count;
+            if (count > 0) {
+                bulkActions.classList.remove('hidden');
+            } else {
+                bulkActions.classList.add('hidden');
+            }
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                checkboxes.forEach(cb => cb.checked = selectAll.checked);
+                updateToolbar();
+            });
+        }
+
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', updateToolbar);
+        });
+    });
+</script>
 {% endblock %}

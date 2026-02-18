@@ -20,6 +20,8 @@ urlpatterns = [
     path('locations/', views.location_list, name='location_list'),
     path('locations/create/', views.location_create, name='location_create'),
     path('locations/<int:pk>/edit/', views.location_edit, name='location_edit'),
+    path('locations/<int:pk>/delete/', views.delete_location, name='delete_location'),
+    path('locations/delete-batch/', views.delete_locations_batch, name='delete_locations_batch'),
 
     # Exports (Async)
     path('exports/', views.export_list, name='export_list'),

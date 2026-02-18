@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.db.models import ProtectedError
 
 from django.db import transaction
 from django.utils import timezone
@@ -459,3 +460,45 @@ def delete_export(request, pk):
         messages.success(request, "Exportação removida com sucesso.")
     return redirect('inventory:export_list')
 
+    return redirect('inventory:export_list')
+
+
+@login_required
+@admin_required
+def delete_location(request, pk):
+    """Delete a single stock location"""
+    location = get_object_or_404(Location, pk=pk, tenant=request.tenant)
+    if request.method == 'POST':
+        try:
+            location.delete()
+            messages.success(request, f"Local '{location.name}' removido com sucesso.")
+        except ProtectedError:
+            messages.error(request, f"Não é possível excluir o local '{location.name}' pois existem movimentações de estoque associadas a ele.")
+        except Exception as e:
+            messages.error(request, f"Erro ao excluir local: {str(e)}")
+
+    return redirect('inventory:location_list')
+
+
+@login_required
+@admin_required
+def delete_locations_batch(request):
+    """Delete multiple stock locations"""
+    if request.method == 'POST':
+        ids = request.POST.getlist('selected_ids')
+        if ids:
+            try:
+                # Filter by tenant to ensure security
+                deleted_count, _ = Location.objects.filter(
+                    tenant=request.tenant,
+                    id__in=ids
+                ).delete()
+                messages.success(request, f"{deleted_count} locais foram removidos com sucesso.")
+            except ProtectedError:
+                messages.error(request, "Não foi possível excluir alguns locais pois eles possuem movimentações de estoque associadas.")
+            except Exception as e:
+                messages.error(request, f"Erro ao excluir locais: {str(e)}")
+        else:
+            messages.warning(request, "Nenhum local selecionado.")
+
+    return redirect('inventory:location_list')
