@@ -32,6 +32,7 @@ class TenantMiddleware:
         '/favicon.ico',
         '/select-company/',
         '/accept-invite/',
+        '/healthcheck/',
     ]
 
     # Paths allowed for suspended/cancelled tenants (billing only)
