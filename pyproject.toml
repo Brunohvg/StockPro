@@ -22,6 +22,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "requests",
     "djangorestframework-simplejwt>=5.5.1",
+    "gevent",
 ]
 
 [dependency-groups]

@@ -14,15 +14,13 @@ WORKDIR /app
 # Instala dependências primeiro (cache layer)
 COPY pyproject.toml uv.lock* /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --no-install-project --no-dev
 
 # Copia o projeto e instala
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --no-dev
 
-# Instala gevent no venv (ARM/aarch64 Celery pool)
-RUN uv pip install gevent --python /app/.venv
 
 # ===========================================
 # Final stage
