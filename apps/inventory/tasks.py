@@ -55,10 +55,6 @@ def generate_idempotency_key(batch_id, file_content):
     bind=True,
     max_retries=3,
     default_retry_delay=60,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    soft_time_limit=240,
-    time_limit=300
 )
 def process_import_task(self, batch_id, idempotency_key=None):
     """Process import with idempotency and retry support"""
@@ -499,8 +495,6 @@ def process_csv_catalog_direct(batch):
     bind=True,
     max_retries=3,
     default_retry_delay=60,
-    retry_backoff=True,
-    time_limit=3600  # 1 hour limit for large exports
 )
 def process_export_catalog(self, batch_id):
     """
