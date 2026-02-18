@@ -1,34 +1,30 @@
 #!/bin/bash
 
 # ===========================================
-# StockPro V11 - Script de Deploy para Docker Hub
+# StockPro V16 - Script de Deploy para Docker Hub
 # ===========================================
 
 set -e
 
-# Cores para output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Configurações
 IMAGE_NAME="brunobh51/stockpro"
 STACK_NAME="stockpro"
 ENV_FILE=".env"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}   StockPro V11 - Deploy Script${NC}"
+echo -e "${BLUE}   StockPro V16 - Deploy Script${NC}"
 echo -e "${BLUE}========================================${NC}"
 
-# Verificar se Docker está rodando
 if ! docker info > /dev/null 2>&1; then
     echo -e "${RED}❌ Docker não está rodando ou você não tem permissão.${NC}"
     exit 1
 fi
 
-# Menu de opções
 show_menu() {
     echo ""
     echo -e "${YELLOW}Escolha uma opção:${NC}"
@@ -48,8 +44,7 @@ do_build() {
     echo ""
     echo -e "${YELLOW}🔨 BUILD + PUSH PARA DOCKER HUB${NC}"
     echo ""
-
-    echo -n "Digite a TAG da versão (ex: v11, v11.1, latest): "
+    echo -n "Digite a TAG da versão (ex: v1, v2, latest): "
     read VERSION
 
     if [ -z "$VERSION" ]; then
@@ -65,26 +60,18 @@ do_build() {
     if docker build -t $FULL_IMAGE_NAME -t $LATEST_IMAGE_NAME .; then
         echo -e "${GREEN}✅ Build com sucesso!${NC}"
     else
-        echo -e "${RED}❌ Falha no Build. Verifique os erros acima.${NC}"
+        echo -e "${RED}❌ Falha no Build.${NC}"
         return 1
     fi
 
     echo ""
     echo -e "${GREEN}[2/3] Enviando para o Docker Hub...${NC}"
-
-    echo "Enviando tag: $VERSION..."
     docker push $FULL_IMAGE_NAME
-
-    echo "Enviando tag: latest..."
     docker push $LATEST_IMAGE_NAME
 
     echo ""
-    echo -e "${GREEN}[3/3] SUCESSO!${NC}"
-    echo -e "Imagem enviada com as tags:"
-    echo -e "  → $FULL_IMAGE_NAME"
-    echo -e "  → $LATEST_IMAGE_NAME"
-    echo ""
-    echo -e "${YELLOW}Agora execute: ./deploy.sh e escolha 'deploy' ou 'update'${NC}"
+    echo -e "${GREEN}[3/3] SUCESSO! Imagem: ${FULL_IMAGE_NAME}${NC}"
+    echo -e "${YELLOW}Agora execute a opção 3 (update) para atualizar os serviços.${NC}"
 }
 
 # ==== DEPLOY STACK ====
@@ -92,36 +79,29 @@ do_deploy() {
     echo ""
     echo -e "${YELLOW}🚀 DEPLOY DA STACK NO SWARM${NC}"
 
-    # Verificar se está em modo Swarm
     if ! docker info 2>/dev/null | grep -q "Swarm: active"; then
         echo -e "${RED}❌ Docker Swarm não está ativo!${NC}"
         echo -e "${YELLOW}Execute: docker swarm init${NC}"
         return 1
     fi
 
-    # Verificar arquivo .env
     if [ ! -f "$ENV_FILE" ]; then
         echo -e "${RED}❌ Arquivo .env não encontrado!${NC}"
         echo -e "${YELLOW}Copie: cp .env.example .env${NC}"
         return 1
     fi
 
-    # Carregar variáveis de ambiente
-    export $(cat $ENV_FILE | grep -v '^#' | xargs)
+    export $(cat $ENV_FILE | grep -v '^#' | grep -v '^$' | xargs)
 
-    # Criar networks se não existirem
     echo "Criando networks..."
     docker network create --driver overlay traefik_public 2>/dev/null || true
     docker network create --driver overlay app_network 2>/dev/null || true
 
-    # Deploy da stack
     echo "Deployando stack..."
     docker stack deploy -c docker-stack.yml ${STACK_NAME} --with-registry-auth
 
     echo ""
     echo -e "${GREEN}✅ Stack ${STACK_NAME} deployada!${NC}"
-    echo ""
-    echo -e "${BLUE}📊 Verificando serviços...${NC}"
     sleep 5
     docker stack services ${STACK_NAME}
 }
@@ -130,24 +110,29 @@ do_deploy() {
 do_update() {
     echo ""
     echo -e "${YELLOW}🔄 ATUALIZAR SERVIÇOS${NC}"
-
-    echo -n "Digite a TAG (ex: v11, latest): "
+    echo -n "Digite a TAG (ex: v2, latest): "
     read VERSION
     VERSION=${VERSION:-latest}
 
-    echo "Atualizando serviços para ${IMAGE_NAME}:${VERSION}..."
+    # Nomes reais dos serviços: stockpro, stockpro_worker, stockpro_beat
+    echo "Atualizando ${STACK_NAME}_stockpro..."
     docker service update --image ${IMAGE_NAME}:${VERSION} ${STACK_NAME}_stockpro --force
-    docker service update --image ${IMAGE_NAME}:${VERSION} ${STACK_NAME}_worker --force
-    docker service update --image ${IMAGE_NAME}:${VERSION} ${STACK_NAME}_beat --force
 
-    echo -e "${GREEN}✅ Serviços atualizados!${NC}"
+    echo "Atualizando ${STACK_NAME}_stockpro_worker..."
+    docker service update --image ${IMAGE_NAME}:${VERSION} ${STACK_NAME}_stockpro_worker --force
+
+    echo "Atualizando ${STACK_NAME}_stockpro_beat..."
+    docker service update --image ${IMAGE_NAME}:${VERSION} ${STACK_NAME}_stockpro_beat --force
+
+    echo ""
+    echo -e "${GREEN}✅ Serviços atualizados para ${VERSION}!${NC}"
 }
 
 # ==== LOGS ====
 do_logs() {
     echo ""
     echo -e "${BLUE}📋 LOGS${NC}"
-    echo "Serviços: stockpro, worker, beat, redis, migrate"
+    echo "Serviços: stockpro, stockpro_worker, stockpro_beat, stockpro_redis, migration"
     echo -n "Qual serviço? [stockpro]: "
     read SERVICE
     SERVICE=${SERVICE:-stockpro}
@@ -169,9 +154,18 @@ do_status() {
 do_migrate() {
     echo ""
     echo -e "${YELLOW}🔄 EXECUTANDO MIGRAÇÕES${NC}"
-    docker service scale ${STACK_NAME}_migrate=1
-    sleep 5
-    docker service logs ${STACK_NAME}_migrate --follow
+
+    # Pega container do serviço stockpro (app principal)
+    CONTAINER=$(docker ps --filter name=${STACK_NAME}_stockpro --format "{{.ID}}" | head -1)
+
+    if [ -z "$CONTAINER" ]; then
+        echo -e "${RED}❌ Container stockpro não encontrado. Stack está rodando?${NC}"
+        return 1
+    fi
+
+    echo "Container: $CONTAINER"
+    docker exec -it $CONTAINER python manage.py migrate --noinput
+    echo -e "${GREEN}✅ Migrate concluído!${NC}"
 }
 
 # ==== REMOVE ====
@@ -190,15 +184,14 @@ do_remove() {
 
 # ==== MAIN ====
 main() {
-    # Se passou argumento direto, usa ele
     case "${1:-menu}" in
-        build)  do_build ;;
-        deploy) do_deploy ;;
-        update) do_update ;;
-        logs)   do_logs ;;
-        status) do_status ;;
+        build)   do_build ;;
+        deploy)  do_deploy ;;
+        update)  do_update ;;
+        logs)    do_logs ;;
+        status)  do_status ;;
         migrate) do_migrate ;;
-        remove) do_remove ;;
+        remove)  do_remove ;;
         menu|*)
             while true; do
                 show_menu

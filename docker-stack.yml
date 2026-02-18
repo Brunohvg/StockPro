@@ -1,24 +1,18 @@
 # ==============================================================================
 # DOCKER STACK - STOCKPRO V16
 # ==============================================================================
-# Stack para produção no Docker Swarm / Portainer.
-# Banco de dados roda separadamente (postgres externo).
-# Traefik já configurado no swarm (igual ao flowlog).
-#
-# Uso:
-#   docker stack deploy -c docker-stack.yml stockpro
+# Uso: docker stack deploy -c docker-stack.yml stockpro
 # ==============================================================================
 
 version: '3.8'
 
 services:
   # --------------------------------------------------------------------------
-  # MIGRATION SERVICE (one-shot)
-  # Executa migrations e collectstatic antes de iniciar a app
+  # MIGRATION (one-shot)
   # --------------------------------------------------------------------------
   migration:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
-    command: sh -c "python manage.py migrate --noinput && python manage.py seed_db && python manage.py collectstatic --noinput"
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput"
     environment: &env
       TZ: America/Sao_Paulo
       PYTHONUNBUFFERED: "1"
@@ -27,23 +21,18 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
       DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH:-admin/}
-      # Database (Postgres externo)
       DB_HOST: ${DB_HOST}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
-      # Celery / Redis
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://stockpro_redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://stockpro_redis:6379/1}
       C_FORCE_ROOT: "1"
-      # Backup
       BACKUP_DIR: ${BACKUP_DIR:-/data/backups}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
-      # Superuser (usado apenas no primeiro deploy)
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-}
       DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}
-      # IA
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -53,8 +42,8 @@ services:
     networks:
       - app_network
     volumes:
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
+      - stockpro_static:/app/staticfiles
+      - stockpro_media:/app/media
     deploy:
       replicas: 1
       restart_policy:
@@ -65,9 +54,9 @@ services:
           memory: 512M
 
   # --------------------------------------------------------------------------
-  # WEB APPLICATION (Gunicorn)
+  # APP (Gunicorn)
   # --------------------------------------------------------------------------
-  web:
+  stockpro:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
     command: >
       gunicorn stock_control.wsgi:application
@@ -79,9 +68,9 @@ services:
       --error-logfile -
     environment: *env
     volumes:
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
-      - imports_volume:/app/imports
+      - stockpro_static:/app/staticfiles
+      - stockpro_media:/app/media
+      - stockpro_imports:/app/imports
     networks:
       - traefik_public
       - app_network
@@ -108,28 +97,22 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck/')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
     depends_on:
       - migration
-      - redis
+      - stockpro_redis
 
   # --------------------------------------------------------------------------
   # CELERY WORKER
   # --------------------------------------------------------------------------
-  worker:
+  stockpro_worker:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
     command: celery -A stock_control worker -l info -Q default --concurrency=${CELERY_CONCURRENCY:-2}
     environment: *env
     networks:
       - app_network
     volumes:
-      - media_volume:/app/media
-      - imports_volume:/app/imports
+      - stockpro_media:/app/media
+      - stockpro_imports:/app/imports
     deploy:
       mode: replicated
       replicas: ${WORKER_REPLICAS:-1}
@@ -146,21 +129,20 @@ services:
     healthcheck:
       disable: true
     depends_on:
-      - redis
+      - stockpro_redis
 
   # --------------------------------------------------------------------------
   # CELERY BEAT
-  # Scheduler para tasks periódicas (backup diário, cleanup trials)
   # --------------------------------------------------------------------------
-  beat:
+  stockpro_beat:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
     command: celery -A stock_control beat -l info
     environment: *env
     networks:
       - app_network
     volumes:
-      - celerybeat_data:/data
-      - backup_volume:/data/backups
+      - stockpro_beat:/data
+      - stockpro_backups:/data/backups
     deploy:
       mode: replicated
       replicas: 1
@@ -177,13 +159,12 @@ services:
     healthcheck:
       disable: true
     depends_on:
-      - redis
+      - stockpro_redis
 
   # --------------------------------------------------------------------------
   # REDIS
-  # Broker Celery e cache
   # --------------------------------------------------------------------------
-  redis:
+  stockpro_redis:
     image: redis:7-alpine
     command: >
       redis-server
@@ -194,7 +175,7 @@ services:
     environment:
       TZ: America/Sao_Paulo
     volumes:
-      - redis_data:/data
+      - stockpro_redis:/data
     networks:
       - app_network
     deploy:
@@ -217,12 +198,12 @@ services:
 # VOLUMES
 # ==============================================================================
 volumes:
-  static_volume:
-  media_volume:
-  imports_volume:
-  redis_data:
-  celerybeat_data:
-  backup_volume:
+  stockpro_static:
+  stockpro_media:
+  stockpro_imports:
+  stockpro_redis:
+  stockpro_beat:
+  stockpro_backups:
 
 # ==============================================================================
 # NETWORKS
