@@ -17,22 +17,26 @@ class Command(BaseCommand):
 
         # 1. Garante que os planos existem (idempotente)
         plans_data = [
-            {'name': 'GRATUITO',     'display_name': 'Gratuito',      'price': 0,   'max_products': 50,     'max_users': 2,   'has_ai_matching': False, 'has_ai_reconciliation': False},
-            {'name': 'PROFISSIONAL',  'display_name': 'Profissional', 'price': 97,  'max_products': 1000,   'max_users': 10,  'has_ai_matching': True,  'has_ai_reconciliation': False},
-            {'name': 'EMPRESARIAL',   'display_name': 'Empresarial',  'price': 197, 'max_products': 999999, 'max_users': 999, 'has_ai_matching': True,  'has_ai_reconciliation': True},
+            {'name': 'GRATUITO',     'display_name': 'Gratuito',      'price': 0,   'max_products': 50,     'max_users': 2,   'has_ai_matching': False, 'has_ai_reconciliation': False, 'features': ''},
+            {'name': 'PROFISSIONAL', 'display_name': 'Profissional',  'price': 97,  'max_products': 1000,   'max_users': 10,  'has_ai_matching': True,  'has_ai_reconciliation': False, 'features': 'Importação XML NF-e,Relatório CMV,Suporte prioritário'},
+            {'name': 'EMPRESARIAL',  'display_name': 'Empresarial',   'price': 197, 'max_products': 999999, 'max_users': 999, 'has_ai_matching': True,  'has_ai_reconciliation': True,  'features': 'Tudo do Profissional,IA Conciliação automática,Multi-empresa ilimitado,API acesso completo'},
         ]
         for p_data in plans_data:
             Plan.objects.update_or_create(name=p_data['name'], defaults=p_data)
         self.stdout.write(self.style.SUCCESS('✅ Planos verificados.'))
 
         # 2. Tenant de sistema para o superuser
-        plan_top = Plan.objects.get(name='EMPRESARIAL')
-        tenant, _ = Tenant.objects.get_or_create(
-            name='Sistema StockPro',
-            defaults={'plan': plan_top, 'subscription_status': 'ACTIVE'}
-        )
-        SystemSetting.get_settings(tenant)
-        self.stdout.write(self.style.SUCCESS(f'✅ Tenant sistema verificado.'))
+        try:
+            plan_top = Plan.objects.get(name='EMPRESARIAL')
+            tenant, _ = Tenant.objects.get_or_create(
+                name='Sistema StockPro',
+                defaults={'plan': plan_top, 'subscription_status': 'ACTIVE'}
+            )
+            SystemSetting.get_settings(tenant)
+            self.stdout.write(self.style.SUCCESS('✅ Tenant sistema verificado.'))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'❌ Erro ao criar tenant sistema: {e}'))
+            return
 
         # 3. Superuser via variáveis de ambiente
         email = os.environ.get('DJANGO_SUPERUSER_EMAIL', '').strip()
@@ -40,30 +44,36 @@ class Command(BaseCommand):
 
         if not email or not password:
             self.stdout.write(self.style.WARNING(
-                '⚠️  DJANGO_SUPERUSER_EMAIL ou DJANGO_SUPERUSER_PASSWORD não definidos no .env. Superuser não criado.'
+                '⚠️  DJANGO_SUPERUSER_EMAIL ou DJANGO_SUPERUSER_PASSWORD não definidos. Superuser não criado.'
             ))
             return
-
-        username = email.split('@')[0][:30]
 
         if User.objects.filter(is_superuser=True).exists():
             self.stdout.write(self.style.WARNING('⚠️  Superuser já existe. Pulando.'))
             return
 
-        user = User.objects.create_superuser(
-            username=username,
-            email=email,
-            password=password,
-        )
+        try:
+            username = email.split('@')[0][:30]
+            # Garante username único
+            if User.objects.filter(username=username).exists():
+                username = f"{username}_su"
 
-        # Vincula ao tenant de sistema como OWNER
-        if not TenantMembership.objects.filter(user=user, tenant=tenant).exists():
-            TenantMembership.objects.create(
-                user=user,
-                tenant=tenant,
-                role=MembershipRole.OWNER,
+            user = User.objects.create_superuser(
+                username=username,
+                email=email,
+                password=password,
             )
 
-        self.stdout.write(self.style.SUCCESS(
-            f'✅ Superuser "{email}" criado. Acesse com este e-mail e a senha do .env.'
-        ))
+            # Vincula ao tenant de sistema como OWNER
+            if not TenantMembership.objects.filter(user=user, tenant=tenant).exists():
+                TenantMembership.objects.create(
+                    user=user,
+                    tenant=tenant,
+                    role=MembershipRole.OWNER,
+                )
+
+            self.stdout.write(self.style.SUCCESS(
+                f'✅ Superuser "{email}" criado com sucesso.'
+            ))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'❌ Erro ao criar superuser: {e}'))
