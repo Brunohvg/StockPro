@@ -19,7 +19,15 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 # 1. Configurações
 IMAGE_NAME="brunobh51/stockpro"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-TAG=${1:-latest} # Aceita tag como argumento, padrão 'latest'
+
+# Pede a versão se não for passada por argumento
+if [ -z "$1" ]; then
+    echo -e "❓ ${BLUE}Qual a versão (tag) da imagem?${NC} (Pressione Enter para 'latest')"
+    read -r USER_TAG
+    TAG=${USER_TAG:-latest}
+else
+    TAG=$1
+fi
 
 echo -e "\n📦 ${BLUE}Building image:${NC} ${IMAGE_NAME}:${TAG}..."
 
