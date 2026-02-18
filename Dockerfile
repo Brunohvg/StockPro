@@ -3,7 +3,9 @@
 # ===========================================
 
 # Build stage
-FROM ghcr.io/astral-sh/uv:latest AS build
+FROM python:3.11-slim AS build
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv/bin /usr/local/bin/
+
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /app
 COPY pyproject.toml /app/
