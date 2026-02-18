@@ -1,0 +1,284 @@
+{% extends 'mobile/base_mobile.html' %}
+
+{% block title %}Movimentação — StockPro{% endblock %}
+{% block subtitle %}Entrada & Saída{% endblock %}
+{% block nav_move %}text-indigo-400{% endblock %}
+
+{% block content %}
+
+<!-- Feedback de sucesso -->
+{% if success and last_movement %}
+<div class="mb-5 rounded-2xl p-5 border
+    {% if last_movement.type == 'IN' %}bg-emerald-950 border-emerald-800{% else %}bg-rose-950 border-rose-800{% endif %}">
+    <div class="flex items-center gap-3 mb-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center
+            {% if last_movement.type == 'IN' %}bg-emerald-500{% else %}bg-rose-500{% endif %}">
+            <i data-lucide="{% if last_movement.type == 'IN' %}arrow-down{% else %}arrow-up{% endif %}" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+            <p class="font-black text-white">{{ last_movement.type_label }} registrada!</p>
+            <p class="text-xs text-slate-400">#{{ last_movement.movement_id }}</p>
+        </div>
+        <div class="ml-auto">
+            <i data-lucide="check-circle-2" class="w-7 h-7
+                {% if last_movement.type == 'IN' %}text-emerald-400{% else %}text-rose-400{% endif %}"></i>
+        </div>
+    </div>
+    <div class="grid grid-cols-3 gap-3 text-center">
+        <div class="bg-black/20 rounded-xl p-3">
+            <p class="text-[10px] text-slate-500 uppercase font-bold">Produto</p>
+            <p class="text-xs font-bold text-white mt-1 truncate">{{ last_movement.product_name }}</p>
+        </div>
+        <div class="bg-black/20 rounded-xl p-3">
+            <p class="text-[10px] text-slate-500 uppercase font-bold">Qtd</p>
+            <p class="text-lg font-black {% if last_movement.type == 'IN' %}text-emerald-400{% else %}text-rose-400{% endif %} mt-0.5">
+                {% if last_movement.type == 'IN' %}+{% else %}-{% endif %}{{ last_movement.quantity|floatformat:0 }}
+            </p>
+        </div>
+        <div class="bg-black/20 rounded-xl p-3">
+            <p class="text-[10px] text-slate-500 uppercase font-bold">Saldo</p>
+            <p class="text-lg font-black text-white mt-0.5">{{ last_movement.balance_after|floatformat:0 }}</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Erro -->
+{% if error %}
+<div class="mb-5 rounded-2xl p-4 bg-rose-950 border border-rose-800 flex items-center gap-3">
+    <i data-lucide="alert-circle" class="w-5 h-5 text-rose-400 flex-shrink-0"></i>
+    <p class="text-sm text-rose-200 font-medium">{{ error }}</p>
+</div>
+{% endif %}
+
+<!-- Formulário principal -->
+<form method="post" id="move-form">
+    {% csrf_token %}
+
+    <!-- Toggle Entrada / Saída -->
+    <div class="bg-slate-900 rounded-2xl p-2 mb-4 border border-white/5">
+        <div class="grid grid-cols-2 gap-2">
+            <label class="relative cursor-pointer haptic">
+                <input type="radio" name="type" value="IN" class="peer sr-only" {% if not last_movement or last_movement.type == 'IN' %}checked{% endif %}>
+                <div class="py-4 rounded-xl flex flex-col items-center gap-1.5 border-2 border-transparent
+                    peer-checked:border-emerald-500 peer-checked:bg-emerald-950 transition-all">
+                    <i data-lucide="arrow-down-circle" class="w-7 h-7 text-slate-600 peer-checked:text-emerald-400"></i>
+                    <span class="text-xs font-black uppercase tracking-wider text-slate-500 peer-checked:text-emerald-400">Entrada</span>
+                </div>
+            </label>
+            <label class="relative cursor-pointer haptic">
+                <input type="radio" name="type" value="OUT" class="peer sr-only" {% if last_movement.type == 'OUT' %}checked{% endif %}>
+                <div class="py-4 rounded-xl flex flex-col items-center gap-1.5 border-2 border-transparent
+                    peer-checked:border-rose-500 peer-checked:bg-rose-950 transition-all">
+                    <i data-lucide="arrow-up-circle" class="w-7 h-7 text-slate-600 peer-checked:text-rose-400"></i>
+                    <span class="text-xs font-black uppercase tracking-wider text-slate-500 peer-checked:text-rose-400">Saída</span>
+                </div>
+            </label>
+        </div>
+    </div>
+
+    <!-- Busca de produto -->
+    <div class="bg-slate-900 rounded-2xl p-4 mb-4 border border-white/5 space-y-3">
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Produto</label>
+
+        <div class="relative">
+            <i data-lucide="search" class="absolute left-3.5 top-3.5 w-5 h-5 text-slate-500 pointer-events-none"></i>
+            <input type="text" id="product_search" autocomplete="off" autocorrect="off"
+                   class="w-full pl-11 pr-4 py-3.5 bg-slate-800 border-2 border-transparent rounded-xl text-base font-semibold text-white placeholder-slate-600
+                          focus:border-indigo-500 focus:bg-slate-900 outline-none transition-all"
+                   placeholder="Nome, SKU ou código...">
+            <input type="hidden" name="sku" id="sku_input">
+        </div>
+
+        <!-- Resultados da busca -->
+        <div id="search-results" class="hidden space-y-1 max-h-52 overflow-y-auto">
+        </div>
+
+        <!-- Produto selecionado -->
+        <div id="selected-product" class="hidden items-center gap-3 p-3 bg-indigo-950 rounded-xl border border-indigo-800">
+            <div class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <i data-lucide="package" class="w-5 h-5 text-white"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p id="selected-name" class="text-sm font-bold text-white truncate"></p>
+                <p id="selected-sku-display" class="text-xs font-mono text-indigo-400"></p>
+            </div>
+            <div class="text-right flex-shrink-0">
+                <p class="text-[10px] text-slate-500 uppercase font-bold">Saldo</p>
+                <p id="selected-stock" class="text-lg font-black text-white"></p>
+            </div>
+            <button type="button" id="clear-product" class="text-slate-600 hover:text-white ml-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Quantidade -->
+    <div class="bg-slate-900 rounded-2xl p-4 mb-4 border border-white/5">
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Quantidade</label>
+        <input type="number" name="quantity" id="quantity_input" min="0.001" step="0.001"
+               class="w-full text-center text-4xl font-black bg-slate-800 border-2 border-transparent rounded-xl py-5 text-white
+                      focus:border-indigo-500 outline-none transition-all"
+               placeholder="0" inputmode="decimal" required>
+        <!-- Atalhos rápidos -->
+        <div class="flex gap-2 mt-3">
+            {% for qty in "1,2,5,10,25" %}
+            <button type="button" onclick="document.getElementById('quantity_input').value={{ qty }}"
+                class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-all haptic">
+                {{ qty }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Motivo (opcional) -->
+    <div class="bg-slate-900 rounded-2xl p-4 mb-5 border border-white/5">
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Motivo <span class="text-slate-600 normal-case font-normal">(opcional)</span></label>
+        <input type="text" name="reason" maxlength="100"
+               class="w-full px-4 py-3 bg-slate-800 border-2 border-transparent rounded-xl text-sm font-medium text-white placeholder-slate-600
+                      focus:border-indigo-500 outline-none transition-all"
+               placeholder="Ex: Venda balcão, recebimento NF...">
+    </div>
+
+    <!-- Botão principal -->
+    <button type="submit" id="submit-btn"
+            class="w-full py-5 rounded-2xl font-black text-lg text-white transition-all haptic disabled:opacity-40 disabled:cursor-not-allowed
+                   bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 active:scale-[0.98]"
+            disabled>
+        <span class="flex items-center justify-center gap-2">
+            <i data-lucide="zap" class="w-5 h-5"></i>
+            Confirmar Movimentação
+        </span>
+    </button>
+</form>
+
+<!-- Movimentos recentes de hoje -->
+{% if recent %}
+<div class="mt-6">
+    <p class="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-3">Suas movimentações hoje</p>
+    <div class="space-y-2">
+        {% for mov in recent %}
+        <div class="flex items-center gap-3 p-3 bg-slate-900 rounded-xl border border-white/5">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
+                {% if mov.movement_type == 'IN' %}bg-emerald-950 text-emerald-400{% else %}bg-rose-950 text-rose-400{% endif %}">
+                <i data-lucide="{% if mov.movement_type == 'IN' %}arrow-down{% else %}arrow-up{% endif %}" class="w-4 h-4"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold text-white truncate">
+                    {% if mov.variant %}{{ mov.variant.product.name }}{% else %}{{ mov.product_sku }}{% endif %}
+                </p>
+                <p class="text-[10px] text-slate-500">{{ mov.created_at|time:"H:i" }}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-black
+                    {% if mov.movement_type == 'IN' %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                    {% if mov.movement_type == 'IN' %}+{% else %}-{% endif %}{{ mov.quantity|floatformat:0 }}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const searchInput = document.getElementById('product_search');
+const skuInput = document.getElementById('sku_input');
+const resultsDiv = document.getElementById('search-results');
+const selectedDiv = document.getElementById('selected-product');
+const selectedName = document.getElementById('selected-name');
+const selectedSkuDisplay = document.getElementById('selected-sku-display');
+const selectedStock = document.getElementById('selected-stock');
+const clearBtn = document.getElementById('clear-product');
+const submitBtn = document.getElementById('submit-btn');
+const qtyInput = document.getElementById('quantity_input');
+
+let searchTimeout;
+
+function checkSubmit() {
+    submitBtn.disabled = !(skuInput.value && qtyInput.value > 0);
+}
+
+function clearProduct() {
+    skuInput.value = '';
+    searchInput.value = '';
+    selectedDiv.classList.add('hidden');
+    selectedDiv.classList.remove('flex');
+    resultsDiv.classList.add('hidden');
+    resultsDiv.innerHTML = '';
+    searchInput.focus();
+    checkSubmit();
+}
+
+function selectProduct(sku, name, stock) {
+    skuInput.value = sku;
+    searchInput.value = name;
+    selectedName.textContent = name;
+    selectedSkuDisplay.textContent = sku;
+    selectedStock.textContent = parseFloat(stock).toFixed(0);
+    selectedDiv.classList.remove('hidden');
+    selectedDiv.classList.add('flex');
+    resultsDiv.classList.add('hidden');
+    resultsDiv.innerHTML = '';
+    qtyInput.focus();
+    checkSubmit();
+}
+
+clearBtn.addEventListener('click', clearProduct);
+qtyInput.addEventListener('input', checkSubmit);
+
+searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    const q = searchInput.value.trim();
+    if (q.length < 2) {
+        resultsDiv.classList.add('hidden');
+        resultsDiv.innerHTML = '';
+        return;
+    }
+    searchTimeout = setTimeout(async () => {
+        try {
+            const res = await fetch(`/inventory/api/products/search/?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            if (data.results && data.results.length > 0) {
+                resultsDiv.innerHTML = data.results.map(r => `
+                    <button type="button" onclick="selectProduct('${r.sku}','${r.display_name}','${r.current_stock}')"
+                        class="w-full flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-left haptic">
+                        <div class="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <svg class="w-4 h-4 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-bold text-white truncate">${r.display_name}</p>
+                            <p class="text-[10px] font-mono text-slate-500">${r.sku}</p>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <p class="text-xs font-black text-white">${parseFloat(r.current_stock).toFixed(0)}</p>
+                            <p class="text-[10px] text-slate-600">em estoque</p>
+                        </div>
+                    </button>
+                `).join('');
+                resultsDiv.classList.remove('hidden');
+            } else {
+                resultsDiv.innerHTML = '<p class="text-xs text-slate-600 text-center py-3">Nenhum produto encontrado</p>';
+                resultsDiv.classList.remove('hidden');
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }, 300);
+});
+
+// Radio change — visual do botão
+document.querySelectorAll('input[name="type"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        const isIn = radio.value === 'IN';
+        submitBtn.className = submitBtn.className.replace(
+            /from-\w+-\d+ to-\w+-\d+/g,
+            isIn ? 'from-emerald-600 to-teal-600' : 'from-indigo-600 to-purple-600'
+        );
+    });
+});
+</script>
+{% endblock %}

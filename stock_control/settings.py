@@ -22,11 +22,7 @@ if not DEBUG and SECRET_KEY == 'django-insecure-secret-key-replace-me':
     print("ERRO FATAL: Configure SECRET_KEY no .env antes de rodar em produção!", file=sys.stderr)
     sys.exit(1)
 
-# Em Docker/Swarm com Traefik, o Django pode aceitar '*' pois o Traefik
-# já valida o Host no nível da rede externa. Isso evita erros 400 no healthcheck.
-ALLOWED_HOSTS = ['*']
-
-print(f"🚀 StockPro ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+ALLOWED_HOSTS = ['*'] if DEBUG else config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/app/'
@@ -202,6 +198,9 @@ CELERY_BEAT_SCHEDULE = {
 # Backup settings
 BACKUP_DIR = config('BACKUP_DIR', default='/data/backups')
 BACKUP_RETENTION_DAYS = config('BACKUP_RETENTION_DAYS', default=30, cast=int)
+
+# WhatsApp de suporte (usado na página de planos/billing)
+WHATSAPP_SUPPORT = config('WHATSAPP_SUPPORT', default='5511999999999')
 
 # AI Integration (Grok / X.AI)
 XAI_API_KEY = config('XAI_API_KEY', default='')

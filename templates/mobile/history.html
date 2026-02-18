@@ -1,0 +1,66 @@
+{% extends 'mobile/base_mobile.html' %}
+
+{% block title %}Histórico — StockPro{% endblock %}
+{% block subtitle %}Últimas 24h{% endblock %}
+{% block nav_history %}text-indigo-400{% endblock %}
+
+{% block content %}
+<div class="mb-5">
+    <h1 class="text-xl font-black text-white">Seu Histórico</h1>
+    <p class="text-xs text-slate-500 mt-0.5">Movimentações das últimas 24 horas</p>
+</div>
+
+{% if movements %}
+<div class="space-y-3">
+    {% for mov in movements %}
+    <div class="bg-slate-900 rounded-2xl p-4 border border-white/5">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
+                {% if mov.movement_type == 'IN' %}bg-emerald-950 border border-emerald-800
+                {% elif mov.movement_type == 'OUT' %}bg-rose-950 border border-rose-800
+                {% else %}bg-slate-800 border border-slate-700{% endif %}">
+                <i data-lucide="
+                    {% if mov.movement_type == 'IN' %}arrow-down
+                    {% elif mov.movement_type == 'OUT' %}arrow-up
+                    {% else %}refresh-cw{% endif %}"
+                   class="w-5 h-5
+                    {% if mov.movement_type == 'IN' %}text-emerald-400
+                    {% elif mov.movement_type == 'OUT' %}text-rose-400
+                    {% else %}text-slate-400{% endif %}"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-bold text-white truncate">
+                    {% if mov.variant %}{{ mov.variant.product.name }}
+                    {% elif mov.product_sku %}{{ mov.product_sku }}
+                    {% else %}—{% endif %}
+                </p>
+                <p class="text-[10px] text-slate-500 mt-0.5">
+                    {{ mov.movement_type }} · {{ mov.created_at|time:"H:i" }} · {{ mov.reason|truncatechars:30|default:"—" }}
+                </p>
+            </div>
+            <div class="text-right flex-shrink-0">
+                <p class="text-base font-black
+                    {% if mov.movement_type == 'IN' %}text-emerald-400
+                    {% elif mov.movement_type == 'OUT' %}text-rose-400
+                    {% else %}text-slate-300{% endif %}">
+                    {% if mov.movement_type == 'IN' %}+{% elif mov.movement_type == 'OUT' %}-{% endif %}{{ mov.quantity|floatformat:0 }}
+                </p>
+                <p class="text-[10px] text-slate-600">→ {{ mov.balance_after|floatformat:0 }}</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="flex flex-col items-center justify-center py-20 text-center">
+    <div class="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mb-4 border border-white/5">
+        <i data-lucide="inbox" class="w-8 h-8 text-slate-700"></i>
+    </div>
+    <p class="text-slate-500 font-semibold">Nenhuma movimentação</p>
+    <p class="text-xs text-slate-700 mt-1">nas últimas 24 horas</p>
+    <a href="/mobile/" class="mt-6 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold text-white transition-all">
+        Registrar agora
+    </a>
+</div>
+{% endif %}
+{% endblock %}

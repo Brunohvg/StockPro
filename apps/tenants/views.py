@@ -95,14 +95,25 @@ def signup_view(request):
 @login_required
 def billing_view(request):
     """View current plan and upgrade options"""
+    from django.conf import settings
+    from apps.core.models import SystemSetting
     tenant = request.tenant
     plans = Plan.objects.all().order_by('price')
     current_plan = tenant.plan if tenant else None
+    global_settings = SystemSetting.get_settings(tenant) if tenant else None
+    ai_active = bool(
+        getattr(settings, 'GROQ_API_KEY', None) or
+        getattr(settings, 'GEMINI_API_KEY', None) or
+        getattr(settings, 'OPENAI_API_KEY', None)
+    )
+    whatsapp_number = getattr(settings, 'WHATSAPP_SUPPORT', '5511999999999')
 
     return render(request, 'tenants/billing.html', {
         'tenant': tenant,
         'current_plan': current_plan,
         'plans': plans,
+        'ai_active': ai_active,
+        'whatsapp_number': whatsapp_number,
     })
 
 

@@ -23,17 +23,23 @@ class TenantMiddleware:
     """
 
     # Paths that don't require tenant context
-    EXEMPT_PATHS = [
-        '/accounts/',
-        '/signup/',
-        '/admin/',
-        '/static/',
-        '/media/',
-        '/favicon.ico',
-        '/select-company/',
-        '/accept-invite/',
-        '/healthcheck/',
-    ]
+    # ADMIN_URL é dinâmico (lido do .env via DJANGO_ADMIN_PATH)
+    @classmethod
+    def _get_exempt_paths(cls):
+        from django.conf import settings
+        admin_path = '/' + getattr(settings, 'ADMIN_URL', 'admin/')
+        return [
+            '/accounts/',
+            '/signup/',
+            admin_path,
+            '/static/',
+            '/media/',
+            '/favicon.ico',
+            '/healthcheck/',
+            '/mobile/',
+            '/select-company/',
+            '/accept-invite/',
+        ]
 
     # Paths allowed for suspended/cancelled tenants (billing only)
     BILLING_PATHS = [
@@ -52,7 +58,7 @@ class TenantMiddleware:
         request.tenant_blocked = False
 
         # Check if path is exempt
-        if self._is_exempt_path(request.path):
+        if self._is_exempt_path(request.path, self._get_exempt_paths()):
             return self.get_response(request)
 
         # Anonymous users pass through (will be handled by @login_required)
@@ -60,7 +66,9 @@ class TenantMiddleware:
             return self.get_response(request)
 
         # Superusers bypass tenant checks for admin access
-        if request.user.is_superuser and request.path.startswith('/admin/'):
+        from django.conf import settings
+        admin_path = '/' + getattr(settings, 'ADMIN_URL', 'admin/')
+        if request.user.is_superuser and request.path.startswith(admin_path):
             return self.get_response(request)
 
         # Get active membership
@@ -102,9 +110,11 @@ class TenantMiddleware:
 
         return self.get_response(request)
 
-    def _is_exempt_path(self, path):
+    def _is_exempt_path(self, path, exempt_paths=None):
         """Check if path is exempt from tenant requirements"""
-        return any(path.startswith(exempt) for exempt in self.EXEMPT_PATHS)
+        if exempt_paths is None:
+            exempt_paths = self._get_exempt_paths()
+        return any(path.startswith(exempt) for exempt in exempt_paths)
 
     def _is_billing_path(self, path):
         """Check if path is allowed for suspended tenants"""

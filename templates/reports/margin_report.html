@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}CMV & Margem — StockPro{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">CMV & Margem</h1>
+            <p class="text-slate-500 text-sm">Rentabilidade do seu estoque por produto</p>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if sem_preco_venda > 0 %}
+            <span class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-xs font-bold text-amber-700">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+                {{ sem_preco_venda }} sem preço de venda
+            </span>
+            {% endif %}
+            <a href="/products/" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all">
+                <i data-lucide="tag" class="w-4 h-4"></i>
+                Cadastrar Preços
+            </a>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Valor a Custo</span>
+                <i data-lucide="package" class="w-4 h-4 text-slate-400"></i>
+            </div>
+            <p class="text-2xl font-black text-slate-900">R$ {{ total_stock_value|floatformat:0 }}</p>
+            <p class="text-xs text-slate-400 mt-1">CMV em estoque</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Valor a Venda</span>
+                <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500"></i>
+            </div>
+            <p class="text-2xl font-black text-emerald-600">
+                {% if total_sale_value %}R$ {{ total_sale_value|floatformat:0 }}{% else %}—{% endif %}
+            </p>
+            <p class="text-xs text-slate-400 mt-1">Potencial de receita</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Lucro Potencial</span>
+                <i data-lucide="dollar-sign" class="w-4 h-4 text-indigo-500"></i>
+            </div>
+            <p class="text-2xl font-black text-indigo-600">
+                {% if lucro_potencial %}R$ {{ lucro_potencial|floatformat:0 }}{% else %}—{% endif %}
+            </p>
+            <p class="text-xs text-slate-400 mt-1">Se vender tudo em estoque</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Produtos</span>
+                <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
+            </div>
+            <p class="text-2xl font-black text-slate-900">{{ total_produtos }}</p>
+            <p class="text-xs text-slate-400 mt-1">com custo cadastrado</p>
+        </div>
+    </div>
+
+    {% if sem_preco_venda > 0 %}
+    <!-- Aviso preço de venda -->
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
+        <i data-lucide="info" class="w-5 h-5 text-amber-500 flex-shrink-0"></i>
+        <div class="text-sm">
+            <span class="font-bold text-amber-800">{{ sem_preco_venda }} produto(s) sem preço de venda cadastrado.</span>
+            <span class="text-amber-700"> A margem não pode ser calculada para eles. Acesse o cadastro de produto e preencha o campo "Preço de Venda".</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabela -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100">
+            <h2 class="text-base font-bold text-slate-900">Rentabilidade por Produto</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Ordenado por margem crescente — itens críticos primeiro</p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Produto / SKU</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Categoria</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Custo</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Preço Venda</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Margem R$</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Margem %</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Estoque</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor Estoque</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in items %}
+                    <tr class="hover:bg-slate-50 transition-colors {% if item.alert %}bg-rose-50/30{% endif %}">
+                        <td class="px-4 py-3">
+                            <p class="font-semibold text-slate-900 truncate max-w-[200px]">{{ item.product_name }}</p>
+                            <p class="text-xs font-mono text-slate-400">{{ item.sku }}</p>
+                        </td>
+                        <td class="px-4 py-3 text-slate-500 text-xs">{{ item.category }}</td>
+                        <td class="px-4 py-3 text-right font-mono text-slate-700">R$ {{ item.custo|floatformat:2 }}</td>
+                        <td class="px-4 py-3 text-right font-mono text-slate-700">
+                            {% if item.preco_venda %}R$ {{ item.preco_venda|floatformat:2 }}
+                            {% else %}<span class="text-amber-500 text-xs font-bold">Não cadastrado</span>{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono font-bold
+                            {% if item.margem_unit == None %}text-slate-300
+                            {% elif item.margem_unit < 0 %}text-rose-600
+                            {% else %}text-emerald-600{% endif %}">
+                            {% if item.margem_unit != None %}R$ {{ item.margem_unit|floatformat:2 }}{% else %}—{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            {% if item.margem_pct != None %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-black
+                                {% if item.margem_pct < 0 %}bg-rose-100 text-rose-700
+                                {% elif item.margem_pct < 20 %}bg-amber-100 text-amber-700
+                                {% elif item.margem_pct < 40 %}bg-sky-100 text-sky-700
+                                {% else %}bg-emerald-100 text-emerald-700{% endif %}">
+                                {{ item.margem_pct|floatformat:1 }}%
+                            </span>
+                            {% else %}<span class="text-slate-300 text-xs">—</span>{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono text-slate-700">{{ item.estoque|floatformat:0 }}</td>
+                        <td class="px-4 py-3 text-right font-mono text-slate-700">R$ {{ item.valor_estoque|floatformat:0 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-6 py-16 text-center">
+                            <i data-lucide="bar-chart-2" class="w-10 h-10 text-slate-300 mx-auto mb-3"></i>
+                            <p class="text-slate-400 font-semibold">Nenhum produto com custo cadastrado.</p>
+                            <p class="text-xs text-slate-300 mt-1">Importe produtos ou cadastre manualmente com o custo médio.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Legenda de margem -->
+    <div class="flex flex-wrap gap-3 text-xs">
+        <span class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100 text-rose-700 rounded-full font-bold"><span class="w-2 h-2 bg-rose-500 rounded-full"></span>Margem negativa (prejuízo)</span>
+        <span class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full font-bold"><span class="w-2 h-2 bg-amber-500 rounded-full"></span>Margem baixa (abaixo de 20%)</span>
+        <span class="flex items-center gap-1.5 px-3 py-1.5 bg-sky-100 text-sky-700 rounded-full font-bold"><span class="w-2 h-2 bg-sky-500 rounded-full"></span>Margem razoável (20–40%)</span>
+        <span class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full font-bold"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span>Margem saudável (acima de 40%)</span>
+    </div>
+
+</div>
+{% endblock %}

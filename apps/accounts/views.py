@@ -57,6 +57,15 @@ class SmartLoginView(LoginView):
         return redirect('accounts:select_company')
 
     def get_success_url(self):
+        # OPERATOR SEMPRE vai para mobile — ignora ?next= da URL
+        membership = TenantMembership.objects.filter(
+            user=self.request.user,
+            tenant_id=self.request.session.get('active_tenant_id'),
+            is_active=True,
+        ).first()
+        if membership and membership.role == MembershipRole.OPERATOR:
+            return '/mobile/'
+        # OWNER/ADMIN: respeita ?next= ou vai para /app/
         return self.get_redirect_url() or '/app/'
 
 
@@ -272,6 +281,13 @@ def invite_user(request):
     })
 
 
+def _redirect_after_join(membership):
+    """Redireciona para mobile se OPERATOR, desktop se ADMIN/OWNER."""
+    if membership and membership.role == MembershipRole.OPERATOR:
+        return redirect('/mobile/')
+    return redirect('reports:dashboard')
+
+
 def accept_invite(request, token):
     """Accept an invitation to join a company"""
     invite = get_object_or_404(TenantInvite, token=token)
@@ -297,7 +313,7 @@ def accept_invite(request, token):
             membership = invite.accept(request.user)
             request.session['active_tenant_id'] = membership.tenant_id
             messages.success(request, f"Bem-vindo à {invite.tenant.name}!")
-            return redirect('reports:dashboard')
+            return _redirect_after_join(membership)
         except ValueError as e:
             messages.error(request, str(e))
             return redirect('reports:dashboard')
@@ -340,6 +356,6 @@ def accept_invite(request, token):
         request.session['active_tenant_id'] = membership.tenant_id
 
         messages.success(request, f"Conta criada! Bem-vindo à {invite.tenant.name}!")
-        return redirect('reports:dashboard')
+        return _redirect_after_join(membership)
 
     return render(request, 'accounts/accept_invite.html', {'invite': invite})

@@ -1,4 +1,5 @@
 # apps/core/management/commands/seed_db.py
+import sys
 from decouple import config
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
@@ -9,44 +10,60 @@ from apps.tenants.models import Plan, Tenant
 
 
 class Command(BaseCommand):
-    help = 'Popula o banco de dados com dados iniciais (Planos, Tenant e Superuser)'
+    help = 'Cria superuser e tenant de sistema no primeiro deploy.'
 
     def handle(self, *args, **options):
-        # 1. Criar Planos
-        plans = [
-            {'name': 'GRATUITO', 'display_name': 'Plano Gratuito', 'price': 0, 'max_products': 50, 'max_users': 2},
-            {'name': 'BASIC', 'display_name': 'Plano Basic', 'price': 49.90, 'max_products': 500, 'max_users': 5},
-            {'name': 'PROFISSIONAL', 'display_name': 'Plano Profissional', 'price': 97.00, 'max_products': 2000, 'max_users': 15},
-            {'name': 'PREMIUM', 'display_name': 'Plano Premium', 'price': 197.00, 'max_products': 10000, 'max_users': 50}
-        ]
-
-        for p_data in plans:
-            Plan.objects.get_or_create(name=p_data['name'], defaults=p_data)
-        self.stdout.write(self.style.SUCCESS('✅ Planos criados/atualizados.'))
-
-        # 2. Criar Tenant "Sistema Gestor" (para o Admin)
-        plan_premium = Plan.objects.get(name='PREMIUM')
-        tenant, _ = Tenant.objects.get_or_create(
-            name='Sistema Gestor',
-            defaults={'plan': plan_premium, 'subscription_status': 'ACTIVE'}
-        )
-        SystemSetting.get_settings(tenant) # Garante settings
-        self.stdout.write(self.style.SUCCESS(f'✅ Tenant "{tenant.name}" verificado.'))
-
-        # 3. Criar Superusuário (pegando do .env)
         User = get_user_model()
-        u = config('DJANGO_SUPERUSER_USERNAME', default='admin')
-        e = config('DJANGO_SUPERUSER_EMAIL', default='admin@example.com')
-        p = config('DJANGO_SUPERUSER_PASSWORD', default='admin123')
 
-        if not User.objects.filter(username=u).exists():
-            user = User.objects.create_superuser(u, e, p)
-            # Vincula o superuser ao tenant do sistema
+        # 1. Garante que os planos existem (idempotente)
+        plans_data = [
+            {'name': 'GRATUITO',     'display_name': 'Gratuito',      'price': 0,   'max_products': 50,     'max_users': 2,   'has_ai_matching': False, 'has_ai_reconciliation': False},
+            {'name': 'PROFISSIONAL',  'display_name': 'Profissional', 'price': 97,  'max_products': 1000,   'max_users': 10,  'has_ai_matching': True,  'has_ai_reconciliation': False},
+            {'name': 'EMPRESARIAL',   'display_name': 'Empresarial',  'price': 197, 'max_products': 999999, 'max_users': 999, 'has_ai_matching': True,  'has_ai_reconciliation': True},
+        ]
+        for p_data in plans_data:
+            Plan.objects.update_or_create(name=p_data['name'], defaults=p_data)
+        self.stdout.write(self.style.SUCCESS('✅ Planos verificados.'))
+
+        # 2. Tenant de sistema para o superuser
+        plan_top = Plan.objects.get(name='EMPRESARIAL')
+        tenant, _ = Tenant.objects.get_or_create(
+            name='Sistema StockPro',
+            defaults={'plan': plan_top, 'subscription_status': 'ACTIVE'}
+        )
+        SystemSetting.get_settings(tenant)
+        self.stdout.write(self.style.SUCCESS(f'✅ Tenant sistema verificado.'))
+
+        # 3. Superuser via variáveis de ambiente
+        email = config('DJANGO_SUPERUSER_EMAIL', default='')
+        password = config('DJANGO_SUPERUSER_PASSWORD', default='')
+
+        if not email or not password:
+            self.stdout.write(self.style.WARNING(
+                '⚠️  DJANGO_SUPERUSER_EMAIL ou DJANGO_SUPERUSER_PASSWORD não definidos no .env. Superuser não criado.'
+            ))
+            return
+
+        username = email.split('@')[0][:30]
+
+        if User.objects.filter(is_superuser=True).exists():
+            self.stdout.write(self.style.WARNING('⚠️  Superuser já existe. Pulando.'))
+            return
+
+        user = User.objects.create_superuser(
+            username=username,
+            email=email,
+            password=password,
+        )
+
+        # Vincula ao tenant de sistema como OWNER
+        if not TenantMembership.objects.filter(user=user, tenant=tenant).exists():
             TenantMembership.objects.create(
                 user=user,
                 tenant=tenant,
-                role=MembershipRole.OWNER
+                role=MembershipRole.OWNER,
             )
-            self.stdout.write(self.style.SUCCESS(f'✅ Superuser "{u}" criado com sucesso!'))
-        else:
-            self.stdout.write(self.style.WARNING(f'⚠️ Superuser "{u}" já existe.'))
+
+        self.stdout.write(self.style.SUCCESS(
+            f'✅ Superuser "{email}" criado. Acesse com este e-mail e a senha do .env.'
+        ))

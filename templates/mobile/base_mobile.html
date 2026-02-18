@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>{% block title %}StockPro Mobile{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: #0f172a; min-height: 100dvh; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+        .haptic:active { transform: scale(0.97); transition: transform 0.1s; }
+    </style>
+</head>
+<body class="bg-slate-950 text-white min-h-dvh flex flex-col">
+
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-50 bg-slate-900/95 backdrop-blur border-b border-white/5 px-4 py-3">
+        <div class="flex items-center justify-between max-w-lg mx-auto">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/30">
+                    <i data-lucide="package" class="w-4 h-4 text-white"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-black text-white leading-none">StockPro</p>
+                    <p class="text-[10px] text-slate-500 leading-none mt-0.5">{% block subtitle %}Operação{% endblock %}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="text-right">
+                    <p class="text-[10px] text-slate-500 leading-none">{{ user_name }}</p>
+                    <p class="text-[10px] text-indigo-400 leading-none mt-0.5">{{ now|date:"H:i" }}</p>
+                </div>
+                <a href="/accounts/logout/" class="p-2 text-slate-500 hover:text-white transition-colors">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Content -->
+    <main class="flex-1 w-full max-w-lg mx-auto px-4 py-5">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bottom Nav -->
+    <nav class="sticky bottom-0 bg-slate-900/95 backdrop-blur border-t border-white/5 safe-bottom">
+        <div class="flex items-center justify-around max-w-lg mx-auto px-4 pt-2 pb-1">
+            <a href="/mobile/" class="flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all
+                {% block nav_move %}text-slate-500 hover:text-white{% endblock %}">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Mover</span>
+            </a>
+            <a href="/mobile/history/" class="flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all
+                {% block nav_history %}text-slate-500 hover:text-white{% endblock %}">
+                <i data-lucide="clock" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Histórico</span>
+            </a>
+            <a href="/app/" class="flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all text-slate-500 hover:text-white">
+                <i data-lucide="layout-grid" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Desktop</span>
+            </a>
+        </div>
+    </nav>
+
+    <script>lucide.createIcons();</script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

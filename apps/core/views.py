@@ -28,6 +28,8 @@ def system_settings(request):
 
 @login_required
 def employee_create(request):
+    from apps.accounts.models import MembershipRole, TenantMembership
+
     if request.method == 'POST':
         form = EmployeeForm(request.POST)
         if form.is_valid():
@@ -35,15 +37,18 @@ def employee_create(request):
             user.set_password(form.cleaned_data['password'])
             user.save()
 
-            # Create membership (V11 fix)
-            from apps.accounts.models import MembershipRole, TenantMembership
+            # Respeita o toggle de permissão do formulário
+            is_admin_toggle = request.POST.get('is_staff') == 'on'
+            role = MembershipRole.ADMIN if is_admin_toggle else MembershipRole.OPERATOR
+
             TenantMembership.objects.create(
                 user=user,
                 tenant=request.tenant,
-                role=MembershipRole.OPERATOR
+                role=role,
             )
 
-            messages.success(request, f"Funcionário '{user.username}' criado!")
+            role_label = 'Administrador' if role == MembershipRole.ADMIN else 'Operador'
+            messages.success(request, f"Funcionário '{user.username}' criado como {role_label}!")
             return redirect('reports:employee_list')
     else:
         form = EmployeeForm()

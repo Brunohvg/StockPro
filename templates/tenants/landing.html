@@ -111,30 +111,112 @@
         <div class="max-w-7xl mx-auto px-6">
             <div class="text-center max-w-2xl mx-auto mb-20">
                 <h2 class="text-4xl font-black mb-4">Planos Para Todos os Tamanhos</h2>
-                <p class="text-slate-400">Do pequeno estoque ao armazém corporativo.</p>
+                <p class="text-slate-400">Do pequeno estoque ao armazém corporativo. Comece grátis, evolua quando precisar.</p>
             </div>
-            <div class="grid md:grid-cols-3 gap-8">
+            <div class="grid md:grid-cols-3 gap-8 items-start">
+
+                {% if plans %}
                 {% for plan in plans %}
-                <div class="relative bg-slate-900 border {% if plan.name == 'PROFISSIONAL' %}border-indigo-500 scale-105{% else %}border-slate-800{% endif %} rounded-3xl p-8 flex flex-col">
+                <div class="relative bg-slate-900 border {% if plan.name == 'PROFISSIONAL' %}border-indigo-500 shadow-2xl shadow-indigo-500/20{% else %}border-slate-800{% endif %} rounded-3xl p-8 flex flex-col {% if plan.name == 'PROFISSIONAL' %}md:scale-105{% endif %}">
                     {% if plan.name == 'PROFISSIONAL' %}
-                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-indigo-600 rounded-full text-xs font-black uppercase tracking-widest">Mais Popular</div>
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-indigo-600 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap">⭐ Mais Popular</div>
+                    {% elif plan.name == 'EMPRESARIAL' %}
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-purple-600 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap">🏢 Empresas</div>
                     {% endif %}
-                    <h3 class="text-2xl font-black mb-2">{{ plan.display_name }}</h3>
-                    <div class="flex items-baseline gap-1 mb-6">
-                        <span class="text-4xl font-black">R$ {{ plan.price|floatformat:0 }}</span>
-                        <span class="text-slate-500">/mês</span>
+                    <h3 class="text-2xl font-black mb-1">{{ plan.display_name }}</h3>
+                    <div class="flex items-baseline gap-1 mb-6 mt-3">
+                        {% if plan.price == 0 %}
+                        <span class="text-4xl font-black text-emerald-400">Grátis</span>
+                        {% else %}
+                        <span class="text-sm font-medium text-slate-400">R$</span>
+                        <span class="text-4xl font-black">{{ plan.price|floatformat:0 }}</span>
+                        <span class="text-slate-500 text-sm">/mês</span>
+                        {% endif %}
                     </div>
-                    <ul class="space-y-4 mb-8 flex-grow">
-                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-5 h-5 text-emerald-400"></i> Até {{ plan.max_products }} produtos</li>
-                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-5 h-5 text-emerald-400"></i> Até {{ plan.max_users }} usuários</li>
-                        {% for feat in plan.features.split %}
-                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-5 h-5 text-emerald-400"></i> {{ feat }}</li>
+                    <ul class="space-y-3 mb-8 flex-grow">
+                        {% if plan.max_products >= 999999 %}
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Produtos ilimitados</li>
+                        {% else %}
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Até {{ plan.max_products }} produtos</li>
+                        {% endif %}
+                        {% if plan.max_users >= 999 %}
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Usuários ilimitados</li>
+                        {% else %}
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Até {{ plan.max_users }} usuários</li>
+                        {% endif %}
+                        {% for feat in plan.features.split ',' %}
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> {{ feat|trim }}</li>
                         {% endfor %}
                     </ul>
-                    <a href="{% url 'tenants:signup' %}?plan={{ plan.name }}" class="block w-full text-center py-4 {% if plan.name == 'PROFISSIONAL' %}bg-indigo-600 hover:bg-indigo-500{% else %}bg-slate-800 hover:bg-slate-700{% endif %} rounded-2xl font-bold transition-all">Começar Agora</a>
+                    <a href="{% url 'tenants:signup' %}?plan={{ plan.name }}" class="block w-full text-center py-4 {% if plan.name == 'PROFISSIONAL' %}bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30{% elif plan.name == 'EMPRESARIAL' %}bg-purple-600 hover:bg-purple-500{% else %}bg-slate-800 hover:bg-slate-700{% endif %} rounded-2xl font-bold transition-all">
+                        {% if plan.price == 0 %}Começar Grátis{% else %}Assinar Agora{% endif %}
+                    </a>
                 </div>
                 {% endfor %}
+
+                {% else %}
+                <!-- Fallback estático caso os planos ainda não estejam no banco -->
+                <!-- Gratuito -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col">
+                    <h3 class="text-2xl font-black mb-1">Gratuito</h3>
+                    <div class="flex items-baseline gap-1 mb-6 mt-3">
+                        <span class="text-4xl font-black text-emerald-400">Grátis</span>
+                    </div>
+                    <ul class="space-y-3 mb-8 flex-grow">
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Até 50 produtos</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> 2 usuários</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Movimentações ilimitadas</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Importação CSV</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Relatórios básicos</li>
+                    </ul>
+                    <a href="{% url 'tenants:signup' %}?plan=GRATUITO" class="block w-full text-center py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl font-bold transition-all">Começar Grátis</a>
+                </div>
+                <!-- Profissional -->
+                <div class="relative bg-slate-900 border border-indigo-500 shadow-2xl shadow-indigo-500/20 rounded-3xl p-8 flex flex-col md:scale-105">
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-indigo-600 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap">⭐ Mais Popular</div>
+                    <h3 class="text-2xl font-black mb-1">Profissional</h3>
+                    <div class="flex items-baseline gap-1 mb-6 mt-3">
+                        <span class="text-sm font-medium text-slate-400">R$</span>
+                        <span class="text-4xl font-black">97</span>
+                        <span class="text-slate-500 text-sm">/mês</span>
+                    </div>
+                    <ul class="space-y-3 mb-8 flex-grow">
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Até 1.000 produtos</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> 10 usuários</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Importação CSV e XML (NF-e)</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> IA para match de produtos</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> App mobile</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Backup diário automático</li>
+                    </ul>
+                    <a href="{% url 'tenants:signup' %}?plan=PROFISSIONAL" class="block w-full text-center py-4 bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 rounded-2xl font-bold transition-all">Assinar Agora</a>
+                </div>
+                <!-- Empresarial -->
+                <div class="relative bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col">
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-purple-600 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap">🏢 Empresas</div>
+                    <h3 class="text-2xl font-black mb-1">Empresarial</h3>
+                    <div class="flex items-baseline gap-1 mb-6 mt-3">
+                        <span class="text-sm font-medium text-slate-400">R$</span>
+                        <span class="text-4xl font-black">197</span>
+                        <span class="text-slate-500 text-sm">/mês</span>
+                    </div>
+                    <ul class="space-y-3 mb-8 flex-grow">
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Produtos ilimitados</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Usuários ilimitados</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Multi-empresa</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> IA completa (match + conciliação)</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> API para integração</li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300"><i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i> Suporte dedicado</li>
+                    </ul>
+                    <a href="{% url 'tenants:signup' %}?plan=EMPRESARIAL" class="block w-full text-center py-4 bg-purple-600 hover:bg-purple-500 rounded-2xl font-bold transition-all">Assinar Agora</a>
+                </div>
+                {% endif %}
+
             </div>
+
+            <!-- Nota de pagamento futuro -->
+            <p class="text-center text-slate-600 text-sm mt-12">
+                💳 Integração de pagamento em breve. Por enquanto, entre em contato para ativar planos pagos.
+            </p>
         </div>
     </section>
 

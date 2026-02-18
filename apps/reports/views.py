@@ -436,3 +436,83 @@ def delete_exports_batch(request):
             ).delete()
     return redirect('reports:export_page')
 
+
+
+@login_required
+def margin_report(request):
+    """
+    Relatório de CMV e Margem por produto.
+    Cruza avg_unit_cost com sale_price para calcular margem bruta.
+    """
+    from decimal import Decimal
+    from apps.products.models import ProductVariant, ProductType
+
+    tenant = request.tenant
+
+    # Buscar todas as variantes com preço de custo
+    variants = ProductVariant.objects.filter(
+        tenant=tenant,
+        is_active=True,
+        avg_unit_cost__isnull=False,
+    ).select_related('product', 'product__category').order_by('product__name', 'name')
+
+    items = []
+    total_stock_value = Decimal('0')
+    total_sale_value = Decimal('0')
+    sem_preco_venda = 0
+
+    for v in variants:
+        custo = Decimal(str(v.avg_unit_cost or 0))
+        preco_venda = None
+
+        # Tenta pegar preço de venda da variante, depois do produto pai
+        if hasattr(v, 'sale_price') and v.sale_price:
+            preco_venda = Decimal(str(v.sale_price))
+        elif hasattr(v.product, 'sale_price') and v.product.sale_price:
+            preco_venda = Decimal(str(v.product.sale_price))
+
+        estoque = Decimal(str(v.current_stock or 0))
+        valor_estoque = estoque * custo
+
+        if preco_venda and preco_venda > 0:
+            margem_unit = preco_venda - custo
+            margem_pct = (margem_unit / preco_venda * 100) if preco_venda else Decimal('0')
+            valor_venda_estoque = estoque * preco_venda
+        else:
+            margem_unit = None
+            margem_pct = None
+            valor_venda_estoque = None
+            sem_preco_venda += 1
+
+        total_stock_value += valor_estoque
+        if valor_venda_estoque:
+            total_sale_value += valor_venda_estoque
+
+        items.append({
+            'variant': v,
+            'product_name': v.product.name,
+            'category': v.product.category.name if v.product.category else '—',
+            'sku': v.sku,
+            'custo': custo,
+            'preco_venda': preco_venda,
+            'margem_unit': margem_unit,
+            'margem_pct': margem_pct,
+            'estoque': estoque,
+            'valor_estoque': valor_estoque,
+            'valor_venda_estoque': valor_venda_estoque,
+            'alert': margem_pct is not None and margem_pct < 20,
+        })
+
+    # Ordenar por margem (sem preço de venda no final)
+    items.sort(key=lambda x: (x['margem_pct'] is None, x['margem_pct'] or 0))
+
+    lucro_potencial = total_sale_value - total_stock_value if total_sale_value else None
+
+    return render(request, 'reports/margin_report.html', {
+        'items': items,
+        'total_stock_value': total_stock_value,
+        'total_sale_value': total_sale_value,
+        'lucro_potencial': lucro_potencial,
+        'sem_preco_venda': sem_preco_venda,
+        'total_produtos': len(items),
+    })

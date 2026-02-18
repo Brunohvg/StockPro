@@ -18,5 +18,8 @@ urlpatterns = [
     path('export/movements/csv/', views.export_movements_csv, name='export_movements_csv'),
     path('export/<uuid:pk>/delete/', views.delete_export, name='delete_export'),
     path('export/delete-batch/', views.delete_exports_batch, name='delete_exports_batch'),
+
+    # CMV e Margem
+    path('margem/', views.margin_report, name='margin_report'),
 ]
 

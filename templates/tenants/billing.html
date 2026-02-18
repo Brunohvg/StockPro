@@ -5,24 +5,20 @@
 
 {% block content %}
 <div class="space-y-8">
+
     <!-- Header -->
-        <div class="flex items-center justify-between gap-4 w-full">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-900">Meu Plano</h1>
-                <p class="text-gray-500">Gerencie sua assinatura e faça upgrade quando precisar.</p>
-            </div>
-            {% if ai_active %}
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full">
-                <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                <span class="text-xs font-bold text-emerald-700 uppercase tracking-widest leading-none">Cérebro IA Ativo</span>
-            </div>
-            {% else %}
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-full">
-                <div class="w-2 h-2 bg-slate-400 rounded-full"></div>
-                <span class="text-xs font-bold text-slate-500 uppercase tracking-widest leading-none">IA Aguardando Chave</span>
-            </div>
-            {% endif %}
+    <div class="flex items-center justify-between gap-4 w-full">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Meu Plano</h1>
+            <p class="text-slate-500">Gerencie sua assinatura e faça upgrade quando precisar.</p>
         </div>
+        {% if ai_active %}
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full">
+            <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            <span class="text-xs font-bold text-emerald-700 uppercase tracking-widest leading-none">IA Ativa</span>
+        </div>
+        {% endif %}
+    </div>
 
     <!-- Current Plan Card -->
     <div class="bg-gradient-to-br from-slate-900 to-indigo-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden">
@@ -32,141 +28,177 @@
             <div>
                 <div class="flex items-center gap-3 mb-4">
                     <span class="inline-flex items-center px-3 py-1 bg-white/10 backdrop-blur-sm border border-white/10 rounded-full text-xs font-bold uppercase tracking-wider">
-                        {% if tenant.subscription_status == 'TRIAL' %}🧪 Em Teste{% elif tenant.subscription_status == 'ACTIVE' %}✅ Ativo{% elif tenant.subscription_status == 'SUSPENDED' %}⚠️ Suspenso{% else %}❌ Cancelado{% endif %}
+                        {% if tenant.subscription_status == 'TRIAL' %}🧪 Em Teste
+                        {% elif tenant.subscription_status == 'ACTIVE' %}✅ Ativo
+                        {% elif tenant.subscription_status == 'SUSPENDED' %}⚠️ Suspenso
+                        {% else %}❌ Cancelado{% endif %}
                     </span>
                     {% if tenant.is_trial_expired %}
-                    <span class="inline-flex items-center px-3 py-1 bg-rose-500/20 border border-rose-500/50 text-rose-300 rounded-full text-xs font-bold uppercase tracking-wider">
-                        Expirado
-                    </span>
+                    <span class="inline-flex items-center px-3 py-1 bg-rose-500/20 border border-rose-500/50 text-rose-300 rounded-full text-xs font-bold uppercase tracking-wider">Trial Expirado</span>
                     {% endif %}
                 </div>
                 <h2 class="text-4xl font-black tracking-tight mb-2">{{ current_plan.display_name|default:"Plano Free" }}</h2>
-                <div class="text-indigo-200 font-medium">
+                <p class="text-indigo-200 font-medium">
                     {% if tenant.subscription_status == 'TRIAL' and tenant.trial_ends_at %}
-                        Seu período de teste termina em <span class="text-white font-bold">{{ tenant.trial_ends_at|date:"d/m/Y" }}</span>
+                        Período de teste até <span class="text-white font-bold">{{ tenant.trial_ends_at|date:"d/m/Y" }}</span>
                     {% else %}
-                        Sua empresa está evoluindo com o plano {{ current_plan.display_name|default:"Free" }}
+                        Assinatura ativa — obrigado por confiar no StockPro!
                     {% endif %}
-                </div>
+                </p>
             </div>
-
-            <div class="flex flex-col items-end">
+            <div class="flex flex-col items-start md:items-end">
+                {% if current_plan.price == 0 %}
+                <span class="text-4xl font-black text-emerald-400">Grátis</span>
+                {% else %}
                 <div class="flex items-baseline gap-1">
                     <span class="text-sm font-medium text-indigo-300">R$</span>
-                    <span class="text-5xl font-black tracking-tight">{{ current_plan.price|floatformat:0|default:"0" }}</span>
+                    <span class="text-5xl font-black tracking-tight">{{ current_plan.price|floatformat:0 }}</span>
                     <span class="text-sm font-medium text-indigo-300">/mês</span>
                 </div>
-                <div class="text-xs text-indigo-400 mt-2 font-medium">Próxima fatura em {{ tenant.trial_ends_at|date:"d/m" }}</div>
+                {% endif %}
+                <p class="text-xs text-indigo-400 mt-2">Pagamento manual — em breve via cartão</p>
             </div>
         </div>
 
-        <!-- Usage Stats Grid -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mt-12 pt-8 border-t border-white/10">
-            <!-- Products Stat -->
-            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div class="flex items-center justify-between mb-3">
+        <!-- Usage Stats -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-10 pt-8 border-t border-white/10">
+            <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+                <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Produtos</span>
                     <i data-lucide="package" class="w-4 h-4 text-indigo-400"></i>
                 </div>
                 <div class="text-2xl font-black mb-1">{{ tenant.products_count }}</div>
-                <div class="text-xs text-indigo-200 mb-3">de {{ current_plan.max_products|default:"∞" }} permitidos</div>
-                <div class="w-full bg-black/20 rounded-full h-1.5 overflow-hidden">
-                    <div class="bg-indigo-400 h-full rounded-full transition-all duration-500" style="width: {% widthratio tenant.products_count current_plan.max_products 100 %}%"></div>
+                <div class="text-xs text-indigo-300 mb-2">
+                    {% if current_plan.max_products >= 999999 %}ilimitados{% else %}de {{ current_plan.max_products }}{% endif %}
                 </div>
+                {% if current_plan.max_products < 999999 %}
+                <div class="w-full bg-black/20 rounded-full h-1.5 overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-500
+                        {% if tenant.products_count >= current_plan.max_products %}bg-rose-400{% elif tenant.products_count >= current_plan.max_products|add:'-10' %}bg-amber-400{% else %}bg-indigo-400{% endif %}"
+                        style="width: {% widthratio tenant.products_count current_plan.max_products 100 %}%"></div>
+                </div>
+                {% endif %}
             </div>
-
-            <!-- Users Stat -->
-            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div class="flex items-center justify-between mb-3">
+            <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+                <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Usuários</span>
                     <i data-lucide="users" class="w-4 h-4 text-indigo-400"></i>
                 </div>
                 <div class="text-2xl font-black mb-1">{{ tenant.users_count }}</div>
-                <div class="text-xs text-indigo-200 mb-3">de {{ current_plan.max_users|default:"∞" }} permitidos</div>
-                <div class="w-full bg-black/20 rounded-full h-1.5 overflow-hidden">
-                    <div class="bg-indigo-400 h-full rounded-full transition-all duration-500" style="width: {% widthratio tenant.users_count current_plan.max_users 100 %}%"></div>
+                <div class="text-xs text-indigo-300 mb-2">
+                    {% if current_plan.max_users >= 999 %}ilimitados{% else %}de {{ current_plan.max_users }}{% endif %}
                 </div>
             </div>
-
-            <!-- Client Since -->
-            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div class="flex items-center justify-between mb-3">
+            <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+                <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Cliente Desde</span>
                     <i data-lucide="calendar" class="w-4 h-4 text-indigo-400"></i>
                 </div>
-                <div class="text-xl font-bold mb-1">{{ tenant.created_at|date:"d M Y" }}</div>
-                <div class="text-xs text-indigo-200">Fidelidade Valorizada</div>
+                <div class="text-lg font-bold mb-1">{{ tenant.created_at|date:"d/m/Y" }}</div>
             </div>
-
-            <!-- CNPJ -->
-            <div class="bg-white/5 rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div class="flex items-center justify-between mb-3">
+            <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+                <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">CNPJ</span>
                     <i data-lucide="building" class="w-4 h-4 text-indigo-400"></i>
                 </div>
-                <div class="text-lg font-mono font-bold mb-1">{{ tenant.cnpj|default:"Não informado" }}</div>
-                <div class="text-xs text-indigo-200">{{ tenant.name }}</div>
+                <div class="text-sm font-mono font-bold">{{ tenant.cnpj|default:"Não informado" }}</div>
+                <div class="text-xs text-indigo-300 mt-1 truncate">{{ tenant.name }}</div>
             </div>
         </div>
     </div>
 
-    <!-- Available Plans -->
+    <!-- Plans Grid -->
     <div>
-        <h3 class="text-xl font-bold text-gray-900 mb-6">Planos Disponíveis</h3>
-        <div class="grid md:grid-cols-4 gap-6">
+        <h3 class="text-lg font-bold text-slate-900 mb-1">Planos Disponíveis</h3>
+        <p class="text-sm text-slate-500 mb-6">Para fazer upgrade, entre em contato pelo WhatsApp — ativamos em minutos.</p>
+        <div class="grid md:grid-cols-3 gap-6">
             {% for plan in plans %}
-            <div class="relative bg-white border-2 {% if plan.pk == current_plan.pk %}border-indigo-500 ring-2 ring-indigo-200{% else %}border-gray-200{% endif %} rounded-2xl p-6 flex flex-col hover:shadow-lg transition-all">
+            <div class="relative bg-white border-2 rounded-2xl p-6 flex flex-col transition-all hover:shadow-lg
+                {% if plan.pk == current_plan.pk %}border-indigo-500 ring-2 ring-indigo-100 shadow-md
+                {% elif plan.name == 'PROFISSIONAL' %}border-slate-200
+                {% else %}border-slate-200{% endif %}">
+
                 {% if plan.pk == current_plan.pk %}
-                <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold">Atual</div>
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-black whitespace-nowrap">✓ Plano Atual</div>
+                {% elif plan.name == 'PROFISSIONAL' %}
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-amber-500 text-white rounded-full text-xs font-black whitespace-nowrap">⭐ Mais Popular</div>
                 {% endif %}
-                <h4 class="text-xl font-bold text-gray-900">{{ plan.display_name }}</h4>
-                <div class="flex items-baseline gap-1 mt-2 mb-4">
-                    <span class="text-3xl font-black text-gray-900">R$ {{ plan.price|floatformat:0 }}</span>
-                    <span class="text-gray-500">/mês</span>
+
+                <h4 class="text-xl font-black text-slate-900 mb-1">{{ plan.display_name }}</h4>
+                <div class="flex items-baseline gap-1 mt-2 mb-5">
+                    {% if plan.price == 0 %}
+                    <span class="text-3xl font-black text-emerald-600">Grátis</span>
+                    {% else %}
+                    <span class="text-xs text-slate-400">R$</span>
+                    <span class="text-3xl font-black text-slate-900">{{ plan.price|floatformat:0 }}</span>
+                    <span class="text-slate-400 text-sm">/mês</span>
+                    {% endif %}
                 </div>
-                <ul class="space-y-3 mb-6 flex-grow">
-                    <li class="flex items-center gap-2 text-sm text-gray-600">
-                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        Até {{ plan.max_products }} produtos
+
+                <ul class="space-y-2.5 mb-6 flex-grow">
+                    {% if plan.max_products >= 999999 %}
+                    <li class="flex items-center gap-2 text-sm text-slate-600">
+                        <i data-lucide="check" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i> Produtos ilimitados
                     </li>
-                    <li class="flex items-center gap-2 text-sm text-gray-600">
-                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        Até {{ plan.max_users }} usuários
+                    {% else %}
+                    <li class="flex items-center gap-2 text-sm text-slate-600">
+                        <i data-lucide="check" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i> Até {{ plan.max_products }} produtos
                     </li>
+                    {% endif %}
+                    {% if plan.max_users >= 999 %}
+                    <li class="flex items-center gap-2 text-sm text-slate-600">
+                        <i data-lucide="check" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i> Usuários ilimitados
+                    </li>
+                    {% else %}
+                    <li class="flex items-center gap-2 text-sm text-slate-600">
+                        <i data-lucide="check" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i> Até {{ plan.max_users }} usuários
+                    </li>
+                    {% endif %}
                     {% if plan.features %}
-                    {% for feat in plan.features.split %}
-                    <li class="flex items-center gap-2 text-sm text-gray-600">
-                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        {{ feat }}
-                    </li>
-                    {% endfor %}
+                        {% for feat in plan.features.split ',' %}
+                        <li class="flex items-center gap-2 text-sm text-slate-600">
+                            <i data-lucide="check" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i> {{ feat|trim }}
+                        </li>
+                        {% endfor %}
                     {% endif %}
                 </ul>
+
                 {% if plan.pk == current_plan.pk %}
-                <button disabled class="w-full py-3 bg-gray-200 text-gray-500 rounded-xl font-semibold cursor-not-allowed">Plano Atual</button>
-                {% elif plan.price > current_plan.price %}
-                <form method="post" action="{% url 'tenants:billing_upgrade' plan.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors">
-                        Fazer Upgrade
-                    </button>
-                </form>
+                <button disabled class="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold cursor-not-allowed text-sm">Plano Atual</button>
+                {% elif plan.price == 0 %}
+                <button disabled class="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold cursor-not-allowed text-sm">Downgrade indisponível</button>
                 {% else %}
-                <button disabled class="w-full py-3 bg-gray-100 text-gray-400 rounded-xl font-semibold cursor-not-allowed">Downgrade indisponível</button>
+                <a href="https://wa.me/{{ whatsapp_number }}?text=Olá!%20Quero%20fazer%20upgrade%20para%20o%20plano%20{{ plan.display_name }}%20(R$%20{{ plan.price|floatformat:0 }}/mês)%20da%20empresa%20{{ tenant.name }}"
+                   target="_blank"
+                   class="w-full py-3 text-center rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+                   {% if plan.name == 'EMPRESARIAL' %}bg-purple-600 hover:bg-purple-500 text-white{% else %}bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20{% endif %}">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    Solicitar via WhatsApp
+                </a>
                 {% endif %}
+            </div>
+            {% empty %}
+            <div class="col-span-3 text-center py-12 text-slate-400">
+                <i data-lucide="package" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                <p>Planos não configurados ainda.</p>
             </div>
             {% endfor %}
         </div>
     </div>
 
-    <!-- Contact Section -->
-    <div class="bg-gray-50 rounded-2xl p-8 text-center">
-        <h3 class="text-xl font-bold text-gray-900 mb-2">Precisa de um Plano Personalizado?</h3>
-        <p class="text-gray-600 mb-4">Entre em contato para soluções Enterprise sob medida.</p>
-        <a href="mailto:contato@stockpro.com.br" class="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-            Falar com Comercial
+    <!-- CTA Contato -->
+    <div class="bg-gradient-to-r from-slate-900 to-indigo-900 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-white">
+        <div>
+            <h3 class="text-xl font-bold mb-1">Precisa de algo personalizado?</h3>
+            <p class="text-indigo-200 text-sm">Volumes maiores, integração com ERP, treinamento — fale com a gente.</p>
+        </div>
+        <a href="https://wa.me/{{ whatsapp_number }}?text=Olá!%20Preciso%20de%20uma%20solução%20personalizada%20para%20{{ tenant.name }}"
+           target="_blank"
+           class="flex-shrink-0 flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-400 rounded-xl font-bold transition-all">
+            <i data-lucide="message-circle" class="w-5 h-5"></i>
+            WhatsApp Comercial
         </a>
     </div>
+
 </div>
 {% endblock %}

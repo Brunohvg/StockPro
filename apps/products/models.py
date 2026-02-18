@@ -106,6 +106,7 @@ class Product(TenantMixin):
     current_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Atual (Legado)")
     minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo (Legado)")
     avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio (Legado)")
+    sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Preço de Venda", help_text="Usado para calcular margem bruta.")
 
     requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
     ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")
@@ -255,6 +256,7 @@ class ProductVariant(TenantMixin):
     current_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque")
     minimum_stock = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Estoque Mínimo")
     avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio")
+    sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Preço de Venda", help_text="Sobrepõe o preço do produto pai.")
 
     requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
     ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")

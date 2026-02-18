@@ -18,7 +18,7 @@ services:
   # --------------------------------------------------------------------------
   migration:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
-    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput"
+    command: sh -c "python manage.py migrate --noinput && python manage.py seed_db && python manage.py collectstatic --noinput"
     environment: &env
       TZ: America/Sao_Paulo
       PYTHONUNBUFFERED: "1"
@@ -49,6 +49,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
+      WHATSAPP_SUPPORT: ${WHATSAPP_SUPPORT:-5511999999999}
     networks:
       - app_network
     volumes:
@@ -107,13 +108,12 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-    resources:
-      limits:
-        cpus: ${WEB_CPU_LIMIT:-1}
-        memory: ${WEB_MEMORY_LIMIT:-512M}
-      reservations:
-        cpus: "0.25"
-        memory: 256M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     depends_on:
       - migration
       - redis
