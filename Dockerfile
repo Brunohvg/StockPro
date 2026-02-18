@@ -3,10 +3,12 @@
 # ===========================================
 
 # Build stage
-FROM ghcr.io/astral-sh/uv:latest AS build
+FROM python:3.11-slim AS build
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /app
-COPY pyproject.toml /app/
+COPY pyproject.toml uv.lock /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 COPY . /app
@@ -37,8 +39,8 @@ RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data && \
     chmod -R 755 /app /data
 
 USER appuser
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthcheck/')" || exit 1
 
 EXPOSE 8000
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "stock_control.wsgi:application"]
