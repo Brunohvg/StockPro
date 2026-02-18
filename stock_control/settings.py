@@ -1,17 +1,17 @@
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
 from celery.schedules import crontab
-from decouple import Config, Csv, RepositoryEnv
-
-import sys
+from decouple import AutoConfig, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Loading environment variables
-env_path = os.path.join(BASE_DIR, '.env.local') if os.path.exists(os.path.join(BASE_DIR, '.env.local')) else os.path.join(BASE_DIR, '.env')
-config = Config(RepositoryEnv(env_path))
+# Carrega variáveis de ambiente com fallback inteligente:
+# 1. No Docker/Swarm: lê direto do os.environ (sem arquivo .env)
+# 2. Em desenvolvimento: lê do .env.local ou .env se existirem
+config = AutoConfig(search_path=BASE_DIR)
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-secret-key-replace-me')
 
