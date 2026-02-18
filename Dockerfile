@@ -23,7 +23,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 libjpeg62-turbo zlib1g libxml2 libxslt1.1 \
+    libpq5 libjpeg62-turbo zlib1g libxml2 libxslt1.1 postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy artifacts from build stage

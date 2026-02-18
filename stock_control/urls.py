@@ -4,9 +4,13 @@ StockPro URL Configuration
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include, path
 
 urlpatterns = [
+    # Health check para Docker Swarm / load balancer
+    path('healthcheck/', lambda request: HttpResponse('ok', content_type='text/plain'), name='healthcheck'),
+
     path(settings.ADMIN_URL, admin.site.urls),
 
     # Custom Authentication (V11 - Smart Login)

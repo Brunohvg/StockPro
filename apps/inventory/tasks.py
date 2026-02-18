@@ -21,6 +21,30 @@ from apps.products.models import Brand, Category
 from .models import ExportBatch, ImportBatch, ImportLog
 
 
+def parse_decimal_br(value) -> 'Decimal | None':
+    """
+    Converte string decimal em formato BR ou internacional para Decimal.
+    Suporta: '1.250,00' -> 1250.00 | '1250.00' -> 1250.00 | '1250,00' -> 1250.00
+    Retorna None se inválido.
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s or s.lower() == 'nan':
+        return None
+    # Formato BR com milhar: 1.250,00
+    if ',' in s and '.' in s:
+        s = s.replace('.', '').replace(',', '.')
+    # Formato BR sem milhar: 1250,00
+    elif ',' in s:
+        s = s.replace(',', '.')
+    # Formato internacional: 1250.00 - já ok
+    try:
+        return Decimal(s)
+    except Exception:
+        return None
+
+
 def generate_idempotency_key(batch_id, file_content):
     """Generate unique key for idempotency checking"""
     content_hash = hashlib.md5(file_content).hexdigest()[:16]
@@ -73,7 +97,7 @@ def process_import_task(self, batch_id, idempotency_key=None):
             batch=batch,
             row_number=0,
             idempotency_key=idempotency_key,
-            status='ERROR' if "Erro crítico" in result or "itens criados/atualizados. 0 erros" not in result and "0 itens criados/atualizados" in result else 'SUCCESS',
+            status='ERROR' if ("Erro crítico" in result) else 'SUCCESS',
             message=result
         )
 
@@ -304,8 +328,20 @@ def process_csv_catalog_direct(batch):
                             except: pass
 
                     if not final_cnpj:
-                        final_cnpj = f"TEMP-{uuid.uuid4().hex[:8]}"
+                        # Antes de criar com TEMP-, verifica se já existe um com TEMP e mesmo nome
+                        existing_temp = Supplier.objects.filter(
+                            tenant=tenant,
+                            cnpj__startswith='TEMP-'
+                        ).filter(
+                            models.Q(trade_name__iexact=supplier_name) |
+                            models.Q(company_name__iexact=supplier_name)
+                        ).first()
+                        if existing_temp:
+                            supplier_obj = existing_temp
+                        else:
+                            final_cnpj = f"TEMP-{uuid.uuid4().hex[:8]}"
 
+                if not supplier_obj and supplier_name and 'final_cnpj' in dir() and final_cnpj:
                     supplier_obj = Supplier.objects.create(
                         tenant=tenant,
                         cnpj=final_cnpj,
@@ -331,8 +367,9 @@ def process_csv_catalog_direct(batch):
 
                     cost = get_val(row, 'cost')
                     if cost:
-                        try: variant.avg_unit_cost = Decimal(cost.replace(',', '.'))
-                        except: pass
+                        parsed_cost = parse_decimal_br(cost)
+                        if parsed_cost is not None:
+                            variant.avg_unit_cost = parsed_cost
 
                     variant.save()
 
@@ -375,7 +412,7 @@ def process_csv_catalog_direct(batch):
                             sku=sku,
                             name=name[:255],
                             barcode=get_val(row, 'barcode'),
-                            avg_unit_cost=Decimal(get_val(row, 'cost').replace(',', '.')) if get_val(row, 'cost') else 0,
+                            avg_unit_cost=parse_decimal_br(get_val(row, 'cost')) or Decimal('0'),
                             is_active=True
                         )
                     else:
@@ -399,8 +436,9 @@ def process_csv_catalog_direct(batch):
                         if barcode: variant.barcode = barcode[:100]
                         cost = get_val(row, 'cost')
                         if cost:
-                            try: variant.avg_unit_cost = Decimal(cost.replace(',', '.'))
-                            except: pass
+                            parsed_cost = parse_decimal_br(cost)
+                            if parsed_cost is not None:
+                                variant.avg_unit_cost = parsed_cost
                         variant.save()
 
                 # 4. PARSE ATRIBUTOS (Para ambos se houver attrs_raw)
@@ -424,9 +462,10 @@ def process_csv_catalog_direct(batch):
                 stock_val = get_val(row, 'stock')
                 if stock_val is not None:
                     try:
-                        new_qty = Decimal(stock_val.replace(',', '.'))
-                        # Só gera movimento se for diferente do atual ou se for novo
-                        if not is_update or variant.current_stock != new_qty:
+                        new_qty = parse_decimal_br(stock_val)
+                        if new_qty is None:
+                            log_entries.append(f"Linha {index+1} (SKU {sku}): Valor de estoque inválido '{stock_val}'.")
+                        elif not is_update or variant.current_stock != new_qty:
                             StockService.create_movement(
                                 tenant=tenant,
                                 user=batch.user,

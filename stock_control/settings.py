@@ -5,17 +5,22 @@ from pathlib import Path
 from celery.schedules import crontab
 from decouple import Config, Csv, RepositoryEnv
 
+import sys
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Loading environment variables
 env_path = os.path.join(BASE_DIR, '.env.local') if os.path.exists(os.path.join(BASE_DIR, '.env.local')) else os.path.join(BASE_DIR, '.env')
-print(f"DEBUG: Carregando configurações de: {env_path}")
 config = Config(RepositoryEnv(env_path))
-print(f"DEBUG: DB_TYPE selecionado: {config('DB_TYPE', default='postgres')}")
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-secret-key-replace-me')
 
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
+
+# Guard de segurança: bloqueia subida em produção com defaults inseguros
+if not DEBUG and SECRET_KEY == 'django-insecure-secret-key-replace-me':
+    print("ERRO FATAL: Configure SECRET_KEY no .env antes de rodar em produção!", file=sys.stderr)
+    sys.exit(1)
 
 ALLOWED_HOSTS = ['*'] if DEBUG else config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
@@ -28,8 +33,8 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# Admin Configuration
-ADMIN_URL = config('ADMIN_URL', default='admin/')
+# Admin Configuration — lê DJANGO_ADMIN_PATH (padrão do .env)
+ADMIN_URL = config('DJANGO_ADMIN_PATH', default='admin/')
 ADMIN_URL = ADMIN_URL.strip('/')
 if ADMIN_URL:
     ADMIN_URL += '/'
@@ -184,7 +189,15 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.tenants.tasks.cleanup_expired_trials',
         'schedule': crontab(hour=3, minute=0),
     },
+    'daily-backup': {
+        'task': 'apps.tenants.backup_task.daily_backup',
+        'schedule': crontab(hour=3, minute=30),
+    },
 }
+
+# Backup settings
+BACKUP_DIR = config('BACKUP_DIR', default='/data/backups')
+BACKUP_RETENTION_DAYS = config('BACKUP_RETENTION_DAYS', default=30, cast=int)
 
 # AI Integration (Grok / X.AI)
 XAI_API_KEY = config('XAI_API_KEY', default='')
