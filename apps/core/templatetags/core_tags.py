@@ -48,3 +48,18 @@ def subtract(value, arg):
     except (ValueError, TypeError):
         return 0
 
+@register.filter
+def split(value, arg):
+    """Splits the string by the given argument."""
+    try:
+        return value.split(arg) if value else []
+    except (AttributeError, TypeError):
+        return []
+
+@register.filter
+def trim(value):
+    """Strips whitespace from the string."""
+    try:
+        return value.strip() if value else ""
+    except (AttributeError, TypeError):
+        return ""

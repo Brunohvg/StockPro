@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static core_tags %}
 
 {% block title %}Meu Plano - StockPro{% endblock %}
 
@@ -155,7 +155,7 @@
                     </li>
                     {% endif %}
                     {% if plan.features %}
-                        {% for feat in plan.features.split ',' %}
+                        {% for feat in plan.features|split:',' %}
                         <li class="flex items-center gap-2 text-sm text-slate-600">
                             <i data-lucide="check" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i> {{ feat|trim }}
                         </li>
