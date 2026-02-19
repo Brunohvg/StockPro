@@ -41,6 +41,7 @@ if ADMIN_URL:
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -154,6 +155,17 @@ NUMBER_GROUPING = 3
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+WHITENOISE_MANIFEST_STRICT = False  # Permite que o sistema ignore arquivos faltando no manifest (evita crashes)
 
 # Celery — padrão Flowlog: só configura se broker estiver definido
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='')
