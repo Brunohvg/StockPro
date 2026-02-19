@@ -165,7 +165,9 @@ do_migrate() {
 
     echo "Container: $CONTAINER"
     docker exec -it $CONTAINER python manage.py migrate --noinput
-    echo -e "${GREEN}✅ Migrate concluído!${NC}"
+    echo "Coletando arquivos estáticos..."
+    docker exec -it $CONTAINER python manage.py collectstatic --noinput
+    echo -e "${GREEN}✅ Migrate e Collectstatic concluídos!${NC}"
 }
 
 # ==== REMOVE ====
