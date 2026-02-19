@@ -104,7 +104,7 @@ services:
   stockpro_worker:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
     user: root
-    command: celery -A stock_control worker -l info -Q default --concurrency=2
+    command: celery -A stock_control worker -l info -Q celery,default --concurrency=2
     environment: *env
     networks:
       - app_network
