@@ -140,6 +140,12 @@ class Product(TenantMixin):
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
+
+        # Normaliza nome: remove espaços extras
+        if self.name:
+            import re as _re
+            self.name = _re.sub(r'\s+', ' ', self.name.strip())
+
         super().save(*args, **kwargs)
 
         # Auto-gera SKU APENAS se estiver vazio/nulo
@@ -302,6 +308,11 @@ class ProductVariant(TenantMixin):
             old_instance = ProductVariant.objects.get(pk=self.id)
             if old_instance.current_stock != self.current_stock and not getattr(self, '_allow_stock_change', False):
                 self.current_stock = old_instance.current_stock
+
+        # Normaliza nome: remove espaços extras
+        if self.name:
+            import re as _re
+            self.name = _re.sub(r'\s+', ' ', self.name.strip())
 
         super().save(*args, **kwargs)
 
