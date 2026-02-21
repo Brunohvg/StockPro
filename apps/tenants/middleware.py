@@ -244,31 +244,41 @@ def plan_limit_required(limit_type):
     """
     Decorator that blocks creation if plan limits are reached.
     limit_type: 'products' or 'users'
+
+    Only blocks POST/PUT (write operations).
+    GET requests pass through so users can still view the form.
     """
     from functools import wraps
 
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
-            if not request.tenant:
+            if not request.tenant or not request.tenant.plan:
+                return view_func(request, *args, **kwargs)
+
+            # Only block write operations — allow GET so user sees the form
+            if request.method not in ['POST', 'PUT']:
                 return view_func(request, *args, **kwargs)
 
             if limit_type == 'products' and request.tenant.products_limit_reached:
-                if request.method in ['POST', 'PUT']:
-                    messages.error(
-                        request,
-                        f"Limite de produtos do seu plano '{request.tenant.plan.display_name}' atingido ({request.tenant.plan.max_products}). Faça upgrade para cadastrar mais."
-                    )
-                    return redirect('products:product_list')
+                messages.error(
+                    request,
+                    f"Limite de {request.tenant.plan.max_products} produtos do plano "
+                    f"'{request.tenant.plan.display_name}' atingido. "
+                    f"Faça upgrade para cadastrar mais."
+                )
+                return redirect('products:product_list')
 
             if limit_type == 'users' and request.tenant.users_limit_reached:
-                if request.method in ['POST', 'PUT']:
-                    messages.error(
-                        request,
-                        f"Limite de usuários do seu plano '{request.tenant.plan.display_name}' atingido ({request.tenant.plan.max_users}). Faça upgrade para convidar mais membros."
-                    )
-                    return redirect('accounts:invite_user')
+                messages.error(
+                    request,
+                    f"Limite de {request.tenant.plan.max_users} usuários do plano "
+                    f"'{request.tenant.plan.display_name}' atingido. "
+                    f"Faça upgrade para convidar mais membros."
+                )
+                return redirect('reports:employee_list')
 
             return view_func(request, *args, **kwargs)
         return wrapper
     return decorator
+

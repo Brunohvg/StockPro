@@ -177,6 +177,7 @@ def product_detail(request, pk):
 
 @login_required
 @trial_allows_read
+@plan_limit_required('products')
 def variant_create(request, product_pk):
     """Criar nova variação para um produto variável"""
     product = get_object_or_404(Product, pk=product_pk, tenant=request.tenant, product_type=ProductType.VARIABLE)

@@ -17,9 +17,24 @@ class Command(BaseCommand):
 
         # 1. Garante que os planos existem (idempotente)
         plans_data = [
-            {'name': 'GRATUITO',     'display_name': 'Gratuito',      'price': 0,   'max_products': 50,     'max_users': 2,   'has_ai_matching': False, 'has_ai_reconciliation': False, 'features': ''},
-            {'name': 'PROFISSIONAL', 'display_name': 'Profissional',  'price': 97,  'max_products': 1000,   'max_users': 10,  'has_ai_matching': True,  'has_ai_reconciliation': False, 'features': 'Importação XML NF-e,Relatório CMV,Suporte prioritário'},
-            {'name': 'EMPRESARIAL',  'display_name': 'Empresarial',   'price': 197, 'max_products': 999999, 'max_users': 999, 'has_ai_matching': True,  'has_ai_reconciliation': True,  'features': 'Tudo do Profissional,IA Conciliação automática,Multi-empresa ilimitado,API acesso completo'},
+            {
+                'name': 'GRATUITO', 'display_name': 'Gratuito', 'price': 0,
+                'max_products': 50, 'max_users': 2,
+                'has_ai_matching': False, 'has_ai_reconciliation': False,
+                'features': 'Cadastro de até 50 produtos,Controle de estoque básico,Movimentações de entrada e saída,Relatório de estoque simples,Importação CSV básica,1 localização de estoque,Suporte por email',
+            },
+            {
+                'name': 'PROFISSIONAL', 'display_name': 'Profissional', 'price': 97,
+                'max_products': 5000, 'max_users': 10,
+                'has_ai_matching': True, 'has_ai_reconciliation': False,
+                'features': 'Tudo do Gratuito,Até 5.000 produtos,Até 10 usuários,Importação XML NF-e,Importação/Exportação CSV completa,Relatório CMV,Match inteligente via IA,Múltiplas localizações,Fornecedores e parceiros,Suporte prioritário via chat',
+            },
+            {
+                'name': 'EMPRESARIAL', 'display_name': 'Empresarial', 'price': 247,
+                'max_products': 999999, 'max_users': 999,
+                'has_ai_matching': True, 'has_ai_reconciliation': True,
+                'features': 'Tudo do Profissional,Produtos ilimitados,Usuários ilimitados,IA Conciliação automática,Multi-empresa,API acesso completo,Relatórios avançados,Suporte dedicado com SLA',
+            },
         ]
         for p_data in plans_data:
             Plan.objects.update_or_create(name=p_data['name'], defaults=p_data)

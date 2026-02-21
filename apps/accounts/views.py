@@ -178,7 +178,7 @@ def create_company(request):
                 display_name='Gratuito',
                 price=0,
                 max_products=50,
-                max_users=3
+                max_users=2
             )
 
         # Create tenant

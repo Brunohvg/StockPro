@@ -237,9 +237,11 @@ class ProductExporter:
             }
 
             if product.product_type == ProductType.SIMPLE:
-                item['stock'] = product.current_stock
-                item['minimum_stock'] = product.minimum_stock
-                item['cost'] = product.avg_unit_cost
+                variant = product.variants.first()
+                item['stock'] = variant.current_stock if variant else 0
+                item['minimum_stock'] = variant.minimum_stock if variant else 0
+                item['cost'] = float(variant.avg_unit_cost) if variant and variant.avg_unit_cost else 0
+                item['barcode'] = (variant.barcode if variant and variant.barcode else product.barcode) or ''
             else:
                 item['variants'] = []
                 if include_variants:

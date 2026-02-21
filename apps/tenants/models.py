@@ -70,12 +70,14 @@ class Tenant(models.Model):
 
     @property
     def products_count(self):
-        """Count products for this tenant (SIMPLE products + Variants)"""
-        from apps.products.models import Product, ProductType, ProductVariant
-        # Contagem de produtos SIMPLES + todas as variações de produtos VARIÁVEIS
-        simple_count = Product.objects.filter(tenant=self, product_type=ProductType.SIMPLE).count()
-        variant_count = ProductVariant.objects.filter(tenant=self).count()
-        return simple_count + variant_count
+        """Count active SKUs (variants) for this tenant.
+
+        Cada variante representa um SKU ativo.
+        Produtos SIMPLE auto-criam uma variante, então contar
+        Product(SIMPLE) + Variants causa double-counting.
+        """
+        from apps.products.models import ProductVariant
+        return ProductVariant.objects.filter(tenant=self).count()
 
     @property
     def users_count(self):
@@ -84,15 +86,33 @@ class Tenant(models.Model):
 
     @property
     def products_limit_reached(self):
-        if self.plan and self.plan.max_products:
+        if not self.plan:
+            return False
+        if self.plan.max_products:
             return self.products_count >= self.plan.max_products
         return False
 
     @property
     def users_limit_reached(self):
-        if self.plan and self.plan.max_users:
+        if not self.plan:
+            return False
+        if self.plan.max_users:
             return self.users_count >= self.plan.max_users
         return False
+
+    @property
+    def products_remaining(self):
+        """Number of products that can still be created"""
+        if not self.plan or not self.plan.max_products:
+            return 999999
+        return max(0, self.plan.max_products - self.products_count)
+
+    @property
+    def products_usage_pct(self):
+        """Percentage of product limit used (0-100)"""
+        if not self.plan or not self.plan.max_products:
+            return 0
+        return min(100, int(self.products_count / self.plan.max_products * 100))
 
 
 class TenantMixin(models.Model):

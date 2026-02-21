@@ -396,6 +396,17 @@ def process_csv_catalog_direct(batch):
                     if uom: product.uom = uom[:10]
                     product.save()
                 else:
+                    # CHECK PLAN LIMIT before creating
+                    if tenant.products_limit_reached:
+                        plan_name = tenant.plan.display_name if tenant.plan else 'Sem plano'
+                        max_prod = tenant.plan.max_products if tenant.plan else 0
+                        log_entries.append(
+                            f"Linha {index+1} ('{name}'): Limite de {max_prod} produtos "
+                            f"do plano '{plan_name}' atingido. Faça upgrade."
+                        )
+                        error_count += 1
+                        continue
+
                     # CREATE LOGIC
                     if sku_pai:
                         # VARIABLE PRODUCT LOGIC
