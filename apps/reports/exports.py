@@ -44,6 +44,8 @@ class ProductExporter:
 
     def _simple_row(self, product):
         """Generate CSV row for simple product"""
+        # Stock e custo vivem na variante, não no produto legado
+        variant = product.variants.first()
         return {
             'sku': product.sku,
             'name': product.name,
@@ -51,11 +53,12 @@ class ProductExporter:
             'category': product.category.name if product.category else '',
             'brand': product.brand.name if product.brand else '',
             'uom': product.uom,
-            'stock': product.current_stock,
-            'minimum_stock': product.minimum_stock,
-            'cost': float(product.avg_unit_cost) if product.avg_unit_cost else 0,
-            'barcode': product.barcode or '',
+            'stock': variant.current_stock if variant else 0,
+            'minimum_stock': variant.minimum_stock if variant else 0,
+            'cost': float(variant.avg_unit_cost) if variant and variant.avg_unit_cost else 0,
+            'barcode': (variant.barcode if variant and variant.barcode else product.barcode) or '',
         }
+
 
     def _parent_row(self, product):
         """Generate CSV row for variable product (parent)"""

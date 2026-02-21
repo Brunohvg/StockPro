@@ -93,7 +93,7 @@ def process_import_task(self, batch_id, idempotency_key=None):
             batch=batch,
             row_number=0,
             idempotency_key=idempotency_key,
-            status='ERROR' if ("Erro crítico" in result) else 'SUCCESS',
+            status='ERROR' if ('0 erros' not in result and 'erros' in result.lower()) or 'Erro crítico' in result else 'SUCCESS',
             message=result
         )
 
@@ -142,9 +142,9 @@ def process_csv_stock_adjustment(batch):
     error_count = 0
     log_entries = []
 
-    try:
-        with transaction.atomic():
-            for index, row in df.iterrows():
+    for index, row in df.iterrows():
+        try:
+            with transaction.atomic():
                 sku = str(row.get('sku', '')).strip()
                 name_visual = str(row.get('name', '')).strip()
                 qty_raw = row.get('quantity', 0)
@@ -183,23 +183,27 @@ def process_csv_stock_adjustment(batch):
                     movement_type='IN' if qty >= 0 else 'OUT',
                     quantity=abs(qty),
                     reason=f"Ajuste via CSV Inventário (Ref: {name_visual})",
+                    source='IMPORT',
                     unit_cost=unit_cost
                 )
 
                 success_count += 1
-                batch.processed_rows = index + 1
-                if index % 10 == 0:
-                    batch.save()
 
-        summary = f"Processamento concluído. Sucessos: {success_count}. Erros: {error_count}."
-        if log_entries:
-            summary += "\nDetalhes:\n" + "\n".join(log_entries[:20])
-            if len(log_entries) > 20:
-                summary += "\n... (e mais erros)"
-        return summary
+        except Exception as row_err:
+            error_count += 1
+            log_entries.append(f"Linha {index+1} (SKU {sku}): Erro: {row_err}")
 
-    except Exception as e:
-        return f"Erro crítico durante transação: {e}"
+        batch.processed_rows = index + 1
+        if index % 10 == 0:
+            batch.save()
+
+    summary = f"Processamento concluído. Sucessos: {success_count}. Erros: {error_count}."
+    if log_entries:
+        summary += "\nDetalhes:\n" + "\n".join(log_entries[:20])
+        if len(log_entries) > 20:
+            summary += "\n... (e mais erros)"
+    return summary
+
 
 
 def process_csv_catalog_direct(batch):
@@ -464,7 +468,8 @@ def process_csv_catalog_direct(batch):
                             variant=variant,
                             movement_type='ADJ',
                             quantity=new_qty,
-                            reason="Ajuste via Importação Direta de Catálogo"
+                            reason="Ajuste via Importação Direta de Catálogo",
+                            source='IMPORT'
                         )
 
                 success_count += 1
@@ -547,8 +552,9 @@ def process_export_catalog(self, batch_id):
             batch.file.save(filename, ContentFile(content))
 
         batch.status = 'COMPLETED'
-        batch.total_rows = 0 # TODO: Exporter could return count
-        batch.completed_at = pd.Timestamp.now()
+        batch.total_rows = 0  # TODO: Exporter could return count
+        from django.utils import timezone as _tz
+        batch.completed_at = _tz.now()
         batch.save()
 
         return f"Exported {batch.resource} as {batch.export_type}"
