@@ -36,15 +36,18 @@ COPY . /app
 # Diretórios necessários
 RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data/backups
 
+# Coleta estáticos durante o build para garantir que estejam na imagem
+RUN SECRET_KEY=build-time-only-secret python manage.py collectstatic --noinput
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck/')" || exit 1
 
 EXPOSE 8000
 
 CMD ["gunicorn", "stock_control.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "2", \
-     "--threads", "4", \
-     "--timeout", "120", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+    "--bind", "0.0.0.0:8000", \
+    "--workers", "2", \
+    "--threads", "4", \
+    "--timeout", "120", \
+    "--access-logfile", "-", \
+    "--error-logfile", "-"]

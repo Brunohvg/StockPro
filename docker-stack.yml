@@ -12,7 +12,7 @@ services:
   # --------------------------------------------------------------------------
   migration:
     image: ${STOCKPRO_IMAGE:-brunobh51/stockpro:latest}
-    command: sh -c "python manage.py migrate --noinput && python manage.py seed_db && python manage.py collectstatic --noinput"
+    command: sh -c "python manage.py migrate --noinput && python manage.py seed_db"
     environment: &env
       TZ: America/Sao_Paulo
       PYTHONUNBUFFERED: "1"
@@ -42,7 +42,6 @@ services:
     networks:
       - app_network
     volumes:
-      - stockpro_static:/app/staticfiles
       - stockpro_media:/app/media
     deploy:
       replicas: 1
@@ -68,7 +67,6 @@ services:
       --error-logfile -
     environment: *env
     volumes:
-      - stockpro_static:/app/staticfiles
       - stockpro_media:/app/media
       - stockpro_imports:/app/imports
     networks:
@@ -193,7 +191,6 @@ services:
 # VOLUMES
 # ==============================================================================
 volumes:
-  stockpro_static:
   stockpro_media:
   stockpro_imports:
   stockpro_redis:
