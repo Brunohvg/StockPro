@@ -266,12 +266,21 @@ def process_csv_catalog_direct(batch):
                     error_count += 1
                     continue
 
-                # 1. BUSCA EXISTENTE (se tiver SKU)
+                # 1. BUSCA EXISTENTE
                 variant = None
                 is_update = False
                 if sku:
+                    # Busca por SKU (match exato)
                     variant = ProductVariant.objects.filter(tenant=tenant, sku=sku).first()
                     is_update = bool(variant)
+                else:
+                    # Sem SKU: busca por NOME para evitar duplicação
+                    existing_product = Product.objects.filter(
+                        tenant=tenant, name__iexact=name.strip()
+                    ).first()
+                    if existing_product:
+                        variant = existing_product.variants.first()
+                        is_update = bool(variant)
 
                 # 2. RESOLVE CATEGORIA E MARCA
                 cat_name = get_val(row, 'category')
