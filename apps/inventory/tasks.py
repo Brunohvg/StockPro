@@ -261,14 +261,17 @@ def process_csv_catalog_direct(batch):
                 sku_pai = get_val(row, 'sku_pai')
                 attrs_raw = get_val(row, 'attributes')
 
-                if not sku or not name:
-                    log_entries.append(f"Linha {index+1}: SKU ou Nome ausentes. Ignorado.")
+                if not name:
+                    log_entries.append(f"Linha {index+1}: Nome ausente. Ignorado.")
                     error_count += 1
                     continue
 
-                # 1. BUSCA EXISTENTE
-                variant = ProductVariant.objects.filter(tenant=tenant, sku=sku).first()
-                is_update = bool(variant)
+                # 1. BUSCA EXISTENTE (se tiver SKU)
+                variant = None
+                is_update = False
+                if sku:
+                    variant = ProductVariant.objects.filter(tenant=tenant, sku=sku).first()
+                    is_update = bool(variant)
 
                 # 2. RESOLVE CATEGORIA E MARCA
                 cat_name = get_val(row, 'category')
@@ -305,39 +308,26 @@ def process_csv_catalog_direct(batch):
                         models.Q(company_name__iexact=supplier_name)
                     ).first()
 
-                # SMART CREATE: Se não encontrou mas tem dados mínimos, cria para não travar
+                # SMART CREATE: Só cria fornecedor se tiver CNPJ válido
                 if not supplier_obj and supplier_name:
-                    final_cnpj = None
                     if supplier_cnpj:
                         sc = "".join(filter(str.isdigit, supplier_cnpj))
                         if len(sc) == 14:
                             from apps.partners.models import validate_cnpj
                             try:
                                 validate_cnpj(sc)
-                                final_cnpj = sc
-                            except: pass
+                                # CNPJ válido — cria o fornecedor
+                                supplier_obj = Supplier.objects.create(
+                                    tenant=tenant,
+                                    cnpj=sc,
+                                    company_name=supplier_name[:200],
+                                    trade_name=supplier_name[:200],
+                                    is_active=True
+                                )
+                            except Exception:
+                                # CNPJ inválido — ignora, produto será criado sem fornecedor
+                                log_entries.append(f"Linha {index+1} (SKU {sku}): CNPJ '{supplier_cnpj}' inválido. Produto criado sem fornecedor.")
 
-                    if not final_cnpj:
-                        existing_temp = Supplier.objects.filter(
-                            tenant=tenant,
-                            cnpj__startswith='TEMP-'
-                        ).filter(
-                            models.Q(trade_name__iexact=supplier_name) |
-                            models.Q(company_name__iexact=supplier_name)
-                        ).first()
-                        if existing_temp:
-                            supplier_obj = existing_temp
-                        else:
-                            final_cnpj = f"TEMP-{uuid.uuid4().hex[:8]}"
-
-                    if not supplier_obj and final_cnpj:
-                        supplier_obj = Supplier.objects.create(
-                            tenant=tenant,
-                            cnpj=final_cnpj,
-                            company_name=supplier_name[:200],
-                            trade_name=supplier_name[:200],
-                            is_active=True
-                        )
 
                 location_name = get_val(row, 'location')
                 location_obj = None
@@ -397,7 +387,7 @@ def process_csv_catalog_direct(batch):
                         variant = ProductVariant.objects.create(
                             tenant=tenant,
                             product=parent,
-                            sku=sku,
+                            sku=sku or '',
                             name=name[:255],
                             barcode=get_val(row, 'barcode'),
                             avg_unit_cost=parse_decimal_br(get_val(row, 'cost')) or Decimal('0'),
@@ -409,7 +399,7 @@ def process_csv_catalog_direct(batch):
                         # Não precisamos re-setar o SKU da variante depois.
                         product = Product.objects.create(
                             tenant=tenant,
-                            sku=sku[:50],
+                            sku=(sku or '')[:50],
                             name=name[:255],
                             product_type=ProductType.SIMPLE,
                             category=cat_obj,
@@ -483,9 +473,6 @@ def process_csv_catalog_direct(batch):
     if log_entries:
         summary += "\nDetalhes:\n" + "\n".join(log_entries[:20])
     return summary
-
-
-
 
 
 @shared_task(
