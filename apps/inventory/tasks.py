@@ -129,9 +129,29 @@ def process_csv_stock_adjustment(batch):
     # Normalize columns
     df.columns = [c.strip().lower() for c in df.columns]
 
+    # Mapeamento de aliases (PT → EN) — aceita nomes em português
+    column_aliases = {
+        'quantidade': 'quantity',
+        'qtd': 'quantity',
+        'qtde': 'quantity',
+        'qty': 'quantity',
+        'saldo': 'quantity',
+        'estoque': 'quantity',
+        'custo_unitario': 'avg_unit_cost',
+        'custo': 'avg_unit_cost',
+        'custo_medio': 'avg_unit_cost',
+        'cost': 'avg_unit_cost',
+        'nome': 'name',
+        'descricao': 'name',
+        'codigo': 'sku',
+        'cod': 'sku',
+    }
+    df.rename(columns={k: v for k, v in column_aliases.items() if k in df.columns and v not in df.columns}, inplace=True)
+
     # Required columns: sku, quantity
     if 'sku' not in df.columns or 'quantity' not in df.columns:
-        return "Erro: Colunas 'sku' e 'quantity' são obrigatórias no CSV de inventário."
+        cols_found = ', '.join(df.columns.tolist())
+        return f"Erro: Colunas 'sku' e 'quantity' são obrigatórias no CSV de inventário. Colunas encontradas: {cols_found}"
 
     batch.total_rows = len(df)
     batch.save()
@@ -149,6 +169,7 @@ def process_csv_stock_adjustment(batch):
                 name_visual = str(row.get('name', '')).strip()
                 qty_raw = row.get('quantity', 0)
                 cost_raw = row.get('avg_unit_cost')
+
 
                 if not sku:
                     log_entries.append(f"Linha {index+1}: SKU ignorado (vazio).")
@@ -171,10 +192,7 @@ def process_csv_stock_adjustment(batch):
                     continue
 
                 # GENERATE STOCK MOVEMENT (NEVER UPDATE DIRECTLY)
-                try:
-                    unit_cost = Decimal(str(cost_raw)) if pd.notna(cost_raw) and cost_raw else None
-                except:
-                    unit_cost = None
+                unit_cost = parse_decimal_br(str(cost_raw)) if pd.notna(cost_raw) and cost_raw else None
 
                 StockService.create_movement(
                     tenant=tenant,
