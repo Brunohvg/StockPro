@@ -253,9 +253,9 @@ def process_csv_catalog_direct(batch):
     error_count = 0
     log_entries = []
 
-    try:
-        with transaction.atomic():
-            for index, row in df.iterrows():
+    for index, row in df.iterrows():
+        try:
+            with transaction.atomic():
                 sku = get_val(row, 'sku')
                 name = get_val(row, 'name')
                 sku_pai = get_val(row, 'sku_pai')
@@ -275,20 +275,16 @@ def process_csv_catalog_direct(batch):
                 cat_obj = None
                 if cat_name:
                     c_name = cat_name.strip()
-                    # Tenta encontrar ignorando maiúsculas/minúsculas (evita duplicatas)
                     cat_obj = Category.objects.filter(tenant=tenant, name__iexact=c_name).first()
                     if not cat_obj:
-                        # Se não existir, cria padronizado como Título (Ex: "nike" -> "Nike")
                         cat_obj = Category.objects.create(tenant=tenant, name=c_name.title()[:100])
 
                 brand_name = get_val(row, 'brand')
                 brand_obj = None
                 if brand_name:
                     b_name = brand_name.strip()
-                    # Tenta encontrar ignorando maiúsculas/minúsculas
                     brand_obj = Brand.objects.filter(tenant=tenant, name__iexact=b_name).first()
                     if not brand_obj:
-                        # Se não existir, cria padronizado
                         brand_obj = Brand.objects.create(tenant=tenant, name=b_name.title()[:100])
 
                 # 2.1 RESOLVE FORNECEDOR E LOCAL
@@ -302,7 +298,6 @@ def process_csv_catalog_direct(batch):
                     supplier_obj = Supplier.objects.filter(tenant=tenant, cnpj=cnpj_clean).first()
 
                 if not supplier_obj and supplier_name:
-                    # Busca por nome fantasia ou razão social
                     supplier_obj = Supplier.objects.filter(
                         tenant=tenant
                     ).filter(
@@ -312,7 +307,6 @@ def process_csv_catalog_direct(batch):
 
                 # SMART CREATE: Se não encontrou mas tem dados mínimos, cria para não travar
                 if not supplier_obj and supplier_name:
-                    # Tenta validar o CNPJ se fornecido. Se for inválido, usa TEMP.
                     final_cnpj = None
                     if supplier_cnpj:
                         sc = "".join(filter(str.isdigit, supplier_cnpj))
@@ -324,7 +318,6 @@ def process_csv_catalog_direct(batch):
                             except: pass
 
                     if not final_cnpj:
-                        # Antes de criar com TEMP-, verifica se já existe um com TEMP e mesmo nome
                         existing_temp = Supplier.objects.filter(
                             tenant=tenant,
                             cnpj__startswith='TEMP-'
@@ -337,14 +330,14 @@ def process_csv_catalog_direct(batch):
                         else:
                             final_cnpj = f"TEMP-{uuid.uuid4().hex[:8]}"
 
-                if not supplier_obj and supplier_name and 'final_cnpj' in dir() and final_cnpj:
-                    supplier_obj = Supplier.objects.create(
-                        tenant=tenant,
-                        cnpj=final_cnpj,
-                        company_name=supplier_name[:200],
-                        trade_name=supplier_name[:200],
-                        is_active=True
-                    )
+                    if not supplier_obj and final_cnpj:
+                        supplier_obj = Supplier.objects.create(
+                            tenant=tenant,
+                            cnpj=final_cnpj,
+                            company_name=supplier_name[:200],
+                            trade_name=supplier_name[:200],
+                            is_active=True
+                        )
 
                 location_name = get_val(row, 'location')
                 location_obj = None
@@ -371,7 +364,7 @@ def process_csv_catalog_direct(batch):
 
                     # UPDATE PARENT PRODUCT
                     product = variant.product
-                    product.name = name[:255] if not sku_pai else product.name # Se for variável, não sobrescreve nome do pai com nome da variante
+                    product.name = name[:255] if not sku_pai else product.name
                     if cat_obj: product.category = cat_obj
                     if brand_obj: product.brand = brand_obj
                     if supplier_obj: product.default_supplier = supplier_obj
@@ -387,7 +380,7 @@ def process_csv_catalog_direct(batch):
                             tenant=tenant,
                             sku=sku_pai[:50],
                             defaults={
-                                'name': name[:255].split('-')[0].strip(), # Tenta pegar o nome base antes do '-'
+                                'name': name[:255].split('-')[0].strip(),
                                 'product_type': ProductType.VARIABLE,
                                 'category': cat_obj,
                                 'brand': brand_obj,
@@ -396,7 +389,6 @@ def process_csv_catalog_direct(batch):
                                 'uom': (get_val(row, 'unit') or 'UN')[:10]
                             }
                         )
-                        # Se já existia, garante que é variável
                         if parent.product_type != ProductType.VARIABLE:
                             parent.product_type = ProductType.VARIABLE
                             parent.save()
@@ -413,6 +405,8 @@ def process_csv_catalog_direct(batch):
                         )
                     else:
                         # SIMPLE PRODUCT LOGIC
+                        # Product.save() auto-cria uma variante com o mesmo SKU.
+                        # Não precisamos re-setar o SKU da variante depois.
                         product = Product.objects.create(
                             tenant=tenant,
                             sku=sku[:50],
@@ -424,23 +418,27 @@ def process_csv_catalog_direct(batch):
                             default_location=location_obj,
                             uom=(get_val(row, 'unit') or 'UN')[:10]
                         )
-                        # O save() do Product SIMPLE cria uma variant padrão.
+                        # Pega a variante já criada pelo Product.save()
                         variant = product.variants.first()
-                        variant.sku = sku[:50]
-                        variant.name = name[:255]
+
+                        # Atualiza campos extras na variante (barcode, custo)
+                        changed = False
                         barcode = get_val(row, 'barcode')
-                        if barcode: variant.barcode = barcode[:100]
+                        if barcode:
+                            variant.barcode = barcode[:100]
+                            changed = True
                         cost = get_val(row, 'cost')
                         if cost:
                             parsed_cost = parse_decimal_br(cost)
                             if parsed_cost is not None:
                                 variant.avg_unit_cost = parsed_cost
-                        variant.save()
+                                changed = True
+                        if changed:
+                            variant.save()
 
                 # 4. PARSE ATRIBUTOS (Para ambos se houver attrs_raw)
                 if attrs_raw:
                     from apps.products.models import VariantAttributeValue, AttributeType
-                    # Formato: Cor:Azul; Tamanho:G
                     parts = [p.strip() for p in attrs_raw.split(';') if ':' in p]
                     for part in parts:
                         attr_key, attr_val = part.split(':', 1)
@@ -457,38 +455,37 @@ def process_csv_catalog_direct(batch):
                 # 5. ESTOQUE (ADJ ABSOLUTO SE FORNECIDO)
                 stock_val = get_val(row, 'stock')
                 if stock_val is not None:
-                    try:
-                        new_qty = parse_decimal_br(stock_val)
-                        if new_qty is None:
-                            log_entries.append(f"Linha {index+1} (SKU {sku}): Valor de estoque inválido '{stock_val}'.")
-                        elif not is_update or variant.current_stock != new_qty:
-                            StockService.create_movement(
-                                tenant=tenant,
-                                user=batch.user,
-                                variant=variant,
-                                movement_type='ADJ',
-                                quantity=new_qty,
-                                reason="Ajuste via Importação Direta de Catálogo"
-                            )
-                    except Exception as stock_err:
-                        log_entries.append(f"Linha {index+1} (SKU {sku}): Erro no estoque: {stock_err}")
+                    new_qty = parse_decimal_br(stock_val)
+                    if new_qty is None:
+                        log_entries.append(f"Linha {index+1} (SKU {sku}): Valor de estoque inválido '{stock_val}'.")
+                    elif not is_update or variant.current_stock != new_qty:
+                        StockService.create_movement(
+                            tenant=tenant,
+                            user=batch.user,
+                            variant=variant,
+                            movement_type='ADJ',
+                            quantity=new_qty,
+                            reason="Ajuste via Importação Direta de Catálogo"
+                        )
 
                 success_count += 1
-                batch.processed_rows = index + 1
-                if index % 10 == 0:
-                    batch.save()
 
-        summary = f"Catálogo processado. {success_count} itens criados/atualizados. {error_count} erros."
-        if log_entries:
-            summary += "\nDetalhes:\n" + "\n".join(log_entries[:20])
-        return summary
+        except Exception as row_err:
+            error_count += 1
+            log_entries.append(f"Linha {index+1} (SKU {get_val(row, 'sku') or '?'}): Erro: {row_err}")
+
+        # Atualiza progresso a cada 10 linhas
+        batch.processed_rows = index + 1
+        if index % 10 == 0:
+            batch.save()
+
+    summary = f"Catálogo processado. {success_count} itens criados/atualizados. {error_count} erros."
+    if log_entries:
+        summary += "\nDetalhes:\n" + "\n".join(log_entries[:20])
+    return summary
 
 
-    except Exception as e:
-        return f"Erro crítico: {e}"
 
-
-        raise
 
 
 @shared_task(

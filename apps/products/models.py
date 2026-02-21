@@ -142,8 +142,8 @@ class Product(TenantMixin):
         is_new = self._state.adding
         super().save(*args, **kwargs)
 
-        # Atualiza SKU se for padrão antigo ou vazio
-        if (is_new and not self.sku) or (self.sku and (self.sku.startswith('PROD-') or '-' not in self.sku)):
+        # Auto-gera SKU APENAS se estiver vazio/nulo
+        if not self.sku:
             self.sku = self.generate_sku()
             Product.objects.filter(pk=self.pk).update(sku=self.sku)
 
@@ -156,8 +156,6 @@ class Product(TenantMixin):
                     sku=self.sku,
                     name="Padrão",
                     barcode=self.barcode,
-                    # Estoque INICIAL deve ser zero.
-                    # Qualquer entrada deve vir via StockSync/CSV_DIRECT que gera StockMovements.
                     current_stock=0,
                     minimum_stock=0,
                     avg_unit_cost=0,
@@ -306,7 +304,9 @@ class ProductVariant(TenantMixin):
                 self.current_stock = old_instance.current_stock
 
         super().save(*args, **kwargs)
-        if (is_new and not self.sku) or (self.sku and self.sku.startswith('VAR-') and '-' not in self.sku[4:]):
+
+        # Auto-gera SKU APENAS se estiver vazio/nulo
+        if not self.sku:
             self.sku = self.generate_sku()
             ProductVariant.objects.filter(pk=self.pk).update(sku=self.sku)
 
