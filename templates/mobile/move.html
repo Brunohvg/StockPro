@@ -136,6 +136,16 @@
         </div>
     </div>
 
+    <!-- Validade (só entrada) -->
+    <div id="expiry-box" class="bg-slate-900 rounded-2xl p-4 mb-4 border border-emerald-900/60">
+        <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest block mb-3">Validade <span class="text-slate-600 normal-case font-normal">(entrada de perecível, opcional)</span></label>
+        <div class="grid grid-cols-2 gap-2">
+            <input type="date" name="expiry_date" class="w-full px-3 py-3 bg-slate-800 rounded-xl text-sm text-white">
+            <input type="text" name="lot_number" maxlength="60" placeholder="Lote" class="w-full px-3 py-3 bg-slate-800 rounded-xl text-sm text-white placeholder-slate-600">
+        </div>
+        <p id="next-expiry" class="hidden mt-3 text-xs text-amber-300"></p>
+    </div>
+
     <!-- Motivo (opcional) -->
     <div class="bg-slate-900 rounded-2xl p-4 mb-5 border border-white/5">
         <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Motivo <span class="text-slate-600 normal-case font-normal">(opcional)</span></label>
@@ -273,10 +283,20 @@ function renderResults(results) {
         lbl.textContent = 'em estoque';
         stock.append(qty, lbl);
         btn.append(info, stock);
-        btn.addEventListener('click', () => selectProduct(r.sku, r.display_name, r.current_stock));
+        btn.addEventListener('click', () => { selectProduct(r.sku, r.display_name, r.current_stock); showNextExpiry(r); });
         resultsDiv.appendChild(btn);
     });
     resultsDiv.classList.remove('hidden');
+}
+
+function showNextExpiry(r) {
+    if (r.next_expiry) {
+        const [y, m, d] = r.next_expiry.split('-');
+        nextExpiry.textContent = `Próximo a vencer: ${d}/${m}/${y}` + (r.next_expiry_days < 0 ? ' (VENCIDO)' : ` (${r.next_expiry_days} dias)`);
+        nextExpiry.classList.remove('hidden');
+    } else {
+        nextExpiry.classList.add('hidden');
+    }
 }
 
 function formatQty(v) {
@@ -320,7 +340,7 @@ document.getElementById('open-scanner').addEventListener('click', () => {
         try {
             const results = await lookup(code);
             const exact = results.filter(r => r.barcode === code || r.sku === code);
-            if (exact.length === 1) selectProduct(exact[0].sku, exact[0].display_name, exact[0].current_stock);
+            if (exact.length === 1) { selectProduct(exact[0].sku, exact[0].display_name, exact[0].current_stock); showNextExpiry(exact[0]); }
             else renderResults(results);
         } catch (e) { console.error(e); }
     }).catch(() => { alert('Não foi possível acessar a câmera.'); closeScanner(); });
@@ -346,9 +366,20 @@ searchInput.addEventListener('input', () => {
     }, 300);
 });
 
+const expiryBox = document.getElementById('expiry-box');
+const nextExpiry = document.getElementById('next-expiry');
+function syncExpiryBox() {
+    const checked = document.querySelector('input[name="type"]:checked');
+    const isIn = checked && checked.value === 'IN';
+    expiryBox.querySelectorAll('input').forEach(i => { i.disabled = !isIn; });
+    expiryBox.classList.toggle('opacity-40', !isIn);
+}
+syncExpiryBox();
+
 // Radio change — visual do botão
 document.querySelectorAll('input[name="type"]').forEach(radio => {
     radio.addEventListener('change', () => {
+        syncExpiryBox();
         const isIn = radio.value === 'IN';
         submitBtn.className = submitBtn.className.replace(
             /from-\w+-\d+ to-\w+-\d+/g,
