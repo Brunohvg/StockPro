@@ -11,7 +11,40 @@ from .models import Product, ProductVariant
 from .serializers import ProductSerializer, ProductVariantSerializer, StagingItemSerializer, StagingSubmissionSerializer
 
 
-class ProductViewSet(BaseTenantViewSet):
+class ArchiveOnDeleteMixin:
+    """
+    GET da lista oculta arquivados (use ?include_archived=1 para vê-los).
+    DELETE nunca apaga histórico: sem movimentações exclui, com movimentações arquiva.
+    Apenas OWNER/ADMIN podem remover.
+    """
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.action == 'list' and self.request.query_params.get('include_archived') not in ('1', 'true'):
+            qs = qs.filter(is_active=True)
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        from .services import ProductArchiveService
+        membership = getattr(request, 'membership', None)
+        if not membership or membership.role not in ('OWNER', 'ADMIN'):
+            return Response({'error': 'Apenas administradores podem remover produtos.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        obj = self.get_object()
+        try:
+            if isinstance(obj, Product):
+                result = ProductArchiveService.remove_product(obj, request.user)
+            else:
+                result = ProductArchiveService.remove_variant(obj, request.user)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if result == 'deleted':
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({'status': 'archived',
+                         'detail': 'Item com histórico foi arquivado; movimentações preservadas.'})
+
+
+class ProductViewSet(ArchiveOnDeleteMixin, BaseTenantViewSet):
     """
     API endpoint that allows products to be viewed or edited.
     Automatically identifies the tenant and filters results.
@@ -78,7 +111,7 @@ class ProductViewSet(BaseTenantViewSet):
 
         return response
 
-class ProductVariantViewSet(BaseTenantViewSet):
+class ProductVariantViewSet(ArchiveOnDeleteMixin, BaseTenantViewSet):
     """
     API endpoint that allows variants to be viewed or edited.
     """
