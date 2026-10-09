@@ -580,7 +580,7 @@ def revert_document(doc, user):
                     for alloc in allocations:
                         StockService.create_movement(
                             tenant=doc.tenant, user=user, movement_type='OUT', quantity=alloc.quantity,
-                            variant=mov.variant, lot_id=alloc.lot_id, source='NFE_REVERT',
+                            variant=mov.variant, lot_id=alloc.lot_id, allow_expired_lot=True, source='NFE_REVERT',
                             source_doc=doc.access_key, reason=f"Estorno NF-e {doc.number} item {item.item_number}",
                         )
                 else:
