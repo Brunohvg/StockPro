@@ -1,3 +1,20 @@
+## Stack final (Coolify)
+
+- Domínio do serviço web: `https://stock.optarys.com.br` (porta interna 8000).
+- Banco: PostgreSQL 17 **já existente** em recurso separado; configure `DATABASE_URL` com URL interna.
+- Serviços Compose: `web`, `worker`, `beat` e `redis`. Não cria banco adicional.
+- Redis e conexões Celery: definidos no Compose, sem necessidade de .env.
+- Beat executa os schedules do Django (incluindo a tarefa diária de backup).
+- O Dockerfile instala `postgresql-client-17` para `pg_dump` compatível com o banco.
+- `web` aplica `migrate`, `collectstatic` e criação idempotente do superusuário; `worker` e `beat` pulam o bootstrap.
+- Volumes persistentes: arquivos, importações, backups, Redis e agenda do Beat.
+- Variáveis para cadastrar no Coolify: `DATABASE_URL`, `DJANGO_SUPERUSER_EMAIL`, `DJANGO_SUPERUSER_PASSWORD` e, conforme uso, `XAI_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY` ou `OPENAI_API_KEY`.
+- Configurar domínio no serviço web, porta 8000, e conferir se Coolify preenche `SERVICE_FQDN_WEB_8000` e `SERVICE_URL_WEB_8000`.
+- Certifique-se de que o endereço interno do PostgreSQL é acessível a partir da rede da stack.
+- Backups em volume no mesmo servidor **não substituem** backups externos e testes de restauração.
+
+**Ainda é preciso executar o primeiro build/deploy e smoke tests** no próprio Coolify para validar a operação completa. As credenciais reais não devem ir para o repositório.
+
 ## Domínio definido para a Bibelô
 
 - URL pública: `https://stock.optarys.com.br`
