@@ -271,7 +271,7 @@ class ProductArchiveService:
 
     @classmethod
     @transaction.atomic
-    def remove_product(cls, product, user, zero_stock=True):
+    def remove_product(cls, product, user, zero_stock=False):
         """Retorna 'deleted' ou 'archived'."""
         product = Product.objects.select_for_update().get(pk=product.pk)
         if not cls.has_movements(product):
@@ -287,7 +287,7 @@ class ProductArchiveService:
 
     @classmethod
     @transaction.atomic
-    def remove_variant(cls, variant, user, zero_stock=True):
+    def remove_variant(cls, variant, user, zero_stock=False):
         variant = ProductVariant.objects.select_for_update().get(pk=variant.pk)
         if not cls.variant_has_movements(variant):
             variant.delete()
