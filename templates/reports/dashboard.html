@@ -243,6 +243,32 @@
                 </div>
             </div>
 
+            {% if expired_lots_count or expiring_lots_count %}
+            <!-- Validade -->
+            <div class="bg-white p-6 rounded-[2rem] border shadow-sm {% if expired_lots_count %}border-rose-200{% else %}border-amber-200{% endif %}">
+                <h3 class="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                    <i data-lucide="calendar-clock" class="w-4 h-4 {% if expired_lots_count %}text-rose-600{% else %}text-amber-600{% endif %}"></i>
+                    Validade
+                </h3>
+                {% if expired_lots_count %}
+                <p class="text-[10px] font-black uppercase tracking-widest text-rose-600 mb-2">Vencidos ({{ expired_lots_count }})</p>
+                <ul class="space-y-2 mb-4">
+                    {% for lot in expired_lots %}
+                    <li class="flex justify-between text-xs"><a class="font-bold text-slate-800 hover:text-indigo-600 truncate" href="{% url 'products:product_detail' lot.variant.product_id %}">{{ lot.variant.product.name }}</a><span class="text-rose-600 font-bold whitespace-nowrap ml-2">{{ lot.expiry_date|date:"d/m" }} · {{ lot.quantity|floatformat:"-3" }}</span></li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                {% if expiring_lots_count %}
+                <p class="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Vencem em até {{ expiry_window }} dias ({{ expiring_lots_count }})</p>
+                <ul class="space-y-2">
+                    {% for lot in expiring_lots %}
+                    <li class="flex justify-between text-xs"><a class="font-bold text-slate-800 hover:text-indigo-600 truncate" href="{% url 'products:product_detail' lot.variant.product_id %}">{{ lot.variant.product.name }}</a><span class="text-amber-600 font-bold whitespace-nowrap ml-2">{{ lot.expiry_date|date:"d/m" }} · {{ lot.quantity|floatformat:"-3" }}</span></li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <!-- Low Stock Alerts -->
             <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm {% if low_stock_count > 0 %}border-rose-200{% endif %}">
                 <h3 class="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
