@@ -2,7 +2,7 @@
 # StockPro / Bibelo - Production Dockerfile
 # Padrao de deploy inspirado no VidalysFlow/Coolify
 # ===========================================
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -17,8 +17,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     libxml2 \
     libxslt1.1 \
-    postgresql-client \
     curl \
+    ca-certificates \
+    gnupg \
+    && mkdir -p /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-17 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
