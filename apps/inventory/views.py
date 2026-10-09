@@ -30,6 +30,11 @@ from .models import ImportBatch, ImportLog, StockMovement, Location, ExportBatch
 from .tasks import process_import_task
 
 
+def _is_admin(request):
+    from apps.accounts.models import MembershipRole
+    return bool(request.membership and request.membership.role in (MembershipRole.OWNER, MembershipRole.ADMIN))
+
+
 @login_required
 def movement_list(request):
     tenant = request.tenant
@@ -77,12 +82,14 @@ def create_movement(request):
     if request.method == 'POST':
         product_identifier = request.POST.get('product_identifier', '').strip()
         movement_type = request.POST.get('type')
-        quantity = int(request.POST.get('quantity', 0))
+        quantity = request.POST.get('quantity', '0').strip().replace(',', '.')
         reason = request.POST.get('reason', '')
-        unit_cost = request.POST.get('unit_cost')
-        location_id = request.POST.get('location')
+        unit_cost = (request.POST.get('unit_cost') or '').strip().replace(',', '.') or None
+        location_id = request.POST.get('location') or None
 
         try:
+            if movement_type == 'ADJ' and not _is_admin(request):
+                raise Exception("Somente administradores podem fazer ajuste absoluto.")
             # Try to find by SKU (variant first, then simple product)
             variant = ProductVariant.objects.filter(
                 Q(sku=product_identifier) | Q(barcode=product_identifier),
@@ -121,7 +128,7 @@ def create_movement(request):
                 product=product,
                 variant=variant,
                 reason=reason,
-                unit_cost=float(unit_cost) if unit_cost else None,
+                unit_cost=unit_cost,
                 location_id=location_id
             )
 
@@ -153,7 +160,9 @@ def create_movement_mobile(request):
         # SKU can come from scanner or search selection
         sku = request.POST.get('sku', '').strip()
         movement_type = request.POST.get('type', 'OUT') # Default to OUT for mobile operational use
-        quantity = int(request.POST.get('quantity', 1))
+        if movement_type not in ('IN', 'OUT'):
+            movement_type = 'OUT'
+        quantity = request.POST.get('quantity', '1').strip().replace(',', '.')
         variant_id = request.POST.get('variant_id') # Explicit variant selection
 
         try:
@@ -164,7 +173,7 @@ def create_movement_mobile(request):
             product = None
 
             if variant_id:
-                variant = ProductVariant.objects.get(pk=variant_id, tenant=tenant)
+                variant = ProductVariant.objects.filter(pk=variant_id, tenant=tenant).first()
             else:
                 # 1. Try exact SKU/Barcode match
                 variant = ProductVariant.objects.filter(
@@ -224,6 +233,8 @@ def import_list(request):
 
 
 @login_required
+@admin_required
+@trial_allows_read
 def import_create(request):
     if request.method == 'POST':
         form = ImportBatchForm(request.POST, request.FILES)
@@ -284,6 +295,7 @@ def import_detail(request, pk):
 
 
 @login_required
+@admin_required
 def delete_import(request, pk):
     batch = get_object_or_404(ImportBatch, pk=pk, tenant=request.tenant)
     if request.method == 'POST':

@@ -5,11 +5,15 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
+from apps.tenants.middleware import admin_required, plan_limit_required, tenant_required
+
 from .forms import EmployeeForm, SystemSettingForm
 from .models import SystemSetting
 
 
 @login_required
+@tenant_required
+@admin_required
 def system_settings(request):
     tenant = request.tenant
     settings_obj = SystemSetting.get_settings(tenant)
@@ -27,6 +31,9 @@ def system_settings(request):
 
 
 @login_required
+@tenant_required
+@admin_required
+@plan_limit_required('users')
 def employee_create(request):
     from apps.accounts.models import MembershipRole, TenantMembership
 
@@ -38,7 +45,11 @@ def employee_create(request):
             user.save()
 
             # Respeita o toggle de permissão do formulário
-            is_admin_toggle = request.POST.get('is_staff') == 'on'
+            # Só o OWNER pode criar outro administrador
+            is_admin_toggle = (
+                request.POST.get('is_staff') == 'on'
+                and request.membership.role == MembershipRole.OWNER
+            )
             role = MembershipRole.ADMIN if is_admin_toggle else MembershipRole.OPERATOR
 
             TenantMembership.objects.create(

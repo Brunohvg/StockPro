@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 import requests
@@ -145,9 +145,25 @@ class StockService:
         """
         Create a stock movement and update stock.
         """
-        quantity = Decimal(str(quantity))
-        if unit_cost is not None:
-            unit_cost = Decimal(str(unit_cost))
+        if tenant is None:
+            raise ValueError("Movimentação exige uma empresa (tenant) definida.")
+        if movement_type not in ('IN', 'OUT', 'ADJ'):
+            raise ValueError(f"Tipo de movimento inválido: {movement_type}")
+        try:
+            quantity = Decimal(str(quantity))
+            if unit_cost is not None:
+                unit_cost = Decimal(str(unit_cost))
+        except (InvalidOperation, ValueError, TypeError):
+            raise ValueError("Quantidade ou custo inválido.")
+        if not quantity.is_finite():
+            raise ValueError("Quantidade inválida.")
+        if movement_type == 'ADJ':
+            if quantity < 0:
+                raise ValueError("Ajuste absoluto não pode ser negativo.")
+        elif quantity <= 0:
+            raise ValueError("Quantidade deve ser maior que zero.")
+        if unit_cost is not None and (not unit_cost.is_finite() or unit_cost < 0):
+            raise ValueError("Custo unitário não pode ser negativo.")
         # Resolve by SKU if no direct reference
         if product_sku and not product and not variant:
             # Try variant first (more specific)
@@ -157,6 +173,9 @@ class StockService:
 
             if not product and not variant:
                 raise ValueError(f"Produto/variação com SKU '{product_sku}' não encontrado.")
+
+        if product is not None and product.tenant_id != tenant.pk:
+            raise ValueError("Produto não pertence a esta empresa.")
 
         # Determine target - ALWAYS resolve to variant
         if not variant and product:
@@ -174,8 +193,16 @@ class StockService:
         if not variant:
             raise ValueError("Deve especificar uma variante válida ou um produto simples com SKU.")
 
-        # Lock variant for update
-        target = ProductVariant.objects.select_for_update().get(pk=variant.pk)
+        # Lock variant for update (sempre dentro da empresa informada)
+        target = ProductVariant.objects.select_for_update().filter(pk=variant.pk, tenant=tenant).first()
+        if target is None:
+            raise ValueError("Variação não pertence a esta empresa.")
+
+        # Location precisa pertencer à mesma empresa
+        if location_id:
+            from apps.inventory.models import Location
+            if not Location.objects.filter(pk=location_id, tenant=tenant).exists():
+                raise ValueError("Local de estoque inválido para esta empresa.")
 
         # Fallback for location_id
         if not location_id:

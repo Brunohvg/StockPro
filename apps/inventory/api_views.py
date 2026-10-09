@@ -16,21 +16,14 @@ from rest_framework import status, views
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.core.api.tenant import HasActiveTenant, resolve_api_tenant
 from apps.core.services import StockService
 from apps.products.models import ProductVariant
 
 
 def _resolve_tenant(request):
-    """Resolve tenant do request (middleware ou fallback por membership)."""
-    tenant = getattr(request, 'tenant', None)
-    if not tenant and request.user.is_authenticated:
-        from apps.accounts.models import TenantMembership
-        membership = TenantMembership.objects.filter(
-            user=request.user, is_active=True
-        ).first()
-        if membership:
-            tenant = membership.tenant
-    return tenant
+    """Resolve tenant do request (validado por HasActiveTenant)."""
+    return getattr(request, 'tenant', None) or resolve_api_tenant(request)
 
 
 class ProductSearchView(views.APIView):
@@ -61,7 +54,7 @@ class ProductSearchView(views.APIView):
         ]
     }
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveTenant]
 
     def get(self, request):
         query = request.GET.get('q', '').strip()
@@ -133,7 +126,7 @@ class OrderConsumptionView(views.APIView):
         "errors": [{"sku": "SKU-999", "error": "Produto não encontrado."}]
     }
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveTenant]
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
@@ -226,7 +219,7 @@ class StockEntryView(views.APIView):
         "errors": []
     }
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveTenant]
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):

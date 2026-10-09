@@ -10,7 +10,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from apps.tenants.middleware import plan_limit_required, trial_allows_read
+from apps.tenants.middleware import admin_required, plan_limit_required, trial_allows_read
 
 from .forms import ProductForm, ProductVariantForm
 from .models import (
@@ -260,6 +260,7 @@ def variant_edit(request, pk):
 
 
 @login_required
+@admin_required
 @trial_allows_read
 def variant_delete(request, pk):
     """Excluir variação"""
@@ -285,6 +286,7 @@ def variant_delete(request, pk):
 
 
 @login_required
+@admin_required
 @trial_allows_read
 def product_delete(request, pk):
     """
@@ -329,6 +331,7 @@ def product_delete(request, pk):
 # ============== BULK DELETE ==============
 
 @login_required
+@admin_required
 def bulk_delete(request):
     """
     Exclusão em massa de produtos selecionados.
@@ -416,6 +419,7 @@ def brand_create(request):
 
 
 @login_required
+@trial_allows_read
 def attribute_type_create(request):
     """Criar novo tipo de atributo (Cor, Tamanho, etc.)"""
     if request.method == 'POST':
@@ -430,6 +434,7 @@ def attribute_type_create(request):
 
 
 @login_required
+@admin_required
 def category_delete(request, pk):
     cat = get_object_or_404(Category, pk=pk, tenant=request.tenant)
     if request.method == 'POST':
@@ -439,6 +444,7 @@ def category_delete(request, pk):
 
 
 @login_required
+@admin_required
 def brand_delete(request, pk):
     brand = get_object_or_404(Brand, pk=pk, tenant=request.tenant)
     if request.method == 'POST':
@@ -448,6 +454,7 @@ def brand_delete(request, pk):
 
 
 @login_required
+@admin_required
 def attribute_type_delete(request, pk):
     attr = get_object_or_404(AttributeType, pk=pk, tenant=request.tenant)
     if request.method == 'POST':
@@ -512,6 +519,9 @@ def product_search_api(request):
 @login_required
 def ai_enhance_product_api(request):
     """API para preenchimento inteligente via IA baseado no nome do produto"""
+    plan = getattr(request.tenant, 'plan', None) if request.tenant else None
+    if not plan or not plan.has_ai_matching:
+        return JsonResponse({'error': 'Recurso de IA não disponível no seu plano.'}, status=403)
     name = request.GET.get('name', '')
     if not name or len(name) < 3:
         return JsonResponse({'error': 'Nome muito curto'}, status=400)
@@ -572,6 +582,7 @@ def consolidation_suggestions(request):
 
 
 @login_required
+@admin_required
 def consolidation_execute(request):
     """
     Executa a consolidação de produtos selecionados.

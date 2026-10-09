@@ -23,7 +23,7 @@ class ProductVariantSerializer(TenantSerializerMixin, serializers.ModelSerialize
             'minimum_stock', 'avg_unit_cost', 'external_id',
             'external_platform', 'is_active'
         ]
-        read_only_fields = ['current_stock']
+        read_only_fields = ['current_stock', 'avg_unit_cost']
 
 class ProductSerializer(TenantSerializerMixin, serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, read_only=True)
@@ -39,4 +39,12 @@ class ProductSerializer(TenantSerializerMixin, serializers.ModelSerializer):
             'avg_unit_cost', 'external_id', 'external_platform',
             'is_active', 'variants'
         ]
-        read_only_fields = ['current_stock']
+        read_only_fields = ['current_stock', 'avg_unit_cost']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        tenant = getattr(request, 'tenant', None) if request else None
+        # Impede vincular categoria/marca de outra empresa
+        self.fields['category'].queryset = Category.objects.filter(tenant=tenant)
+        self.fields['brand'].queryset = Brand.objects.filter(tenant=tenant)

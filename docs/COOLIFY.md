@@ -145,3 +145,10 @@ Revisão de segurança solicitada pelo usuário: [SECURITY_REVIEW_2026-10-09.md]
 Deploy ljaxnpduxtymcovulezcgrbk, commit 1c3776bec3c6cff2cf8aab2a08fa7191ca34654e: Success; aplicação Running em 09/10/2026, por volta de 12:25 America/Sao_Paulo. Após esse deploy, o login do admin abriu visualmente estilizado. As 5 folhas CSS (base, dark_mode, nav_sidebar, login, responsive) e os 2 scripts (theme, nav_sidebar) foram baixados em paralelo pela URL pública: HTTP 200, corpo presente, MIME correto e cache immutable. A verificação local de WhiteNoise/manifesto e a de Gunicorn gthread com 28 requests também passaram.
 
 Nenhuma credencial foi inserida no admin nesta verificação; navegação autenticada não foi testada. O primeiro redeploy de manifesto sozinho teve Success mas não corrigiu o transporte; a prova visual e de downloads foi feita após --no-sendfile. O commit posterior de documentação não altera código executável.
+
+
+## Patch de segurança — 09/10/2026
+
+Revisão/aplicação documentada em [PATCH_REVIEW_2026-10-09.md](PATCH_REVIEW_2026-10-09.md). Inclui cookies Secure, redirect HTTPS com /healthcheck/ isento e HSTS inicial de 3600 segundos. Ambos os Compose encaminham EMAIL_HOST/PORT/HOST_USER/HOST_PASSWORD/USE_TLS, DEFAULT_FROM_EMAIL e opções SECURE_SSL_REDIRECT/SECURE_HSTS_SECONDS. Valores SMTP reais ficam no painel; sem EMAIL_HOST não há envio em produção nem tokens em logs. Recuperação de senha continua dependente de SMTP funcional.
+
+Preservar o header X-Tenant-ID nos clientes da API com múltiplas empresas. O patch não resolve todos os achados da revisão anterior; consulte os limites no novo documento. Limpeza da árvore Git não limpa histórico nem altera volumes de produção.

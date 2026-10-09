@@ -212,6 +212,9 @@
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{{ category_labels|json_script:"category-labels" }}
+{{ category_values|json_script:"category-values" }}
+{{ movements_trend|json_script:"movements-trend" }}
 <script>
     lucide.createIcons();
 
@@ -220,9 +223,9 @@
     new Chart(ctxCategory, {
         type: 'doughnut',
         data: {
-            labels: {{ category_labels|safe }},
+            labels: JSON.parse(document.getElementById('category-labels').textContent),
             datasets: [{
-                data: {{ category_values|safe }},
+                data: JSON.parse(document.getElementById('category-values').textContent),
                 backgroundColor: [
                     '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
                 ],
@@ -251,7 +254,7 @@
 
     // Trend Line Chart
     const ctxTrend = document.getElementById('trendChart').getContext('2d');
-    const trendData = {{ movements_trend|safe }};
+    const trendData = JSON.parse(document.getElementById('movements-trend').textContent);
 
     const labels = [...new Set(trendData.map(d => d.created_at__date))].sort();
     const inData = labels.map(l => {

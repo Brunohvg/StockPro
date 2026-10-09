@@ -75,3 +75,8 @@ test_import_*.xml
 
 # Agent
 .agent
+
+# Dados reais / bancos locais (nunca versionar)
+*.sqlite3*
+db.sqlite3.*
+imports/

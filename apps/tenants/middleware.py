@@ -36,7 +36,6 @@ class TenantMiddleware:
             '/media/',
             '/favicon.ico',
             '/healthcheck/',
-            '/mobile/',
             '/select-company/',
             '/accept-invite/',
         ]

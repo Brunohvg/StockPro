@@ -2,7 +2,10 @@
 Mobile Views — Interface otimizada para operadores em chão de loja/almoxarifado.
 Acessível em /mobile/ — redireciona automaticamente OPERATOR após login.
 """
+from decimal import Decimal
+
 from django.contrib.auth.decorators import login_required
+from apps.tenants.middleware import trial_allows_read
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.utils import timezone
@@ -25,6 +28,7 @@ def mobile_home(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+@trial_allows_read
 def mobile_move(request):
     """
     Tela principal de movimentação mobile.
@@ -40,6 +44,9 @@ def mobile_move(request):
         'now': timezone.localtime(timezone.now()),
     }
 
+    if tenant is None:
+        return redirect('accounts:no_company')
+
     if request.method == 'POST':
         movement_type = request.POST.get('type', 'OUT')
         sku = request.POST.get('sku', '').strip()
@@ -47,7 +54,9 @@ def mobile_move(request):
         reason = request.POST.get('reason', '').strip() or ('Saída via App' if movement_type == 'OUT' else 'Entrada via App')
 
         try:
-            quantity = float(quantity_raw)
+            if movement_type not in ('IN', 'OUT'):
+                raise ValueError("Tipo de movimento inválido no mobile.")
+            quantity = Decimal(quantity_raw)
             if quantity <= 0:
                 raise ValueError("Quantidade deve ser maior que zero.")
 
@@ -98,6 +107,8 @@ def mobile_move(request):
 def mobile_history(request):
     """Histórico de movimentos do usuário logado (últimas 24h)."""
     tenant = _get_tenant(request)
+    if tenant is None:
+        return redirect('accounts:no_company')
     since = timezone.now() - timezone.timedelta(hours=24)
     movements = StockMovement.objects.filter(
         tenant=tenant,

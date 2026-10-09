@@ -5,6 +5,8 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -41,7 +43,7 @@ def signup_view(request):
         company_name = request.POST.get('company_name', '').strip()
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
-        email = request.POST.get('email', '').strip()
+        email = request.POST.get('email', '').strip().lower()
         password = request.POST.get('password', '')
         plan_name = request.GET.get('plan', 'GRATUITO')
 
@@ -50,10 +52,12 @@ def signup_view(request):
             errors['company_name'] = 'Nome da empresa é obrigatório.'
         if not email:
             errors['email'] = 'E-mail é obrigatório.'
-        if User.objects.filter(email=email).exists():
+        if email and User.objects.filter(Q(email__iexact=email) | Q(username__iexact=email)).exists():
             errors['email'] = 'Este e-mail já está cadastrado.'
-        if len(password) < 6:
-            errors['password'] = 'Senha deve ter pelo menos 6 caracteres.'
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            errors['password'] = ' '.join(e.messages)
 
         # Check for duplicate CNPJ
         cnpj = request.POST.get('cnpj', '').strip() or None
@@ -119,9 +123,19 @@ def billing_view(request):
 
 @login_required
 def billing_upgrade(request, plan_id):
-    """Upgrade tenant to a new plan"""
+    """Upgrade tenant to a new plan.
+
+    Sem integração de pagamento, troca de plano é operação administrativa:
+    apenas superusuário pode executar. Clientes devem solicitar via suporte.
+    """
+    if not request.user.is_superuser:
+        messages.info(request, "Para mudar de plano, fale com o suporte pelo WhatsApp.")
+        return redirect('tenants:billing')
     if request.method == 'POST':
         tenant = request.tenant
+        if tenant is None:
+            messages.error(request, "Selecione uma empresa antes de alterar o plano.")
+            return redirect('tenants:billing')
         new_plan = get_object_or_404(Plan, pk=plan_id)
         tenant.plan = new_plan
         tenant.subscription_status = 'ACTIVE'

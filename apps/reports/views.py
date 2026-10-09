@@ -144,6 +144,15 @@ def inventory_reports(request):
     ).values('created_at__date', 'type').annotate(
         total_qty=Sum('quantity')
     ).order_by('created_at__date'))
+    # Serializável para json_script (date/Decimal quebravam o JS do template)
+    movements_trend = [
+        {
+            'created_at__date': m['created_at__date'].isoformat(),
+            'type': m['type'],
+            'total_qty': float(m['total_qty'] or 0),
+        }
+        for m in movements_trend
+    ]
 
     # Collect data for AI insights
     from .services import BIService
@@ -314,7 +323,9 @@ def employee_list(request):
 @login_required
 def employee_detail(request, user_id):
     from django.shortcuts import get_object_or_404
-    employee = get_object_or_404(User, id=user_id)
+    employee = get_object_or_404(
+        User.objects.filter(memberships__tenant=request.tenant).distinct(), id=user_id
+    )
     movements = StockMovement.objects.filter(
         tenant=request.tenant, user=employee
     ).select_related('product', 'variant', 'variant__product').order_by('-created_at')[:50]

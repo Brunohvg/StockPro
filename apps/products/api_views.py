@@ -24,6 +24,12 @@ class ProductViewSet(BaseTenantViewSet):
         staged = request.query_params.get('staged', 'false').lower() == 'true'
         tenant = self.get_tenant() # Ensure tenant resolution
 
+        if not staged and tenant.products_limit_reached:
+            return Response(
+                {"error": f"Limite de {tenant.plan.max_products} produtos do plano atingido."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if staged:
             from apps.inventory.models import ImportItem
             data = request.data

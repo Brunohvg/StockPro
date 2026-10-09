@@ -5,6 +5,8 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.contrib.auth.views import LoginView
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
@@ -230,7 +232,7 @@ def invite_user(request):
             return redirect('accounts:invite_user')
 
         # Check if already member
-        existing_user = User.objects.filter(email=email).first()
+        existing_user = User.objects.filter(email__iexact=email).first()
         if existing_user:
             if TenantMembership.objects.filter(user=existing_user, tenant=request.tenant).exists():
                 messages.error(request, "Este usuário já é membro da empresa.")
@@ -332,9 +334,15 @@ def accept_invite(request, token):
         last_name = request.POST.get('last_name', '').strip()
         password = request.POST.get('password', '')
 
-        if len(password) < 6:
-            messages.error(request, "Senha deve ter pelo menos 6 caracteres.")
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            messages.error(request, ' '.join(e.messages))
             return render(request, 'accounts/accept_invite.html', {'invite': invite})
+
+        if User.objects.filter(username__iexact=invite.email).exists():
+            messages.error(request, "Já existe uma conta com este identificador. Faça login.")
+            return redirect(f'/accounts/login/?next=/accounts/accept-invite/{token}/')
 
         # Create user
         username = invite.email.split('@')[0][:30]
@@ -343,7 +351,7 @@ def accept_invite(request, token):
 
         user = User.objects.create_user(
             username=username,
-            email=invite.email,
+            email=invite.email.lower(),
             password=password,
             first_name=first_name,
             last_name=last_name

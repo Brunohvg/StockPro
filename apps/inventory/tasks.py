@@ -193,6 +193,10 @@ def process_csv_stock_adjustment(batch):
                     error_count += 1
                     continue
 
+                if qty == 0:
+                    log_entries.append(f"Linha {index+1}: SKU '{sku}' com quantidade 0, ignorado.")
+                    continue
+
                 # GENERATE STOCK MOVEMENT (NEVER UPDATE DIRECTLY)
                 unit_cost = parse_decimal_br(str(cost_raw)) if pd.notna(cost_raw) and cost_raw else None
 

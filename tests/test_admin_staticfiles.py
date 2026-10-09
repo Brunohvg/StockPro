@@ -6,11 +6,11 @@ from django.conf import settings
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.core.management import call_command
 from django.http import HttpResponse
-from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from whitenoise.middleware import WhiteNoiseMiddleware
 
 
-class AdminStaticFilesTests(SimpleTestCase):
+class AdminStaticFilesTests(TestCase):
     def test_collected_admin_assets_are_versioned_and_served_without_debug(self):
         assets = {
             "admin/css/base.css": "text/css",
