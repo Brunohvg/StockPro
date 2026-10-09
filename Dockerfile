@@ -35,7 +35,7 @@ RUN chmod +x /usr/local/bin/entrypoint.prod.sh
 
 COPY . /app
 
-RUN mkdir -p /app/staticfiles /app/media /app/imports /data/backups
+RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data/backups
 
 EXPOSE 8000
 
