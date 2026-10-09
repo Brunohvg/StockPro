@@ -77,7 +77,9 @@ class Tenant(models.Model):
         Product(SIMPLE) + Variants causa double-counting.
         """
         from apps.products.models import ProductVariant
-        return ProductVariant.objects.filter(tenant=self).count()
+        # Produtos arquivados não contam no limite do plano
+        return ProductVariant.objects.filter(
+            tenant=self, is_active=True, product__is_active=True).count()
 
     @property
     def users_count(self):
@@ -121,3 +123,30 @@ class TenantMixin(models.Model):
 
     class Meta:
         abstract = True
+
+
+class BackupRun(models.Model):
+    """Registro de cada execução do backup (visível no admin)."""
+    STATUS = [
+        ('RUNNING', 'Em andamento'),
+        ('SUCCESS', 'Concluído'),
+        ('LOCAL_ONLY', 'Concluído só no servidor'),
+        ('FAILED', 'Falhou'),
+    ]
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    trigger = models.CharField(max_length=20, default='beat')
+    status = models.CharField(max_length=20, choices=STATUS, default='RUNNING')
+    db_size_bytes = models.BigIntegerField(default=0)
+    media_size_bytes = models.BigIntegerField(default=0)
+    encrypted = models.BooleanField(default=False)
+    remote_keys = models.JSONField(default=list, blank=True)
+    message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-started_at']
+        verbose_name = "Execução de backup"
+        verbose_name_plural = "Execuções de backup"
+
+    def __str__(self):
+        return f"Backup {self.started_at:%d/%m/%Y %H:%M} ({self.get_status_display()})"
