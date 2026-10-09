@@ -84,6 +84,9 @@
         </div>
 
         <div class="flex items-center gap-3">
+            <a href="{% url 'inventory:nfe_list' %}" class="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 hover:border-indigo-300 text-slate-700 rounded-2xl font-bold transition-all text-sm">
+                <i data-lucide="receipt-text" class="w-4 h-4"></i> NF-e (XML) <span class="text-[9px] font-black uppercase text-amber-600">Beta</span>
+            </a>
             <a href="{% url 'inventory:import_create' %}" class="flex items-center gap-2 px-6 py-3 bg-slate-900 hover:bg-indigo-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-slate-900/10 active:scale-95 group text-sm">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Nova Importação
