@@ -39,7 +39,7 @@ class TestArquivar:
         assert r.status_code == 302
         assert not Product.objects.filter(pk=p.pk).exists()
 
-    def test_produto_com_historico_e_arquivado_e_saldo_zerado(self):
+    def test_produto_com_historico_e_arquivado_preservando_saldo(self):
         u, t = _member()
         p = Product.objects.create(tenant=t, name='Caneta', sku='CAN-1')
         StockService.create_movement(t, u, 'IN', 10, product=p, unit_cost=2)
@@ -48,10 +48,9 @@ class TestArquivar:
         p.refresh_from_db()
         assert p.is_active is False
         assert p.variants.first().is_active is False
-        assert _stock(p) == 0
+        assert _stock(p) == 7
         movs = list(StockMovement.objects.filter(product=p).order_by('created_at'))
-        assert [m.type for m in movs] == ['IN', 'OUT', 'ADJ']  # nada apagado
-        assert movs[-1].source == 'ARCHIVE'
+        assert [m.type for m in movs] == ['IN', 'OUT']  # nada apagado
 
     def test_arquivar_sem_zerar_mantem_saldo(self):
         u, t = _member()
@@ -66,7 +65,7 @@ class TestArquivar:
         u, t = _member()
         p = Product.objects.create(tenant=t, name='Leite', sku='LEI-1')
         StockService.create_movement(t, u, 'IN', 6, product=p, lot_number='L1', expiry_date='31/12/2099')
-        ProductArchiveService.remove_product(p, u)
+        ProductArchiveService.remove_product(p, u, zero_stock=True)
         assert StockLot.objects.get(lot_number='L1').quantity == 0
 
     def test_arquivado_nao_aceita_movimentacao(self):
@@ -119,8 +118,8 @@ class TestArquivar:
         StockService.create_movement(t, u, 'IN', 2, variant=v)
         _client(u).post(f'/products/variants/{v.pk}/delete/')
         v.refresh_from_db()
-        assert v.is_active is False and v.current_stock == 0
-        assert StockMovement.objects.filter(variant=v).count() == 2
+        assert v.is_active is False and v.current_stock == 2
+        assert StockMovement.objects.filter(variant=v).count() == 1
 
     def test_exclusao_em_massa_mista(self):
         u, t = _member()
