@@ -54,7 +54,7 @@ def env(settings, tmp_path, monkeypatch):
     open(os.path.join(settings.MEDIA_ROOT, 'exports', 'tmp.csv'), 'wb').write(b'x')
     settings.BACKUP_S3_BUCKET = 'bucket'
     settings.BACKUP_S3_PREFIX = 'stockpro/'
-    settings.BACKUP_ENCRYPTION_PASSPHRASE = 'senha-de-teste-123'
+    settings.BACKUP_ENCRYPTION_PASSPHRASE = 'senha-de-teste-123-com-mais-caracteres'
     settings.BACKUP_INCLUDE_MEDIA = True
     settings.BACKUP_ALERT_EMAIL = 'ops@example.com'
     fake = FakeS3()
