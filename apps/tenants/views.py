@@ -169,7 +169,10 @@ def admin_panel_view(request):
     active_count = Tenant.objects.filter(subscription_status='ACTIVE').count()
     trial_count = Tenant.objects.filter(subscription_status='TRIAL').count()
 
+    from .backup_status import health as backup_health
+
     return render(request, 'tenants/admin_panel.html', {
+        'backup_health': backup_health(),
         'tenants': tenants,
         'plans': plans,
         'active_count': active_count,
@@ -201,3 +204,88 @@ def admin_tenant_update(request):
         messages.success(request, f"Empresa '{tenant.name}' atualizada com sucesso!")
 
     return redirect('tenants:admin_panel')
+
+
+# ─── Backups (só superusuário da plataforma) ─────────────────────────────────
+# O backup contém o banco de TODAS as empresas: a tela mostra a situação e
+# permite rodar/conferir, mas nunca oferece download pelo navegador.
+
+def _superuser_only(request):
+    if not request.user.is_superuser:
+        messages.error(request, "Acesso restrito a administradores.")
+        return redirect('reports:dashboard')
+    return None
+
+
+@login_required
+def admin_backups_view(request):
+    denied = _superuser_only(request)
+    if denied:
+        return denied
+    from django.conf import settings as dj_settings
+
+    from . import backup_status
+    from .models import BackupRun
+
+    runs = list(BackupRun.objects.all()[:40])
+    for run in runs:
+        run.is_verify = run.trigger == backup_status.VERIFY
+        run.is_stale = backup_status.is_stale_running(run)
+    return render(request, 'tenants/admin_backups.html', {
+        'health': backup_status.health(),
+        'runs': runs,
+        'disk': backup_status.local_disk(),
+        'cfg': {
+            'bucket': getattr(dj_settings, 'BACKUP_S3_BUCKET', ''),
+            'endpoint': getattr(dj_settings, 'BACKUP_S3_ENDPOINT_URL', '') or 'AWS S3',
+            'prefix': getattr(dj_settings, 'BACKUP_S3_PREFIX', ''),
+            'remote_days': getattr(dj_settings, 'BACKUP_REMOTE_RETENTION_DAYS', None),
+            'remote_min': getattr(dj_settings, 'BACKUP_REMOTE_MIN_KEEP', None),
+            'local_days': getattr(dj_settings, 'BACKUP_RETENTION_DAYS', None),
+            'include_media': getattr(dj_settings, 'BACKUP_INCLUDE_MEDIA', False),
+            'alert_email': getattr(dj_settings, 'BACKUP_ALERT_EMAIL', '') or ', '.join(
+                e for _, e in getattr(dj_settings, 'ADMINS', [])),
+        },
+    })
+
+
+def _enqueue(request, task, ok_message):
+    try:
+        task.delay(requested_by=request.user.email or request.user.username)
+    except Exception as exc:  # broker fora do ar
+        messages.error(request, f"Não foi possível agendar: a fila de tarefas (Redis/worker) não respondeu ({type(exc).__name__}).")
+    else:
+        messages.success(request, ok_message)
+    return redirect('tenants:admin_backups')
+
+
+@login_required
+def admin_backup_run(request):
+    denied = _superuser_only(request)
+    if denied:
+        return denied
+    if request.method != 'POST':
+        return redirect('tenants:admin_backups')
+    from .backup_status import running_backup
+    from .backup_task import manual_backup
+    if running_backup():
+        messages.warning(request, "Já existe um backup em andamento. Aguarde ele terminar.")
+        return redirect('tenants:admin_backups')
+    return _enqueue(request, manual_backup,
+                    "Backup iniciado. Atualize a página em alguns minutos para ver o resultado.")
+
+
+@login_required
+def admin_backup_verify(request):
+    denied = _superuser_only(request)
+    if denied:
+        return denied
+    if request.method != 'POST':
+        return redirect('tenants:admin_backups')
+    from .backup import s3_enabled
+    from .backup_task import verify_backup
+    if not s3_enabled():
+        messages.error(request, "A conferência baixa o backup do bucket, e o bucket não está configurado (BACKUP_S3_BUCKET).")
+        return redirect('tenants:admin_backups')
+    return _enqueue(request, verify_backup,
+                    "Conferência iniciada: o último backup será baixado, aberto e checado.")
