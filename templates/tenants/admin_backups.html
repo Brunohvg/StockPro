@@ -53,7 +53,7 @@
           <p class="font-bold">{{ health.headline }}</p>
           <p class="text-xs mt-2 leading-relaxed">{{ health.detail }}</p>
         </div>
-        <p class="text-xs text-slate-400 mt-4">Última verificação remota: {% if health.last_verify %}{{ health.last_verify.finished_at|date:"d/m/Y H:i" }} · {{ health.last_verify.get_status_display }}{% else %}Não realizada{% endif %}</p>
+        <p class="text-xs text-slate-400 mt-4">Última verificação remota: {% if health.last_verify %}{{ health.last_verify.finished_at|date:"d/m/Y H:i" }} · {% if health.last_verify.status == 'SUCCESS' %}Íntegro{% else %}{{ health.last_verify.get_status_display }}{% endif %}{% else %}Não realizada{% endif %}</p>
         {% if health.running %}<p class="text-xs text-indigo-300 mt-2">Backup em andamento desde {{ health.running.started_at|date:"d/m H:i" }}</p>{% endif %}
       </div>
     </div>
@@ -74,7 +74,7 @@
         <thead class="bg-slate-50 text-slate-500 uppercase text-xs"><tr><th class="text-left p-4">Data</th><th class="text-left p-4">Origem</th><th class="text-left p-4">Situação</th><th class="text-right p-4">Banco</th><th class="text-right p-4">Mídia</th><th class="text-left p-4">Detalhes</th></tr></thead>
         <tbody class="divide-y divide-slate-100">
           {% for run in runs %}
-          <tr><td class="p-4 whitespace-nowrap">{{ run.started_at|date:"d/m/Y H:i" }}</td><td class="p-4">{% if run.is_verify %}Verificação{% elif run.trigger == 'beat' %}Automático{% else %}Manual{% endif %}</td><td class="p-4"><span class="font-semibold {% if run.status == 'SUCCESS' %}text-emerald-700{% elif run.status == 'LOCAL_ONLY' %}text-amber-700{% elif run.status == 'FAILED' %}text-rose-700{% else %}text-indigo-700{% endif %}">{% if run.is_stale %}Interrompido{% else %}{{ run.get_status_display }}{% endif %}</span></td><td class="p-4 text-right">{% if run.db_size_bytes %}{{ run.db_size_bytes|filesizeformat }}{% else %}—{% endif %}</td><td class="p-4 text-right">{% if run.media_size_bytes %}{{ run.media_size_bytes|filesizeformat }}{% else %}—{% endif %}</td><td class="p-4 text-xs text-slate-500 max-w-md break-words">{{ run.message|truncatechars:250 }}</td></tr>
+          <tr><td class="p-4 whitespace-nowrap">{{ run.started_at|date:"d/m/Y H:i" }}</td><td class="p-4">{% if run.is_verify %}Verificação{% elif run.trigger == 'beat' %}Automático{% else %}Manual{% endif %}</td><td class="p-4"><span class="font-semibold {% if run.status == 'SUCCESS' %}text-emerald-700{% elif run.status == 'LOCAL_ONLY' %}text-amber-700{% elif run.status == 'FAILED' %}text-rose-700{% else %}text-indigo-700{% endif %}">{% if run.is_stale %}Interrompido{% else %}{{ run.get_status_display }}{% endif %}</span></td><td class="p-4 text-right">{% if run.db_size_bytes %}{{ run.db_size_bytes|filesizeformat }}{% else %}—{% endif %}</td><td class="p-4 text-right">{% if run.media_size_bytes %}{{ run.media_size_bytes|filesizeformat }}{% else %}—{% endif %}</td><td class="p-4 text-xs text-slate-500 max-w-md break-words">{{ run.message|truncatechars:250 }}{% if run.remote_keys %}<div class="mt-1 text-slate-400 break-all">{{ run.remote_keys|join:', ' }}</div>{% endif %}</td></tr>
           {% empty %}<tr><td colspan="6" class="p-10 text-center text-slate-500">Nenhum backup registrado. Confira se o worker e o Celery Beat estão ativos.</td></tr>{% endfor %}
         </tbody>
       </table>
