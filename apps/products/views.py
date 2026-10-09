@@ -33,6 +33,12 @@ def product_list(request):
     tenant = request.tenant
     products = Product.objects.filter(tenant=tenant).select_related('category', 'brand').prefetch_related('variants').order_by('name')
 
+    status_filter = request.GET.get('status', '')  # '' ativos | archived | all
+    if status_filter == 'archived':
+        products = products.filter(is_active=False)
+    elif status_filter != 'all':
+        products = products.filter(is_active=True)
+
     query = request.GET.get('q', '')
     category = request.GET.get('category', '')
     product_type = request.GET.get('type', '')
@@ -80,6 +86,8 @@ def product_list(request):
         'selected_category': category,
         'selected_type': product_type,
         'stock_filter': stock_filter,
+        'status_filter': status_filter,
+        'archived_count': Product.objects.filter(tenant=tenant, is_active=False).count(),
         'view_mode': view_mode,
         'total_count': total_count,
         'ProductType': ProductType,
@@ -281,28 +289,32 @@ def variant_edit(request, pk):
     })
 
 
+def _zero_stock_requested(request):
+    # Checkbox "zerar saldo" vem marcado por padrão no formulário
+    return request.POST.get('zero_stock', 'on') in ('on', '1', 'true')
+
+
 @login_required
 @admin_required
 @trial_allows_read
 def variant_delete(request, pk):
-    """Excluir variação"""
+    """Exclui a variação sem movimentações; com histórico, arquiva."""
+    from .services import ProductArchiveService
+
     variant = get_object_or_404(ProductVariant, pk=pk, tenant=request.tenant)
     product_pk = variant.product.pk
 
     if request.method == 'POST':
-        from apps.inventory.models import StockMovement
-
-        if not variant.can_be_safely_deleted:
-            messages.error(
-                request,
-                "Não é possível excluir esta variação pois existem movimentações de saída vinculadas."
-            )
+        try:
+            result = ProductArchiveService.remove_variant(
+                variant, request.user, zero_stock=_zero_stock_requested(request))
+        except ValueError as e:
+            messages.error(request, f"Não foi possível arquivar: {e}")
             return redirect('products:product_detail', pk=product_pk)
-
-        # Excluir movimentações primeiro
-        StockMovement.objects.filter(variant=variant).delete()
-        variant.delete()
-        messages.success(request, "Variação e suas movimentações foram removidas!")
+        if result == 'deleted':
+            messages.success(request, "Variação excluída (não tinha movimentações).")
+        else:
+            messages.success(request, "Variação arquivada. O histórico de movimentações foi preservado.")
 
     return redirect('products:product_detail', pk=product_pk)
 
@@ -312,57 +324,62 @@ def variant_delete(request, pk):
 @trial_allows_read
 def product_delete(request, pk):
     """
-    Excluir produto com verificação de segurança.
-    - Só exclui se não houver movimentações de SAÍDA (OUT)
-    - Se tiver apenas entradas, exclui as movimentações junto
+    Remove um produto sem apagar histórico:
+    - sem nenhuma movimentação: exclui de vez;
+    - com movimentações: arquiva (e zera o saldo com ajuste registrado, se marcado).
     """
-    from apps.inventory.models import StockMovement
+    from .services import ProductArchiveService
 
     product = get_object_or_404(Product, pk=pk, tenant=request.tenant)
 
     if request.method == 'POST':
         name = product.name
-
-        if not product.can_be_safely_deleted:
-            messages.error(
-                request,
-                f"Não é possível excluir '{name}' pois existem movimentações de saída vinculadas. "
-                f"Desative o produto ao invés de excluí-lo."
-            )
-            return redirect('products:product_detail', pk=pk)
-
         try:
-            # Excluir movimentações de entrada/ajuste primeiro
-            if product.is_variable:
-                for variant in product.variants.all():
-                    StockMovement.objects.filter(variant=variant).delete()
-            else:
-                StockMovement.objects.filter(product=product).delete()
-
-            # Agora pode excluir o produto
-            product.delete()
-            messages.success(request, f"Produto '{name}' e suas movimentações foram removidos com sucesso!")
-            return redirect('products:product_list')
-
-        except Exception as e:
-            messages.error(request, f"Erro ao excluir: {str(e)}")
+            result = ProductArchiveService.remove_product(
+                product, request.user, zero_stock=_zero_stock_requested(request))
+        except ValueError as e:
+            messages.error(request, f"Não foi possível arquivar '{name}': {e}")
             return redirect('products:product_detail', pk=pk)
+        if result == 'deleted':
+            messages.success(request, f"Produto '{name}' excluído (não tinha movimentações).")
+            return redirect('products:product_list')
+        messages.success(
+            request,
+            f"Produto '{name}' arquivado. O histórico foi preservado e ele pode ser reativado em Produtos > Arquivados.")
+        return redirect('products:product_detail', pk=pk)
 
+    return redirect('products:product_detail', pk=pk)
+
+
+@login_required
+@admin_required
+@trial_allows_read
+def product_restore(request, pk):
+    """Reativa um produto arquivado (respeita o limite do plano)."""
+    from .services import ArchiveError, ProductArchiveService
+
+    product = get_object_or_404(Product, pk=pk, tenant=request.tenant)
+    if request.method == 'POST':
+        try:
+            ProductArchiveService.restore_product(product)
+            messages.success(request, f"Produto '{product.name}' reativado.")
+        except ArchiveError as e:
+            messages.error(request, str(e))
     return redirect('products:product_detail', pk=pk)
 
 # ============== BULK DELETE ==============
 
 @login_required
 @admin_required
+@trial_allows_read
 def bulk_delete(request):
     """
-    Exclusão em massa de produtos selecionados.
-    Só exclui produtos sem movimentações de saída.
+    Remoção em massa: exclui os produtos sem movimentações e arquiva os demais.
     """
     if request.method != 'POST':
         return redirect('products:product_list')
 
-    from apps.inventory.models import StockMovement
+    from .services import ProductArchiveService
 
     product_ids = request.POST.getlist('product_ids')
 
@@ -370,27 +387,23 @@ def bulk_delete(request):
         messages.warning(request, "Nenhum produto selecionado.")
         return redirect('products:product_list')
 
-    products = Product.objects.filter(tenant=request.tenant, pk__in=product_ids)
+    products = Product.objects.filter(tenant=request.tenant, pk__in=product_ids, is_active=True)
+    zero_stock = _zero_stock_requested(request)
 
-    deleted_count = 0
-    skipped_count = 0
-
+    counts = {'deleted': 0, 'archived': 0}
+    failed = []
     for product in products:
-        if product.can_be_safely_deleted:
-            if product.is_variable:
-                for variant in product.variants.all():
-                    StockMovement.objects.filter(variant=variant).delete()
-            else:
-                StockMovement.objects.filter(product=product).delete()
-            product.delete()
-            deleted_count += 1
-        else:
-            skipped_count += 1
+        try:
+            counts[ProductArchiveService.remove_product(product, request.user, zero_stock=zero_stock)] += 1
+        except ValueError as e:
+            failed.append(f"{product.name}: {e}")
 
-    if deleted_count > 0:
-        messages.success(request, f"✅ {deleted_count} produto(s) excluído(s)!")
-    if skipped_count > 0:
-        messages.warning(request, f"⚠️ {skipped_count} produto(s) protegido(s) por terem saídas.")
+    if counts['deleted']:
+        messages.success(request, f"{counts['deleted']} produto(s) sem movimentações excluído(s).")
+    if counts['archived']:
+        messages.success(request, f"{counts['archived']} produto(s) com histórico arquivado(s).")
+    for msg in failed[:5]:
+        messages.error(request, msg)
 
     return redirect('products:product_list')
 
@@ -519,7 +532,8 @@ def product_search_api(request):
     # Buscar variantes
     variants = ProductVariant.objects.filter(
         tenant=tenant,
-        is_active=True
+        is_active=True,
+        product__is_active=True,
     ).filter(
         Q(sku__icontains=query) |
         Q(name__icontains=query) |
@@ -541,14 +555,15 @@ def product_search_api(request):
 @login_required
 def ai_enhance_product_api(request):
     """API para preenchimento inteligente via IA baseado no nome do produto"""
-    plan = getattr(request.tenant, 'plan', None) if request.tenant else None
-    if not plan or not plan.has_ai_matching:
-        return JsonResponse({'error': 'Recurso de IA não disponível no seu plano.'}, status=403)
+    from apps.core.services import AIService, AIUnavailable
+
+    try:
+        AIService.check_tenant_access(request.tenant)
+    except AIUnavailable as e:
+        return JsonResponse({'error': str(e)}, status=e.status)
     name = request.GET.get('name', '')
     if not name or len(name) < 3:
         return JsonResponse({'error': 'Nome muito curto'}, status=400)
-
-    from apps.core.services import AIService
 
     prompt = f"""
     Tarefa: Enriquecer dados de um produto comercial para inventário.
@@ -563,7 +578,10 @@ def ai_enhance_product_api(request):
     Retorne APENAS o JSON.
     """
 
-    content = AIService.call_ai(prompt, schema="json")
+    try:
+        content = AIService.call_for_tenant(request.tenant, prompt, schema="json")
+    except AIUnavailable as e:
+        return JsonResponse({'error': str(e)}, status=e.status)
     if not content:
         return JsonResponse({'error': 'Falha na IA'}, status=500)
 
