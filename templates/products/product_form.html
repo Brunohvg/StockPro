@@ -233,6 +233,14 @@
                                 class="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-black focus:bg-white focus:border-emerald-600 transition-all outline-none">
                         </div>
                     </div>
+                    {% if not is_edit %}
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 rounded-2xl bg-emerald-50 p-5">
+                        <div><label class="block text-xs font-bold mb-2">Lote inicial</label><input name="initial_lot_number" maxlength="60" value="{{ form.initial_lot_number.value|default:'' }}" class="w-full border rounded-xl p-3"></div>
+                        <div><label class="block text-xs font-bold mb-2">Fabricação</label>{{ form.initial_manufacture_date }}</div>
+                        <div><label class="block text-xs font-bold mb-2">Validade</label>{{ form.initial_expiry_date }}</div>
+                        <p class="md:col-span-3 text-xs text-slate-600">Os campos registram o lote do estoque inicial. Para outros lotes, faça novas entradas. Com controle de validade e estoque inicial positivo, a data de validade é obrigatória.</p>
+                    </div>
+                    {% endif %}
                     <label class="mt-6 flex items-start gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 cursor-pointer">
                         <input type="checkbox" name="tracks_expiry" {% if form.tracks_expiry.value %}checked{% endif %} class="mt-1 w-4 h-4 text-emerald-600 rounded">
                         <span>
