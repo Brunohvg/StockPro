@@ -42,9 +42,6 @@ services:
       - stockpro_backups:/data/backups
     depends_on:
       redis:
-    networks:
-      - default
-      - coolify_shared
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthcheck/ || exit 1"]
@@ -132,6 +129,9 @@ services:
 
 
   redis:
+    networks:
+      - default
+      - coolify_shared
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
