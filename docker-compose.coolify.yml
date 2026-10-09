@@ -105,7 +105,7 @@ services:
         - CMD
         - python
         - -c
-        - "import os; from pathlib import Path; import redis; cmd = Path('/proc/1/cmdline').read_bytes().split(bytes([0])); assert b'celery' in cmd and b'beat' in cmd, 'Celery Beat process missing'; assert redis.Redis.from_url(os.environ['CELERY_BROKER_URL'], socket_connect_timeout=3, socket_timeout=3).ping()"
+        - "import os; from pathlib import Path; import redis; cmd = Path('/proc/1/cmdline').read_bytes().split(bytes([0])); assert any(Path(os.fsdecode(arg)).name == 'celery' for arg in cmd) and b'beat' in cmd, 'Celery Beat process missing'; assert redis.Redis.from_url(os.environ['CELERY_BROKER_URL'], socket_connect_timeout=3, socket_timeout=3).ping()"
       interval: 30s
       timeout: 10s
       start_period: 60s
