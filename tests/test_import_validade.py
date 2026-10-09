@@ -61,6 +61,35 @@ class TestLotes:
         assert _stock(p) == 8
         assert sorted((a.lot.lot_number, a.quantity) for a in mov.lot_allocations.all()) == [('A', 5), ('B', 2)]
 
+
+    def test_lote_vencido_nao_pode_ser_consumido(self):
+        u, t = _member()
+        p = _product(t)
+        StockService.create_movement(t, u, 'IN', 5, product=p,
+                                     expiry_date=TODAY - timedelta(days=1), lot_number='VENCIDO')
+        with pytest.raises(ValueError, match='vencido'):
+            StockService.create_movement(t, u, 'OUT', 1, product=p)
+        lot = StockLot.objects.get(lot_number='VENCIDO')
+        with pytest.raises(ValueError, match='vencido'):
+            StockService.create_movement(t, u, 'OUT', 1, product=p, lot_id=lot.pk)
+        assert _stock(p) == 5
+        lot.refresh_from_db()
+        assert lot.quantity == 5
+
+    def test_fefo_ignora_vencido_e_preserva_o_seu_saldo(self):
+        u, t = _member()
+        p = _product(t)
+        StockService.create_movement(t, u, 'IN', 5, product=p,
+                                     expiry_date=TODAY - timedelta(days=1), lot_number='VENCIDO')
+        StockService.create_movement(t, u, 'IN', 3, product=p,
+                                     expiry_date=TODAY + timedelta(days=3), lot_number='VALIDO')
+        StockService.create_movement(t, u, 'OUT', 2, product=p)
+        lots = {l.lot_number: l.quantity for l in StockLot.objects.filter(variant__product=p)}
+        assert lots == {'VENCIDO': 5, 'VALIDO': 1}
+        with pytest.raises(ValueError, match='vencidos'):
+            StockService.create_movement(t, u, 'OUT', 2, product=p)
+        assert _stock(p) == 6
+
     def test_saida_de_lote_especifico(self):
         u, t = _member()
         p = _product(t)
