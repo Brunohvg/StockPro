@@ -87,7 +87,7 @@ class TenantMiddleware:
         # Superusers bypass tenant checks for admin access
         from django.conf import settings
         admin_path = '/' + getattr(settings, 'ADMIN_URL', 'admin/')
-        if request.user.is_superuser and request.path.startswith(admin_path):
+        if request.user.is_superuser and (request.path.startswith(admin_path) or request.path.startswith('/admin-panel/')):
             return self.get_response(request)
 
         # Get active membership
