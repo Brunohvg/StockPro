@@ -27,6 +27,17 @@
         </div>
     </div>
 
+    <!-- Backup -->
+    <a href="{% url 'tenants:admin_backups' %}"
+       class="flex items-center justify-between gap-4 rounded-xl border px-5 py-3 hover:shadow-sm transition
+       {% if backup_health.level == 'ok' %}bg-green-50 border-green-200{% elif backup_health.level == 'warning' %}bg-amber-50 border-amber-200{% else %}bg-red-50 border-red-200{% endif %}">
+        <span class="text-sm">
+            <span class="font-bold {% if backup_health.level == 'ok' %}text-green-800{% elif backup_health.level == 'warning' %}text-amber-800{% else %}text-red-800{% endif %}">{{ backup_health.headline }}</span>
+            <span class="text-gray-600"> · {{ backup_health.detail }}</span>
+        </span>
+        <span class="text-sm font-semibold text-indigo-600 whitespace-nowrap">Ver backups &rarr;</span>
+    </a>
+
     <!-- Filters -->
     <div class="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap gap-4 items-center">
         <form method="get" class="flex flex-wrap gap-4 items-center w-full">
