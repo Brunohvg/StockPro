@@ -234,6 +234,8 @@ def run_backup(trigger='beat'):
 
         if s3_enabled():
             passphrase = settings.BACKUP_ENCRYPTION_PASSPHRASE
+            if not passphrase or len(passphrase) < 20:
+                raise BackupError('Backup externo exige BACKUP_ENCRYPTION_PASSPHRASE com pelo menos 20 caracteres.')
             if passphrase:
                 encrypted = []
                 for path in to_send:
