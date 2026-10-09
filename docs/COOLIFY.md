@@ -139,3 +139,9 @@ Os logs da web mostraram requests de CSS/JS com 200 e corpo de 0 bytes, seguidos
 O CMD do Dockerfile agora inclui --no-sendfile, opção documentada pelo Gunicorn, para enviar arquivos pelo caminho de escrita normal compatível com os sockets do worker. Preserve essa opção; hash/cache de estáticos sozinho não resolve o erro de transporte. Teste local com Gunicorn 24.0.0, WhiteNoise e gthread: 28 downloads concorrentes de CSS completos, sem o erro. O teste local de manifesto/CSS/JS do admin também passou.
 
 Revisão de segurança solicitada pelo usuário: [SECURITY_REVIEW_2026-10-09.md](SECURITY_REVIEW_2026-10-09.md). Achados críticos permanecem pendentes e não são resolvidos por este ajuste de infraestrutura.
+
+### Verificação final do admin
+
+Deploy ljaxnpduxtymcovulezcgrbk, commit 1c3776bec3c6cff2cf8aab2a08fa7191ca34654e: Success; aplicação Running em 09/10/2026, por volta de 12:25 America/Sao_Paulo. Após esse deploy, o login do admin abriu visualmente estilizado. As 5 folhas CSS (base, dark_mode, nav_sidebar, login, responsive) e os 2 scripts (theme, nav_sidebar) foram baixados em paralelo pela URL pública: HTTP 200, corpo presente, MIME correto e cache immutable. A verificação local de WhiteNoise/manifesto e a de Gunicorn gthread com 28 requests também passaram.
+
+Nenhuma credencial foi inserida no admin nesta verificação; navegação autenticada não foi testada. O primeiro redeploy de manifesto sozinho teve Success mas não corrigiu o transporte; a prova visual e de downloads foi feita após --no-sendfile. O commit posterior de documentação não altera código executável.

@@ -42,3 +42,10 @@ Revisão do código da branch feature/bibelo-coolify-deploy, após 8356182. Não
 7. Revalidar suíte/CI, e-mail, NF-e e backups.
 
 Não liberar cadastro/comercialização apenas porque os primeiros quatro itens forem feitos: os demais achados altos também precisam de correção e regressão.
+
+## Verificações adicionais feitas nesta sessão
+
+- API do GitHub retornou private=false, visibility=public para Brunohvg/StockPro. O histórico desses arquivos precisa ser tratado como público; não basta excluir apenas da branch atual. Não foram apagados arquivos nem reescrito histórico nesta revisão.
+- Teste local com código real do EmailBackend, Django 5.2.10 e SQLite isolado: duas contas fictícias com e-mail equivalente em maiúsculas/minúsculas; uma senha incorreta autenticou a primeira conta. Falha crítica reproduzida independentemente, sem acessar contas de produção.
+- As demais confirmações são inspeção de código; não foi executada a suíte integral nem os dez testes externos.
+- Ajuste de CSS/sendfile implantado em 1c3776b. Autenticação, cobrança, papéis e demais achados acima continuam pendentes.
