@@ -376,9 +376,14 @@ class StockService:
                 lot.manufacture_date = manufacture_date
             return lot
 
-        def consume_fefo(amount):
+        def consume_fefo(amount, include_expired=True):
+            from django.utils import timezone
+            from django.db.models import Q
             taken = []
-            for lot in lots.filter(quantity__gt=0).order_by(
+            eligible = lots.filter(quantity__gt=0)
+            if not include_expired:
+                eligible = eligible.filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=timezone.localdate()))
+            for lot in eligible.order_by(
                 F('expiry_date').asc(nulls_last=True), 'created_at'
             ):
                 if amount <= 0:
@@ -399,14 +404,25 @@ class StockService:
             return [(lot, quantity)]
 
         if movement_type == 'OUT':
+            from django.utils import timezone
+            from django.db.models import Q
             if lot_id:
                 lot = get_lot()
+                if lot.expiry_date is not None and lot.expiry_date < timezone.localdate():
+                    raise ValueError('Não é permitido consumir lote vencido. Registre descarte ou ajuste.')
                 if lot.quantity < quantity:
                     raise ValueError(f"Lote {lot.lot_number or lot.pk} tem só {lot.quantity} disponível.")
                 lot.quantity -= quantity
                 lot.save(update_fields=['quantity', 'updated_at'])
                 return [(lot, quantity)]
-            return consume_fefo(quantity)
+            total_lots = lots.aggregate(t=Sum('quantity'))['t'] or Decimal('0')
+            untracked = max(Decimal('0'), new_stock + quantity - total_lots)
+            eligible_qty = lots.filter(quantity__gt=0).filter(
+                Q(expiry_date__isnull=True) | Q(expiry_date__gte=timezone.localdate())
+            ).aggregate(t=Sum('quantity'))['t'] or Decimal('0')
+            if quantity > untracked + eligible_qty:
+                raise ValueError('Saldo disponível insuficiente: existem lotes vencidos bloqueados para saída.')
+            return consume_fefo(quantity, include_expired=False)
 
         # ADJ
         lot = get_lot()
