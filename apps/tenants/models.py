@@ -43,6 +43,9 @@ class Tenant(models.Model):
     plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True, related_name='tenants')
     subscription_status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS, default='TRIAL', verbose_name="Status da Assinatura")
     trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="Fim do Período de Teste")
+    next_due_date = models.DateField(
+        null=True, blank=True, verbose_name="Próximo vencimento",
+        help_text="Controle manual de cobrança (enquanto não há gateway de pagamento).")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -150,3 +153,36 @@ class BackupRun(models.Model):
 
     def __str__(self):
         return f"Backup {self.started_at:%d/%m/%Y %H:%M} ({self.get_status_display()})"
+
+
+class TenantEvent(models.Model):
+    """Histórico da conta: tudo que muda no plano/status de uma empresa, e notas internas.
+
+    Gravado pela Central da plataforma (apps/tenants/platform.py), pelo cadastro e
+    pelas tarefas automáticas. Nunca é editado nem apagado pela interface.
+    """
+    KINDS = [
+        ('CREATED', 'Cadastro'),
+        ('PLAN', 'Troca de plano'),
+        ('STATUS', 'Mudança de status'),
+        ('TRIAL', 'Período de teste'),
+        ('DUE_DATE', 'Vencimento'),
+        ('NOTE', 'Nota interna'),
+        ('SECURITY', 'Segurança'),
+    ]
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='events')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    actor = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name='+', help_text="Vazio = sistema (tarefa automática)")
+    kind = models.CharField(max_length=20, choices=KINDS)
+    message = models.CharField(max_length=255)
+    reason = models.TextField(blank=True)
+    data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = "Evento da empresa"
+        verbose_name_plural = "Histórico das empresas"
+
+    def __str__(self):
+        return f"{self.tenant} · {self.get_kind_display()} · {self.message}"

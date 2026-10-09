@@ -1,0 +1,63 @@
+{% extends 'tenants/platform/base_platform.html' %}
+{% load humanize %}
+
+{% block title %}Planos | Central da plataforma | StockPro{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-black text-slate-900">Planos</h1>
+            <p class="text-sm text-slate-500 mt-1">Preços e limites. Mudança aqui vale na hora para todas as empresas do plano.</p>
+        </div>
+        <a href="{% url 'tenants:platform_plan_new' %}" class="rounded-xl px-4 py-2.5 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Novo plano</a>
+    </header>
+
+    {% include 'tenants/platform/_nav.html' with tab='plans' %}
+
+    <section class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-xs font-bold text-slate-600 uppercase">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Plano</th>
+                        <th class="px-4 py-3 text-right">Preço/mês</th>
+                        <th class="px-4 py-3 text-center">Produtos</th>
+                        <th class="px-4 py-3 text-center">Usuários</th>
+                        <th class="px-4 py-3 text-left">IA</th>
+                        <th class="px-4 py-3 text-center">Empresas</th>
+                        <th class="px-4 py-3 text-right">Receita</th>
+                        <th class="px-4 py-3"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for p in plans %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-3">
+                            <div class="font-semibold text-slate-900">{{ p.display_name }}</div>
+                            <div class="text-xs text-slate-500">{{ p.name }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">R$ {{ p.price|floatformat:2|intcomma }}</td>
+                        <td class="px-4 py-3 text-center">{% if p.max_products %}{{ p.max_products }}{% else %}∞{% endif %}</td>
+                        <td class="px-4 py-3 text-center">{% if p.max_users %}{{ p.max_users }}{% else %}∞{% endif %}</td>
+                        <td class="px-4 py-3 text-xs text-slate-600">
+                            {% if p.has_ai_matching %}match{% endif %}{% if p.has_ai_matching and p.has_ai_reconciliation %} · {% endif %}{% if p.has_ai_reconciliation %}conciliação{% endif %}
+                            {% if not p.has_ai_matching and not p.has_ai_reconciliation %}—{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <a href="{% url 'tenants:admin_panel' %}?plan={{ p.pk }}" class="text-indigo-600 hover:underline">{{ p.n }}</a>
+                            <div class="text-xs text-slate-500">{{ p.n_active }} ativa{{ p.n_active|pluralize }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap text-slate-600">R$ {{ p.revenue|floatformat:2|intcomma }}</td>
+                        <td class="px-4 py-3 text-right"><a href="{% url 'tenants:platform_plan_edit' p.pk %}" class="font-semibold text-indigo-600 hover:underline">editar</a></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="px-4 py-12 text-center text-slate-500">Nenhum plano cadastrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <p class="text-xs text-slate-500">Receita = preço × empresas ativas. Empresas em teste não entram na conta.</p>
+</div>
+{% endblock %}

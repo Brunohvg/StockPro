@@ -1,10 +1,10 @@
-{% extends 'base.html' %}
+{% extends 'tenants/platform/base_platform.html' %}
 {% block title %}Central de Backups | StockPro{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-7xl mx-auto">
   <header class="flex flex-wrap items-center justify-between gap-4">
     <div>
-      <a href="{% url 'tenants:admin_panel' %}" class="text-sm text-indigo-600 hover:underline">← Painel da plataforma</a>
+      <a href="{% url 'tenants:admin_panel' %}" class="text-sm text-indigo-600 hover:underline">← Central da plataforma</a>
       <h1 class="text-3xl font-black text-slate-900 mt-2">Central de backups</h1>
       <p class="text-sm text-slate-500 mt-1">Infraestrutura global · banco de dados de todas as empresas e arquivos de mídia.</p>
     </div>
@@ -19,6 +19,8 @@
       </form>
     </div>
   </header>
+
+  {% include 'tenants/platform/_nav.html' with tab='backups' %}
 
   <section class="rounded-2xl border border-slate-800 bg-slate-950 text-slate-100 p-5 md:p-6 space-y-5">
     <div class="flex flex-wrap items-center justify-between gap-2">

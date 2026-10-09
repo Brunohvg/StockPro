@@ -30,9 +30,14 @@ def cleanup_expired_trials():
     suspend_after = getattr(settings, 'TRIAL_SUSPEND_AFTER_DAYS', 0)
     suspended = 0
     if suspend_after > 0:
-        suspended = expired.filter(
-            trial_ends_at__lt=now - timezone.timedelta(days=suspend_after)
-        ).update(subscription_status='SUSPENDED')
+        from .platform import record
+        to_suspend = list(expired.filter(trial_ends_at__lt=now - timezone.timedelta(days=suspend_after)))
+        for tenant in to_suspend:
+            tenant.subscription_status = 'SUSPENDED'
+            tenant.save(update_fields=['subscription_status'])
+            record(tenant, 'STATUS', f"Status: Em Teste → Suspenso (automático, teste vencido há "
+                   f"mais de {suspend_after} dias)")
+        suspended = len(to_suspend)
         if suspended:
             logger.info(f"CELERY BEAT: {suspended} empresa(s) suspensa(s) após {suspend_after} dias de trial vencido.")
 
@@ -46,3 +51,12 @@ def send_expiry_alerts():
     sent = _send()
     logger.info(f"CELERY BEAT: alertas de validade enviados para {sent} empresa(s).")
     return f"Expiry alerts sent: {sent}"
+
+
+@shared_task
+def platform_heartbeat():
+    """Sinal de vida do worker + agendador, mostrado na Central da plataforma."""
+    from django.core.cache import cache
+    from .platform import HEARTBEAT_KEY
+    cache.set(HEARTBEAT_KEY, timezone.now(), timeout=60 * 60 * 24)
+    return "ok"
