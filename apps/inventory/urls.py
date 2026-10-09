@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import api_views, views
+from . import api_views, nfe_views, views
 
 app_name = 'inventory'
 
@@ -17,6 +17,13 @@ urlpatterns = [
     path('imports/template.xlsx', views.download_import_template, name='download_import_template'),
     path('imports/<uuid:pk>/confirm/', views.import_confirm, name='import_confirm'),
     path('imports/<uuid:pk>/reprocess/', views.import_reprocess, name='import_reprocess'),
+    # NF-e de entrada (Beta)
+    path('nfe/', nfe_views.nfe_list, name='nfe_list'),
+    path('nfe/upload/', nfe_views.nfe_upload, name='nfe_upload'),
+    path('nfe/settings/', nfe_views.nfe_settings, name='nfe_settings'),
+    path('nfe/<uuid:pk>/', nfe_views.nfe_detail, name='nfe_detail'),
+    path('nfe/<uuid:pk>/revert/', nfe_views.nfe_revert, name='nfe_revert'),
+    path('nfe/<uuid:pk>/xml/', nfe_views.nfe_xml, name='nfe_xml'),
     path('pending/', views.pending_product_list, name='pending_product_list'),
     path('pending/<int:pk>/approve/', views.pending_product_approve, name='pending_product_approve'),
 
