@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}{{ t.name }} | Central da plataforma | StockPro{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+        <div class="min-w-0">
+            <a href="{% url 'tenants:admin_panel' %}" class="text-sm text-indigo-600 hover:underline">← Central da plataforma</a>
+            <h1 class="text-3xl font-black text-slate-900 mt-2 break-words">{{ t.name }}</h1>
+            <p class="text-sm text-slate-500 mt-1">
+                {{ t.cnpj|default:"sem CNPJ" }} · cadastro em {{ t.created_at|date:"d/m/Y" }} · ID {{ t.pk }}
+            </p>
+        </div>
+        <span class="px-3 py-1.5 rounded-full text-sm font-bold
+            {% if not t.is_active %}bg-slate-200 text-slate-700
+            {% elif t.subscription_status == 'ACTIVE' %}bg-emerald-100 text-emerald-700
+            {% elif t.subscription_status == 'TRIAL' %}bg-amber-100 text-amber-700
+            {% elif t.subscription_status == 'SUSPENDED' %}bg-rose-100 text-rose-700
+            {% else %}bg-slate-100 text-slate-600{% endif %}">
+            {% if not t.is_active %}Acesso bloqueado ({{ t.get_subscription_status_display }}){% else %}{{ t.get_subscription_status_display }}{% endif %}
+        </span>
+    </header>
+
+    {% include 'tenants/platform/_nav.html' with tab='home' %}
+
+    <!-- Resumo -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <div class="text-xs font-bold text-slate-500 uppercase">Plano</div>
+            <div class="text-xl font-black text-slate-900 mt-1">{{ t.plan.display_name|default:"sem plano" }}</div>
+            {% if t.plan %}<div class="text-xs text-slate-500 mt-1">R$ {{ t.plan.price|floatformat:2|intcomma }}/mês</div>{% endif %}
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <div class="text-xs font-bold text-slate-500 uppercase">Produtos ativos</div>
+            <div class="text-xl font-black mt-1 {% if t.products_pct >= 100 %}text-rose-600{% elif t.products_pct >= 80 %}text-amber-600{% else %}text-slate-900{% endif %}">
+                {{ usage.products_active }} / {% if t.plan.max_products %}{{ t.plan.max_products }}{% else %}∞{% endif %}
+            </div>
+            <div class="text-xs text-slate-500 mt-1">{{ usage.products_archived }} arquivado{{ usage.products_archived|pluralize }}</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <div class="text-xs font-bold text-slate-500 uppercase">Usuários</div>
+            <div class="text-xl font-black mt-1 {% if t.users_pct >= 100 %}text-rose-600{% elif t.users_pct >= 80 %}text-amber-600{% else %}text-slate-900{% endif %}">
+                {{ usage.users }} / {% if t.plan.max_users %}{{ t.plan.max_users }}{% else %}∞{% endif %}
+            </div>
+            <div class="text-xs text-slate-500 mt-1">Último login: {% if t.last_login_at %}há {{ t.last_login_at|timesince }}{% else %}nunca{% endif %}</div>
+        </div>
+        <div class="bg-white rounded-2xl border {% if t.is_idle %}border-rose-300{% else %}border-slate-200{% endif %} p-5">
+            <div class="text-xs font-bold text-slate-500 uppercase">Uso do estoque</div>
+            <div class="text-xl font-black text-slate-900 mt-1">{{ usage.moves_30d }} <span class="text-sm font-semibold text-slate-500">mov. em 30 dias</span></div>
+            <div class="text-xs mt-1 {% if t.is_idle %}text-rose-600 font-semibold{% else %}text-slate-500{% endif %}">
+                {{ usage.moves_7d }} em 7 dias · última {% if usage.last_move %}há {{ usage.last_move|timesince }}{% else %}nunca{% endif %}
+            </div>
+        </div>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Coluna principal -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Assinatura -->
+            <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
+                <h2 class="font-bold text-slate-900">Assinatura</h2>
+                <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                    <div>
+                        {% if t.subscription_status == 'TRIAL' %}
+                        <dt class="text-xs font-bold text-slate-500 uppercase">Fim do teste</dt>
+                        <dd class="mt-1 {% if t.trial_days_left is not None and t.trial_days_left < 0 %}text-rose-600 font-semibold{% else %}text-slate-800{% endif %}">
+                            {% if t.trial_ends_at %}{{ t.trial_ends_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                            {% if t.trial_days_left is not None %}
+                            <div class="text-xs">{% if t.trial_days_left < 0 %}vencido (modo leitura){% else %}{{ t.trial_days_left }} dia{{ t.trial_days_left|pluralize }} restante{{ t.trial_days_left|pluralize }}{% endif %}</div>
+                            {% endif %}
+                        </dd>
+                        {% else %}
+                        <dt class="text-xs font-bold text-slate-500 uppercase">Cliente desde</dt>
+                        <dd class="mt-1 text-slate-800">{{ t.created_at|date:"d/m/Y" }} <span class="text-xs text-slate-500">(há {{ t.created_at|timesince }})</span></dd>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <dt class="text-xs font-bold text-slate-500 uppercase">Próximo vencimento</dt>
+                        <dd class="mt-1 {% if t.is_overdue %}text-rose-600 font-semibold{% else %}text-slate-800{% endif %}">
+                            {% if t.next_due_date %}{{ t.next_due_date|date:"d/m/Y" }}{% if t.is_overdue %} (passou){% endif %}{% else %}não informado{% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-bold text-slate-500 uppercase">IA</dt>
+                        <dd class="mt-1 text-slate-800">
+                            {% if usage.ai_allowed %}liberada · {{ usage.ai_used_today|default:0 }} uso{{ usage.ai_used_today|pluralize }} hoje{% else %}não incluída no plano{% endif %}
+                        </dd>
+                    </div>
+                </dl>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Trocar plano -->
+                    <form method="post" action="{% url 'tenants:platform_tenant_action' t.pk %}" class="rounded-xl border border-slate-200 p-4 space-y-3"
+                          onsubmit="return confirm('Trocar o plano desta empresa?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="plan">
+                        <label class="block text-sm font-semibold text-slate-800">Trocar plano</label>
+                        <select name="plan_id" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                            {% for p in plans %}
+                            <option value="{{ p.pk }}" {% if t.plan_id == p.pk %}selected{% endif %}>
+                                {{ p.display_name }} · R$ {{ p.price|floatformat:2 }} · {% if p.max_products %}{{ p.max_products }}{% else %}∞{% endif %} produtos · {% if p.max_users %}{{ p.max_users }}{% else %}∞{% endif %} usuários
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" name="reason" maxlength="500" placeholder="Motivo (opcional)" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                        <button class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">Salvar plano</button>
+                    </form>
+
+                    <!-- Vencimento -->
+                    <form method="post" action="{% url 'tenants:platform_tenant_action' t.pk %}" class="rounded-xl border border-slate-200 p-4 space-y-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="due_date">
+                        <label class="block text-sm font-semibold text-slate-800">Próximo vencimento</label>
+                        <input type="date" name="due_date" value="{{ t.next_due_date|date:'Y-m-d' }}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                        <input type="text" name="reason" maxlength="500" placeholder="Ex.: pagou via Pix em {{ today|date:'d/m' }}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                        <button class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50">Salvar vencimento</button>
+                        <p class="text-xs text-slate-500">Controle manual enquanto não há cobrança automática. Deixe vazio para remover.</p>
+                    </form>
+
+                    <!-- Teste -->
+                    <form method="post" action="{% url 'tenants:platform_tenant_action' t.pk %}" class="rounded-xl border border-slate-200 p-4 space-y-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="trial">
+                        <label class="block text-sm font-semibold text-slate-800">Estender teste</label>
+                        {% if t.subscription_status == 'TRIAL' %}
+                        <div class="flex gap-2">
+                            <input type="number" name="days" min="1" max="365" placeholder="+ dias" class="w-24 px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                            <span class="self-center text-xs text-slate-500">ou até</span>
+                            <input type="date" name="until" min="{{ today|date:'Y-m-d' }}" class="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                        </div>
+                        <input type="text" name="reason" maxlength="500" placeholder="Motivo (opcional)" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                        <button class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50">Estender</button>
+                        {% else %}
+                        <p class="text-xs text-slate-500">Só para empresas em teste. Use "Voltar para teste" ao lado se quiser dar mais um período.</p>
+                        {% endif %}
+                    </form>
+
+                    <!-- Status -->
+                    <div class="rounded-xl border border-slate-200 p-4 space-y-3">
+                        <div class="text-sm font-semibold text-slate-800">Mudar status</div>
+                        {% for key, label, needs_reason in status_actions %}
+                        <form method="post" action="{% url 'tenants:platform_tenant_action' t.pk %}" class="flex gap-2"
+                              onsubmit="return confirm('Confirmar: {{ label }}?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="{{ key }}">
+                            <input type="text" name="reason" maxlength="500" {% if needs_reason %}required placeholder="Motivo (obrigatório)"{% else %}placeholder="Motivo (opcional)"{% endif %}
+                                   class="flex-1 min-w-0 px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                            <button class="px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap
+                                {% if key == 'suspend' or key == 'cancel' %}bg-rose-600 text-white hover:bg-rose-700{% else %}bg-emerald-600 text-white hover:bg-emerald-700{% endif %}">{{ label }}</button>
+                        </form>
+                        {% endfor %}
+                        <p class="text-xs text-slate-500">Suspensa ou cancelada: a empresa não consegue mais usar o sistema. Os dados ficam guardados.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Histórico -->
+            <section class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="font-bold text-slate-900">Histórico da empresa</h2>
+                    <div class="flex flex-wrap gap-1 text-xs">
+                        <a href="?" class="px-2.5 py-1 rounded-lg font-semibold {% if not kind %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Tudo</a>
+                        {% for value, label in event_kinds %}
+                        <a href="?kind={{ value }}" class="px-2.5 py-1 rounded-lg font-semibold {% if kind == value %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">{{ label }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <ul class="divide-y divide-slate-100">
+                    {% for e in events %}
+                    <li class="px-5 py-3 text-sm">
+                        <div class="flex flex-wrap items-baseline justify-between gap-2">
+                            <span class="font-semibold text-slate-800 break-words">{{ e.message }}</span>
+                            <span class="text-xs text-slate-500 whitespace-nowrap">{{ e.created_at|date:"d/m/Y H:i" }}</span>
+                        </div>
+                        <div class="text-xs text-slate-500 mt-0.5">
+                            {{ e.get_kind_display }} · {% if e.actor %}{{ e.actor.get_full_name|default:e.actor.username }}{% else %}sistema{% endif %}
+                        </div>
+                        {% if e.reason and e.reason != e.message %}<div class="text-sm text-slate-600 mt-1 whitespace-pre-line break-words">{{ e.reason }}</div>{% endif %}
+                    </li>
+                    {% empty %}
+                    <li class="px-5 py-8 text-center text-slate-500 text-sm">Nenhum registro ainda. As mudanças feitas a partir de agora aparecem aqui.</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        </div>
+
+        <!-- Lateral -->
+        <div class="space-y-6">
+            <section class="bg-white rounded-2xl border border-slate-200 p-5">
+                <h2 class="font-bold text-slate-900 mb-3">Anotar</h2>
+                <form method="post" action="{% url 'tenants:platform_tenant_action' t.pk %}" class="space-y-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="note">
+                    <textarea name="note" rows="3" required maxlength="2000" placeholder="Ex.: liguei para o dono, vai assinar o Pro na sexta."
+                              class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm"></textarea>
+                    <button class="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800">Salvar nota</button>
+                </form>
+            </section>
+
+            <section class="bg-white rounded-2xl border border-slate-200 p-5">
+                <h2 class="font-bold text-slate-900 mb-3">Equipe</h2>
+                <ul class="divide-y divide-slate-100 text-sm">
+                    {% for m in members %}
+                    <li class="py-2 {% if not m.is_active %}opacity-50{% endif %}">
+                        <div class="flex justify-between gap-2">
+                            <span class="font-semibold text-slate-800 truncate">{{ m.user.get_full_name|default:m.user.username }}</span>
+                            <span class="text-xs text-slate-500 whitespace-nowrap">{{ m.get_role_display }}{% if not m.is_active %} · inativo{% endif %}</span>
+                        </div>
+                        <div class="text-xs text-slate-500 break-all">{{ m.user.email|default:m.user.username }}</div>
+                        <div class="text-xs text-slate-400">último login: {% if m.user.last_login %}{{ m.user.last_login|date:"d/m/Y H:i" }}{% else %}nunca{% endif %}</div>
+                    </li>
+                    {% empty %}
+                    <li class="py-2 text-slate-400">Sem membros.</li>
+                    {% endfor %}
+                </ul>
+            </section>
+
+            {% if locked %}
+            <section class="bg-amber-50 rounded-2xl border border-amber-200 p-5">
+                <h2 class="font-bold text-amber-900 mb-2">Login bloqueado</h2>
+                <p class="text-xs text-amber-800 mb-3">Muitas senhas erradas. Desbloqueie só se confirmou com a pessoa.</p>
+                <ul class="space-y-2 text-sm">
+                    {% for a in locked %}
+                    <li class="flex items-center justify-between gap-2">
+                        <span class="truncate">{{ a.username }} · {{ a.ip_address }}</span>
+                        <form method="post" action="{% url 'tenants:platform_unlock_login' a.pk %}">{% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="text-xs font-semibold text-indigo-700 hover:underline">desbloquear</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
+            {% endif %}
+
+            <section class="bg-white rounded-2xl border border-slate-200 p-5 text-sm">
+                <h2 class="font-bold text-slate-900 mb-3">Mais números</h2>
+                <ul class="space-y-1.5 text-slate-600">
+                    <li class="flex justify-between"><span>NF-e importadas</span><span class="font-semibold">{{ usage.nfe_imported }}</span></li>
+                    <li class="flex justify-between"><span>Importações (30 dias)</span><span class="font-semibold">{{ usage.imports_30d }}</span></li>
+                </ul>
+                <a href="{% url 'admin:tenants_tenant_change' t.pk %}" class="inline-block mt-4 text-xs text-slate-500 hover:underline">Abrir no admin do Django</a>
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}
