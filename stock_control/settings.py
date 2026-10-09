@@ -22,7 +22,21 @@ if not DEBUG and SECRET_KEY == 'django-insecure-secret-key-replace-me':
     print("ERRO FATAL: Configure SECRET_KEY no .env antes de rodar em produção!", file=sys.stderr)
     sys.exit(1)
 
-ALLOWED_HOSTS = ['*'] if DEBUG else config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+DOMAIN = config('DOMAIN', default='').strip().strip('/')
+SITE_URL = config('SITE_URL', default='').strip().rstrip('/')
+
+if not SITE_URL and DOMAIN:
+    SITE_URL = f'https://{DOMAIN}'
+
+ALLOWED_HOSTS = (
+    ['*']
+    if DEBUG
+    else config(
+        'ALLOWED_HOSTS',
+        default=DOMAIN or 'localhost,127.0.0.1',
+        cast=Csv(),
+    )
+)
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/app/'
@@ -140,7 +154,15 @@ else:
         }
     }
 
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv()) if not DEBUG else []
+CSRF_TRUSTED_ORIGINS = (
+    []
+    if DEBUG
+    else config(
+        'CSRF_TRUSTED_ORIGINS',
+        default=SITE_URL,
+        cast=Csv(),
+    )
+)
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
