@@ -169,7 +169,6 @@ def _superuser_only(request):
     return None
 
 
-@login_required
 def _backup_worker_signal():
     """Read the heartbeat without running unrelated dashboard database queries."""
     from django.core.cache import cache
@@ -180,6 +179,7 @@ def _backup_worker_signal():
     return {'last': last, 'ok': bool(last and timezone.now() - last < HEARTBEAT_STALE)}
 
 
+@login_required
 def admin_backups_view(request):
     denied = _superuser_only(request)
     if denied:
