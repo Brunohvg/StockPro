@@ -1,15 +1,15 @@
 # ===========================================
-# StockPro V16 - Dockerfile
-# Padrão: UV_SYSTEM_PYTHON=1 (igual ao Flowlog que funciona em aarch64)
+# StockPro / Bibelo - Production Dockerfile
+# Padrao de deploy inspirado no VidalysFlow/Coolify
 # ===========================================
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TZ=America/Sao_Paulo \
-    UV_SYSTEM_PYTHON=1
+    UV_SYSTEM_PYTHON=1 \
+    PORT=8000
 
-# Dependências de sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
@@ -21,33 +21,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala uv (igual ao Flowlog)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 WORKDIR /app
 
-# Instala dependências no Python do sistema (sem .venv — igual ao Flowlog)
-COPY requirements.txt ./
+# Mantem cache de dependencias entre builds quando o codigo muda.
+COPY pyproject.toml requirements.txt ./
 RUN uv pip install -r requirements.txt --no-cache
 
-# Copia o projeto
+# Entrypoint de producao: aguarda banco, migra e coleta static.
+COPY docker/entrypoint.prod.sh /usr/local/bin/entrypoint.prod.sh
+RUN chmod +x /usr/local/bin/entrypoint.prod.sh
+
 COPY . /app
 
-# Diretórios necessários
-RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data/backups
-
-# Coleta estáticos durante o build para garantir que estejam na imagem
-RUN SECRET_KEY=build-time-only-secret python manage.py collectstatic --noinput
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck/')" || exit 1
+RUN mkdir -p /app/staticfiles /app/media /app/imports /data/backups
 
 EXPOSE 8000
 
-CMD ["gunicorn", "stock_control.wsgi:application", \
-    "--bind", "0.0.0.0:8000", \
-    "--workers", "2", \
-    "--threads", "4", \
-    "--timeout", "120", \
-    "--access-logfile", "-", \
-    "--error-logfile", "-"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS "http://localhost:${PORT:-8000}/healthcheck/" || exit 1
+
+ENTRYPOINT ["entrypoint.prod.sh"]
+
+CMD ["sh", "-c", "gunicorn stock_control.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers=${GUNICORN_WORKERS:-2} --threads=${GUNICORN_THREADS:-4} --timeout=${GUNICORN_TIMEOUT:-120} --access-logfile=- --error-logfile=-"]
