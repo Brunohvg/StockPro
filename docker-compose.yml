@@ -7,9 +7,10 @@ services:
     environment:
       SECRET_KEY: ${SERVICE_HEX_64_DJANGO}
       DEBUG: "False"
-      DOMAIN: ${SERVICE_FQDN_WEB_8000}
-      SITE_URL: ${SERVICE_URL_WEB_8000}
+      DOMAIN: stock.optarys.com.br
+      SITE_URL: https://stock.optarys.com.br
       DATABASE_URL: ${DATABASE_URL:?Configure a URL interna do PostgreSQL no Coolify}
+      ALLOWED_HOSTS: stock.optarys.com.br,localhost,127.0.0.1
       PORT: "8000"
       DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH:-ops19x/}
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
