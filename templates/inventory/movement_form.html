@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
@@ -217,15 +218,8 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-<script src="/static/js/scanner.js"></script>
-<script>
-    lucide.createIcons();
-    window.scannerInstance = new StockScanner('product', 'start-scan', 'scanner-container');
-</script>
-
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-<script src="/static/js/scanner.js"></script>
+<script src="{% static 'vendor/html5-qrcode-2.3.8.min.js' %}"></script>
+<script src="{% static 'js/scanner.js' %}"></script>
 <script>
     lucide.createIcons();
     window.scannerInstance = new StockScanner('product', 'start-scan', 'scanner-container');
