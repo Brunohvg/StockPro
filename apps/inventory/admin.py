@@ -114,3 +114,20 @@ class InventoryAuditAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     readonly_fields = ('id', 'created_at')
     inlines = [InventoryAuditItemInline]
+
+
+from .models import MovementLot, StockLot  # noqa: E402
+
+
+@admin.register(StockLot)
+class StockLotAdmin(admin.ModelAdmin):
+    list_display = ('variant', 'lot_number', 'expiry_date', 'manufacture_date', 'quantity', 'tenant')
+    list_filter = ('tenant', 'expiry_date')
+    search_fields = ('variant__sku', 'lot_number', 'variant__product__name')
+    readonly_fields = ('quantity',)
+
+
+@admin.register(MovementLot)
+class MovementLotAdmin(admin.ModelAdmin):
+    list_display = ('movement', 'lot', 'quantity')
+    readonly_fields = ('movement', 'lot', 'quantity')

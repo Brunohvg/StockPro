@@ -9,7 +9,7 @@ from .models import SystemSetting
 class SystemSettingForm(forms.ModelForm):
     class Meta:
         model = SystemSetting
-        fields = ['company_name', 'logo_url', 'alert_email', 'low_stock_alert_threshold', 'enable_auto_cost_update']
+        fields = ['company_name', 'logo_url', 'alert_email', 'low_stock_alert_threshold', 'expiry_alert_days', 'enable_auto_cost_update']
 
 
 class EmployeeForm(forms.ModelForm):

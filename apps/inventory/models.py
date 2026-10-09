@@ -107,6 +107,62 @@ class StockMovement(TenantMixin):
         target = self.variant.sku if self.variant_id else (self.product.sku if self.product_id else "?")
         return f"{self.get_type_display()} {self.quantity}x {target}"
 
+class StockLot(TenantMixin):
+    """
+    Lote de uma variação com validade (FEFO).
+
+    Invariante: soma(quantity dos lotes) <= variant.current_stock.
+    A diferença é saldo "sem lote" (estoque anterior ao controle de validade).
+    Só o StockService altera quantity.
+    """
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='lots', verbose_name="Variação")
+    lot_number = models.CharField(max_length=60, blank=True, default='', verbose_name="Lote")
+    expiry_date = models.DateField(null=True, blank=True, db_index=True, verbose_name="Validade")
+    manufacture_date = models.DateField(null=True, blank=True, verbose_name="Fabricação")
+    quantity = models.DecimalField(max_digits=12, decimal_places=4, default=0, verbose_name="Saldo do lote")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Lote"
+        verbose_name_plural = "Lotes"
+        ordering = [models.F('expiry_date').asc(nulls_last=True), 'created_at']
+        constraints = [
+            models.CheckConstraint(check=models.Q(quantity__gte=0), name='lot_quantity_non_negative'),
+            models.UniqueConstraint(
+                fields=['variant', 'lot_number', 'expiry_date'], name='unique_lot_per_variant_expiry'
+            ),
+        ]
+
+    def __str__(self):
+        label = self.lot_number or 'sem nº'
+        exp = self.expiry_date.strftime('%d/%m/%Y') if self.expiry_date else 'sem validade'
+        return f"{self.variant.sku} · lote {label} · {exp}"
+
+    @property
+    def days_to_expiry(self):
+        if not self.expiry_date:
+            return None
+        from django.utils import timezone
+        return (self.expiry_date - timezone.localdate()).days
+
+    @property
+    def is_expired(self):
+        d = self.days_to_expiry
+        return d is not None and d < 0
+
+
+class MovementLot(models.Model):
+    """Quanto de cada lote uma movimentação consumiu ou criou."""
+    movement = models.ForeignKey(StockMovement, on_delete=models.CASCADE, related_name='lot_allocations')
+    lot = models.ForeignKey(StockLot, on_delete=models.PROTECT, related_name='allocations')
+    quantity = models.DecimalField(max_digits=12, decimal_places=4)
+
+    class Meta:
+        verbose_name = "Lote da movimentação"
+        verbose_name_plural = "Lotes das movimentações"
+
+
 # ==========================================
 # 3. Import & Intelligence Layer (V3)
 # ==========================================

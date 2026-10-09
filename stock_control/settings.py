@@ -241,6 +241,10 @@ if CELERY_BROKER_URL:
             'task': 'apps.tenants.backup_task.daily_backup',
             'schedule': crontab(hour=3, minute=30),
         },
+        'daily-expiry-alerts': {
+            'task': 'apps.tenants.tasks.send_expiry_alerts',
+            'schedule': crontab(hour=7, minute=0),
+        },
     }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

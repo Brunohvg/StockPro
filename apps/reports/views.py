@@ -6,6 +6,8 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import F, Sum
 from django.shortcuts import render, redirect, get_object_or_404
+
+from apps.core.models import SystemSetting
 from django.utils import timezone
 
 from apps.inventory.models import StockMovement
@@ -79,7 +81,19 @@ def dashboard(request):
         'product', 'variant', 'variant__product', 'user', 'location'
     ).order_by('-created_at')[:10]
 
+    from apps.inventory.services.expiry import expiring_lots
+    expiry_window = 30
+    settings_obj = SystemSetting.get_settings(tenant) if tenant else None
+    if settings_obj:
+        expiry_window = settings_obj.expiry_alert_days
+    expired_lots, expiring_soon_lots = expiring_lots(tenant, expiry_window)
+
     return render(request, 'reports/dashboard.html', {
+        'expired_lots': expired_lots[:10],
+        'expired_lots_count': len(expired_lots),
+        'expiring_lots': expiring_soon_lots[:10],
+        'expiring_lots_count': len(expiring_soon_lots),
+        'expiry_window': expiry_window,
         'total_products': total_products,
         'total_simple': total_simple,
         'total_variable': total_variable,

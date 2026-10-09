@@ -13,6 +13,9 @@ class SystemSetting(TenantMixin):
     logo_url = models.URLField(blank=True, null=True)
     alert_email = models.EmailField(blank=True, null=True)
     low_stock_alert_threshold = models.PositiveIntegerField(default=10)
+    expiry_alert_days = models.PositiveIntegerField(
+        default=30, verbose_name="Avisar validade com antecedência (dias)"
+    )
     enable_auto_cost_update = models.BooleanField(default=True)
 
     # AI Staging Settings (V20)

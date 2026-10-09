@@ -108,6 +108,13 @@ class Product(TenantMixin):
     avg_unit_cost = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="Custo Médio (Legado)")
     sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Preço de Venda", help_text="Usado para calcular margem bruta.")
 
+    # Validade (V3): quando ligado, entradas registram lote/validade e saídas seguem FEFO
+    tracks_expiry = models.BooleanField(
+        default=False,
+        verbose_name="Controla validade",
+        help_text="Registra lote e data de validade nas entradas; saídas consomem primeiro o que vence antes (FEFO).",
+    )
+
     requires_review = models.BooleanField(default=False, verbose_name="Requer Revisão")
     ai_confidence = models.DecimalField(max_digits=3, decimal_places=2, default=1.0, verbose_name="Confiança IA")
 

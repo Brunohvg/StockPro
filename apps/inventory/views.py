@@ -129,7 +129,10 @@ def create_movement(request):
                 variant=variant,
                 reason=reason,
                 unit_cost=unit_cost,
-                location_id=location_id
+                location_id=location_id,
+                lot_number=request.POST.get('lot_number') if movement_type != 'OUT' else None,
+                expiry_date=request.POST.get('expiry_date') if movement_type != 'OUT' else None,
+                manufacture_date=request.POST.get('manufacture_date') if movement_type != 'OUT' else None,
             )
 
             target_name = variant.display_name if variant else product.name
@@ -244,20 +247,56 @@ def import_create(request):
             batch.tenant = request.tenant
             batch.save()
 
-            try:
-                from .tasks import process_import_task
-                process_import_task.delay(str(batch.id))
-                messages.info(request, "Arquivo enviado! O processamento iniciará em segundo plano.")
-            except Exception as e:
-                import logging, traceback
-                logger = logging.getLogger(__name__)
-                logger.error("CELERY ERROR ao enfileirar task: %s\n%s", e, traceback.format_exc())
-                messages.warning(request, "Arquivo recebido! O processamento automático está temporariamente indisponível.")
-
-            return redirect('inventory:import_list')
+            # Prévia síncrona: roda a importação numa transação desfeita
+            from .tasks import preview_import
+            preview_import(batch)
+            if batch.status == 'ERROR':
+                messages.error(request, "Não foi possível ler a planilha. Veja o motivo abaixo.")
+            else:
+                messages.info(request, "Confira a prévia e confirme para gravar.")
+            return redirect('inventory:import_detail', pk=batch.pk)
     else:
         form = ImportBatchForm()
     return render(request, 'inventory/import_form.html', {'form': form})
+
+@login_required
+@admin_required
+@trial_allows_read
+def import_confirm(request, pk):
+    """Confirma a prévia e envia a importação para processamento."""
+    batch = get_object_or_404(ImportBatch, id=pk, tenant=request.tenant)
+    if request.method != 'POST' or batch.status != 'PENDING_REVIEW':
+        return redirect('inventory:import_detail', pk=batch.pk)
+    batch.status = 'PENDING'
+    batch.log = "Importação confirmada. Processando..."
+    batch.save(update_fields=['status', 'log'])
+    _enqueue_import(request, batch)
+    return redirect('inventory:import_detail', pk=batch.pk)
+
+
+def _enqueue_import(request, batch):
+    try:
+        process_import_task.delay(str(batch.id))
+        messages.success(request, "Importação confirmada! Processando em segundo plano.")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("CELERY ERROR ao enfileirar import %s: %s", batch.id, e)
+        messages.warning(request, "Importação confirmada, mas o serviço de fila está offline. Tente reprocessar em instantes.")
+
+
+@login_required
+@admin_required
+def download_import_template(request):
+    """Modelo .xlsx com instruções, exemplos e listas de categorias/marcas da empresa."""
+    from django.http import HttpResponse
+    from .services.template_xlsx import build_import_template
+    kind = request.GET.get('type', 'CATALOG_DIRECT')
+    content, filename = build_import_template(request.tenant, kind)
+    response = HttpResponse(
+        content, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
 
 @login_required
 @admin_required

@@ -77,8 +77,16 @@ class ProductSearchView(views.APIView):
             'product__name', 'name'
         )[:20]
 
+        from apps.inventory.models import StockLot
+        lots_by_variant = {}
+        for lot in StockLot.objects.filter(
+            variant__in=list(variants), quantity__gt=0, expiry_date__isnull=False
+        ).order_by('expiry_date'):
+            lots_by_variant.setdefault(lot.variant_id, lot)
+
         results = []
         for v in variants:
+            next_lot = lots_by_variant.get(v.id)
             results.append({
                 "variant_id": str(v.id),
                 "product_id": str(v.product_id),
@@ -91,6 +99,9 @@ class ProductSearchView(views.APIView):
                 "avg_unit_cost": float(v.avg_unit_cost) if v.avg_unit_cost else 0,
                 "product_type": v.product.product_type,
                 "low_stock": v.current_stock <= (v.minimum_stock or 0),
+                "tracks_expiry": v.product.tracks_expiry,
+                "next_expiry": next_lot.expiry_date.isoformat() if next_lot else None,
+                "next_expiry_days": next_lot.days_to_expiry if next_lot else None,
             })
 
         return Response({"results": results, "count": len(results)})
@@ -172,6 +183,7 @@ class OrderConsumptionView(views.APIView):
                     reason=f"Saída via App — {platform} #{external_order_id}",
                     source=platform,
                     external_order_id=external_order_id,
+                    lot_id=item.get('lot_id'),
                 )
                 results.append({
                     "sku": sku,
@@ -259,6 +271,9 @@ class StockEntryView(views.APIView):
                     unit_cost=unit_cost,
                     reason=f"Entrada via App — Ref: {reference}",
                     source='APP_MOBILE',
+                    lot_number=item.get('lot_number'),
+                    expiry_date=item.get('expiry_date'),
+                    manufacture_date=item.get('manufacture_date'),
                 )
                 results.append({
                     "sku": sku,

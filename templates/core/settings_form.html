@@ -77,6 +77,15 @@
                                         class="w-32 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:border-indigo-500 outline-none">
                                     <span class="text-sm font-medium text-slate-400">unidades</span>
                                 </div>
+                                <div>
+                                    <label class="text-sm font-bold text-slate-900">Aviso de Validade</label>
+                                    <p class="text-xs text-slate-500 mt-1 leading-relaxed">Com quantos dias de antecedência o painel e o e-mail diário (enviado para o e-mail de alertas) avisam sobre lotes perto de vencer.</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <input type="number" name="expiry_alert_days" min="1" max="365" value="{{ settings.expiry_alert_days }}"
+                                        class="w-32 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:border-indigo-500 outline-none">
+                                    <span class="text-sm font-medium text-slate-400">dias</span>
+                                </div>
                             </div>
                         </div>
                     </div>
