@@ -227,12 +227,48 @@ def admin_backups_view(request):
     from . import backup_status
     from .models import BackupRun
 
+    # Resumo global: um dump protege todas as empresas no mesmo PostgreSQL.
+    from datetime import timedelta
+    from django.utils import timezone
+    from apps.accounts.models import TenantMembership
+
+    now = timezone.now()
+    backups_qs = BackupRun.objects.exclude(trigger='verify')
+    recent_qs = backups_qs.filter(started_at__gte=now - timedelta(days=14))
+    completed_qs = recent_qs.filter(status__in=['SUCCESS', 'LOCAL_ONLY'])
+    failed_qs = recent_qs.filter(status='FAILED')
+    total_finished = completed_qs.count() + failed_qs.count()
+    daily_activity = []
+    for offset in range(13, -1, -1):
+        day = timezone.localdate() - timedelta(days=offset)
+        day_runs = recent_qs.filter(started_at__date=day)
+        daily_activity.append({
+            'date': day,
+            'success': day_runs.filter(status__in=['SUCCESS', 'LOCAL_ONLY']).count(),
+            'failed': day_runs.filter(status='FAILED').count(),
+        })
+    max_daily = max((day['success'] + day['failed'] for day in daily_activity), default=0) or 1
+    for day in daily_activity:
+        day['success_height'] = round(day['success'] * 100 / max_daily)
+        day['failed_height'] = round(day['failed'] * 100 / max_daily)
+    dashboard = {
+        'companies': Tenant.objects.count(),
+        'users': TenantMembership.objects.values('user_id').distinct().count(),
+        'total_jobs': backups_qs.count(),
+        'success_14d': completed_qs.count(),
+        'failed_14d': failed_qs.count(),
+        'success_rate': round(completed_qs.count() * 100 / total_finished) if total_finished else None,
+        'last_24h': backups_qs.filter(started_at__gte=now - timedelta(hours=24)).count(),
+        'daily_activity': daily_activity,
+        'schedule': '03:30 (America/Sao_Paulo)',
+    }
     runs = list(BackupRun.objects.all()[:40])
     for run in runs:
         run.is_verify = run.trigger == backup_status.VERIFY
         run.is_stale = backup_status.is_stale_running(run)
     return render(request, 'tenants/admin_backups.html', {
         'health': backup_status.health(),
+        'dashboard': dashboard,
         'runs': runs,
         'disk': backup_status.local_disk(),
         'cfg': {
