@@ -172,6 +172,10 @@ def product_detail(request, pk):
         'attribute_types': attribute_types,
         'ProductType': ProductType,
     }
+    from apps.inventory.models import StockLot
+    context['lots'] = StockLot.objects.filter(
+        tenant=request.tenant, variant__product=product, quantity__gt=0
+    ).select_related('variant')
     return render(request, 'products/product_detail.html', context)
 
 
