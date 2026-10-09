@@ -60,3 +60,8 @@ def platform_heartbeat():
     from .platform import HEARTBEAT_KEY
     cache.set(HEARTBEAT_KEY, timezone.now(), timeout=60 * 60 * 24)
     return "ok"
+
+# Celery autodiscover_tasks() importa apps.tenants.tasks, mas não backup_task.
+# Importar explicitamente registra daily_backup, manual_backup, verify_backup
+# e cleanup_old_exports nos workers de produção.
+from . import backup_task  # noqa: F401, E402
