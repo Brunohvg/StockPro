@@ -86,6 +86,8 @@ def signup_view(request):
         TenantMembership.objects.create(user=user, tenant=tenant, role=MembershipRole.OWNER)
 
         SystemSetting.objects.create(tenant=tenant, company_name=company_name)
+        from .platform import record
+        record(tenant, 'CREATED', f"Cadastro pelo site ({plan.display_name}, teste de 14 dias)", user)
 
         login(request, user, backend='apps.accounts.backends.EmailBackend')
         request.session['active_tenant_id'] = tenant.id  # Set active tenant
@@ -137,73 +139,23 @@ def billing_upgrade(request, plan_id):
             messages.error(request, "Selecione uma empresa antes de alterar o plano.")
             return redirect('tenants:billing')
         new_plan = get_object_or_404(Plan, pk=plan_id)
+        from . import platform
+        old_plan, old_status = tenant.plan, tenant.subscription_status
         tenant.plan = new_plan
         tenant.subscription_status = 'ACTIVE'
         tenant.save()
+        if not old_plan or old_plan.pk != new_plan.pk:
+            platform.record(tenant, 'PLAN', f"Plano: {old_plan.display_name if old_plan else 'nenhum'} → "
+                            f"{new_plan.display_name} (pela tela de planos)", request.user)
+        if old_status != 'ACTIVE':
+            platform.record(tenant, 'STATUS', f"Status: {platform.STATUS_LABELS[old_status]} → Ativo "
+                            "(pela tela de planos)", request.user)
         messages.success(request, f"Plano atualizado para {new_plan.display_name}!")
         return redirect('tenants:billing')
     return redirect('tenants:billing')
 
 
-@login_required
-def admin_panel_view(request):
-    """Admin panel for managing all tenants - superuser only"""
-    if not request.user.is_superuser:
-        messages.error(request, "Acesso restrito a administradores.")
-        return redirect('reports:dashboard')
-
-    tenants = Tenant.objects.select_related('plan').order_by('-created_at')
-    plans = Plan.objects.all().order_by('price')
-
-    q = request.GET.get('q', '')
-    status = request.GET.get('status', '')
-    plan_filter = request.GET.get('plan', '')
-
-    if q:
-        tenants = tenants.filter(Q(name__icontains=q) | Q(cnpj__icontains=q))
-    if status:
-        tenants = tenants.filter(subscription_status=status)
-    if plan_filter:
-        tenants = tenants.filter(plan_id=plan_filter)
-
-    active_count = Tenant.objects.filter(subscription_status='ACTIVE').count()
-    trial_count = Tenant.objects.filter(subscription_status='TRIAL').count()
-
-    from .backup_status import health as backup_health
-
-    return render(request, 'tenants/admin_panel.html', {
-        'backup_health': backup_health(),
-        'tenants': tenants,
-        'plans': plans,
-        'active_count': active_count,
-        'trial_count': trial_count,
-    })
-
-
-@login_required
-def admin_tenant_update(request):
-    """Update tenant plan and status - superuser only"""
-    if not request.user.is_superuser:
-        messages.error(request, "Acesso restrito a administradores.")
-        return redirect('reports:dashboard')
-
-    if request.method == 'POST':
-        tenant_id = request.POST.get('tenant_id')
-        plan_id = request.POST.get('plan_id')
-        subscription_status = request.POST.get('subscription_status')
-        is_active = request.POST.get('is_active') == 'on'
-
-        tenant = get_object_or_404(Tenant, pk=tenant_id)
-
-        if plan_id:
-            tenant.plan = get_object_or_404(Plan, pk=plan_id)
-        tenant.subscription_status = subscription_status
-        tenant.is_active = is_active
-        tenant.save()
-
-        messages.success(request, f"Empresa '{tenant.name}' atualizada com sucesso!")
-
-    return redirect('tenants:admin_panel')
+# A Central da plataforma (/admin-panel/) fica em views_platform.py.
 
 
 # ─── Backups (só superusuário da plataforma) ─────────────────────────────────
