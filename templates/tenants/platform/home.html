@@ -15,6 +15,15 @@
     </header>
 
     {% include 'tenants/platform/_nav.html' with tab='home' %}
+    <section aria-label="Ações rápidas da plataforma" class="platform-actions flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4">
+        <div class="mr-auto">
+            <p class="font-bold text-slate-900 text-sm">Operação da plataforma</p>
+            <p class="text-xs text-slate-500 mt-1">Acesse os serviços globais sem entrar na área de uma empresa.</p>
+        </div>
+        <a href="#empresas" class="rounded-xl px-4 py-2.5 border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">Ver empresas</a>
+        <a href="{% url 'tenants:platform_plans' %}" class="rounded-xl px-4 py-2.5 border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">Administrar planos</a>
+        <a href="{% url 'tenants:admin_backups' %}" class="rounded-xl px-4 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700">Central de backups</a>
+    </section>
 
     <!-- Indicadores -->
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
