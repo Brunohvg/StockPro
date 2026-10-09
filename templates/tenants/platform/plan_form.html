@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if plan %}Editar {{ plan.display_name }}{% else %}Novo plano{% endif %} | Central da plataforma | StockPro{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-3xl mx-auto">
+    <header>
+        <a href="{% url 'tenants:platform_plans' %}" class="text-sm text-indigo-600 hover:underline">← Planos</a>
+        <h1 class="text-3xl font-black text-slate-900 mt-2">{% if plan %}Editar {{ plan.display_name }}{% else %}Novo plano{% endif %}</h1>
+        {% if plan and n_tenants %}
+        <p class="text-sm text-amber-700 mt-1">{{ n_tenants }} empresa{{ n_tenants|pluralize }} usa{{ n_tenants|pluralize:"m" }} este plano. Preço e limites mudam para elas na hora, e a mudança fica no histórico de cada uma.</p>
+        {% endif %}
+    </header>
+
+    <form method="post" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="rounded-xl bg-rose-50 border border-rose-200 p-3 text-sm text-rose-700">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+        {% endif %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {% for field in form %}
+            <div class="{% if field.name == 'features' %}sm:col-span-2{% endif %}">
+                {% if field.field.widget.input_type == 'checkbox' %}
+                <label class="flex items-center gap-2 text-sm font-semibold text-slate-800">{{ field }} {{ field.label }}</label>
+                {% else %}
+                <label for="{{ field.id_for_label }}" class="block text-sm font-semibold text-slate-800 mb-1">{{ field.label }}</label>
+                {{ field }}
+                {% endif %}
+                {% for e in field.errors %}<p class="text-xs text-rose-600 mt-1">{{ e }}</p>{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="flex gap-3">
+            <button class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">Salvar</button>
+            <a href="{% url 'tenants:platform_plans' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
