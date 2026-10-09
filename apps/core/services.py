@@ -218,6 +218,7 @@ class StockService:
         expiry_date=None,       # Validade: date ou 'dd/mm/aaaa' / 'aaaa-mm-dd'
         manufacture_date=None,  # Fabricação
         lot_id=None,            # Saída de um lote específico (senão FEFO)
+        allow_expired_lot=False, # Exclusivamente para estornos internos auditados
     ):
         """
         Create a stock movement and update stock.
@@ -357,7 +358,7 @@ class StockService:
         # Lotes / validade (FEFO)
         allocations = StockService._apply_lots(
             tenant, target, movement_type, quantity, new_stock,
-            lot_number, expiry_date, manufacture_date, lot_id,
+            lot_number, expiry_date, manufacture_date, lot_id, allow_expired_lot,
         )
         if allocations:
             from apps.inventory.models import MovementLot
@@ -393,7 +394,7 @@ class StockService:
 
     @staticmethod
     def _apply_lots(tenant, target, movement_type, quantity, new_stock,
-                    lot_number, expiry_date, manufacture_date, lot_id):
+                    lot_number, expiry_date, manufacture_date, lot_id, allow_expired_lot=False):
         """
         Atualiza os lotes da variação. Retorna [(lote, quantidade)] para auditoria.
 
@@ -462,7 +463,7 @@ class StockService:
             from django.db.models import Q
             if lot_id:
                 lot = get_lot()
-                if lot.expiry_date is not None and lot.expiry_date < timezone.localdate():
+                if not allow_expired_lot and lot.expiry_date is not None and lot.expiry_date < timezone.localdate():
                     raise ValueError('Não é permitido consumir lote vencido. Registre descarte ou ajuste.')
                 if lot.quantity < quantity:
                     raise ValueError(f"Lote {lot.lot_number or lot.pk} tem só {lot.quantity} disponível.")
