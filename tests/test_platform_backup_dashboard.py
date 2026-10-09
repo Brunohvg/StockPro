@@ -26,3 +26,16 @@ def test_backup_dashboard_global_autenticado():
     response = client.get('/admin-panel/backups/')
     assert response.context['dashboard']['total_jobs'] == 1
     assert response.context['dashboard']['success_14d'] == 1
+
+@pytest.mark.django_db
+def test_backup_dashboard_avisa_quando_worker_sem_sinal(settings):
+    from django.core.cache import cache
+    from apps.tenants.platform import HEARTBEAT_KEY
+    cache.delete(HEARTBEAT_KEY)
+    user = UserFactory(is_superuser=True, is_staff=True)
+    client = Client()
+    client.force_login(user)
+    result = client.get('/admin-panel/backups/')
+    assert result.status_code == 200
+    assert result.context['worker_health']['ok'] is False
+    assert 'sem sinal recente' in result.content.decode()
