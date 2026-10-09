@@ -68,6 +68,8 @@ def mobile_move(request):
                 product_sku=sku,
                 reason=reason,
                 source='MOBILE_APP',
+                expiry_date=request.POST.get('expiry_date') if movement_type == 'IN' else None,
+                lot_number=request.POST.get('lot_number') if movement_type == 'IN' else None,
             )
 
             # Buscar variante para mostrar nome
