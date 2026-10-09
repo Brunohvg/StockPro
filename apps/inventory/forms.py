@@ -4,6 +4,21 @@ from .models import ImportBatch, Location
 
 
 class ImportBatchForm(forms.ModelForm):
+    ALLOWED_EXTENSIONS = ('.xlsx', '.xlsm', '.csv', '.txt')
+    MAX_SIZE_MB = 10
+
+    def clean_file(self):
+        f = self.cleaned_data.get('file')
+        if not f:
+            return f
+        import os
+        ext = os.path.splitext(f.name)[1].lower()
+        if ext not in self.ALLOWED_EXTENSIONS:
+            raise forms.ValidationError("Envie uma planilha .xlsx ou .csv.")
+        if f.size > self.MAX_SIZE_MB * 1024 * 1024:
+            raise forms.ValidationError(f"Arquivo maior que {self.MAX_SIZE_MB} MB.")
+        return f
+
     class Meta:
         model = ImportBatch
         fields = ['type', 'file']
