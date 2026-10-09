@@ -11,7 +11,8 @@ RUN npm ci --no-audit --no-fund
 COPY templates ./templates
 COPY apps ./apps
 COPY static ./static
-RUN npm run build:css
+COPY scripts/fetch_vendor.mjs ./scripts/fetch_vendor.mjs
+RUN node scripts/fetch_vendor.mjs && npm run build:css
 
 # ---- Etapa 2: aplicação ----
 FROM python:3.11-slim-bookworm
@@ -54,6 +55,7 @@ RUN chmod +x /usr/local/bin/entrypoint.prod.sh
 COPY . /app
 # CSS recém-gerado na etapa 1 (sobrescreve o static/css/app.css do repositório)
 COPY --from=assets /build/static/css/app.css /app/static/css/app.css
+COPY --from=assets /build/static/vendor/html5-qrcode-2.3.8.min.js /app/static/vendor/html5-qrcode-2.3.8.min.js
 
 RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data/backups
 
