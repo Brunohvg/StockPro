@@ -46,5 +46,24 @@ jobs:
             tests/test_plan_pricing_migration.py \
             tests/test_catalog_initial_lot.py \
             tests/test_import_validade.py
+      # Desde o patch 6 a suíte inteira passa; ela roda toda para pegar regressões em qualquer parte.
+      - name: Full test suite
+        run: python -m pytest -q -o addopts="" tests/
+
+  tailwind-css:
+    # O static/css/app.css do repositório precisa estar em dia com os templates
+    # (o Dockerfile regera no deploy, mas o runserver local usa o arquivo commitado).
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:css
+      - name: CSS commitado igual ao gerado
+        run: git diff --exit-code static/css/app.css || (echo "Rode 'npm run build:css' e commite static/css/app.css" && exit 1)
 
 # Deliberately no deploy job. Production deployment is manual in Coolify.
