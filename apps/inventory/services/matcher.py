@@ -465,8 +465,12 @@ Retorne JSON:
     "logic": "Explicação curta"
 }}"""
 
+        from apps.core.services import AIUnavailable
         try:
-            response = AIService.call_ai(prompt, schema="json")
+            try:
+                response = AIService.call_for_tenant(tenant, prompt, schema="json")
+            except AIUnavailable:
+                return parsed_result  # plano sem IA: fica com o reconhecimento local
             if not response:
                 # AI offline - return parsed result
                 return parsed_result
