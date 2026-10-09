@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Plan, Tenant
+from .models import BackupRun, Plan, Tenant
 
 
 @admin.register(Plan)
@@ -16,3 +16,16 @@ class TenantAdmin(admin.ModelAdmin):
     search_fields = ('name', 'cnpj', 'slug')
     list_editable = ('is_active', 'subscription_status', 'plan')
     prepopulated_fields = {'slug': ('name',)}
+
+
+@admin.register(BackupRun)
+class BackupRunAdmin(admin.ModelAdmin):
+    list_display = ('started_at', 'status', 'trigger', 'db_size_bytes', 'media_size_bytes', 'encrypted')
+    list_filter = ('status', 'trigger', 'encrypted')
+    readonly_fields = [f.name for f in BackupRun._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

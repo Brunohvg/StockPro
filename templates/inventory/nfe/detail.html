@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-8 space-y-6">
+    <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div>
+            <a href="{% url 'inventory:nfe_list' %}" class="text-xs font-bold text-slate-400 hover:text-indigo-600">← Notas fiscais</a>
+            <div class="flex items-center gap-3 mt-1">
+                <h1 class="text-2xl font-black text-slate-900">NF-e nº {{ doc.number }}{% if doc.series %} <span class="text-slate-400 text-lg">série {{ doc.series }}</span>{% endif %}</h1>
+                {% include 'inventory/nfe/_beta.html' %}
+                <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase
+                    {% if doc.status == 'IMPORTED' %}bg-emerald-50 text-emerald-700{% elif doc.status == 'PREVIEW' %}bg-amber-50 text-amber-700{% else %}bg-slate-100 text-slate-500{% endif %}">{{ doc.get_status_display }}</span>
+            </div>
+            <p class="text-sm text-slate-600 mt-1">
+                <strong>{{ doc.supplier_trade_name|default:doc.supplier_name }}</strong>
+                · CNPJ {{ doc.supplier_cnpj }}{% if doc.supplier_city %} · {{ doc.supplier_city }}/{{ doc.supplier_state }}{% endif %}
+                · emitida em {{ doc.issued_at|date:"d/m/Y" }}
+            </p>
+            <p class="text-xs text-slate-400 font-mono mt-1">Chave {{ doc.access_key }}</p>
+        </div>
+        <div class="text-right">
+            <p class="text-xs text-slate-400 uppercase font-bold">Valor da nota</p>
+            <p class="text-2xl font-black text-slate-900">R$ {{ doc.total_invoice|floatformat:2 }}</p>
+            <p class="text-xs text-slate-500">Produtos: R$ {{ doc.total_products|floatformat:2 }}</p>
+            <a href="{% url 'inventory:nfe_xml' doc.pk %}" class="text-xs font-bold text-indigo-600">Baixar XML</a>
+        </div>
+    </div>
+
+    {% for w in doc.warnings %}
+    <div class="rounded-xl p-3 text-sm {% if w.blocking %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-amber-50 text-amber-900 border border-amber-200{% endif %}">
+        {% if w.blocking %}<strong>Bloqueado:</strong>{% else %}<strong>Atenção:</strong>{% endif %} {{ w.text }}
+    </div>
+    {% endfor %}
+
+    {% if doc.status == 'PREVIEW' %}
+    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-900">
+        <strong>Prévia: nada entrou no estoque ainda.</strong> Para cada item escolha <em>Vincular</em> (a um produto do sistema),
+        <em>Criar novo</em> ou <em>Ignorar</em>, e confira o <strong>fator</strong> (quantas unidades do seu estoque vêm em 1 unidade da nota;
+        ex.: caixa com 12 = 12). Custos calculados pelo <a class="underline font-bold" href="{% url 'inventory:nfe_settings' %}">padrão da empresa</a>.
+    </div>
+    {% endif %}
+
+    <form method="post" id="nfe-form">
+        {% csrf_token %}
+        <div class="bg-white rounded-2xl border border-slate-100 overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-[10px] font-black uppercase text-slate-500">
+                    <tr>
+                        <th class="px-3 py-3 text-left">#</th>
+                        <th class="px-3 py-3 text-left">Item da nota</th>
+                        <th class="px-3 py-3 text-right">Qtd nota</th>
+                        <th class="px-3 py-3 text-left">Ação / produto no sistema</th>
+                        <th class="px-3 py-3 text-right">Fator</th>
+                        <th class="px-3 py-3 text-right">Entra no estoque</th>
+                        <th class="px-3 py-3 text-right">Custo unit.</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 align-top">
+                {% for item in items %}
+                <tr class="{% if item.decision == 'PENDING' %}bg-amber-50/40{% elif item.decision == 'IGNORE' %}opacity-60{% endif %}">
+                    <td class="px-3 py-3 text-slate-400">{{ item.item_number }}</td>
+                    <td class="px-3 py-3 max-w-xs">
+                        <div class="font-bold text-slate-800">{{ item.description }}</div>
+                        <div class="text-[11px] text-slate-500 font-mono">Cód. {{ item.supplier_code|default:"-" }}{% if item.ean %} · EAN {{ item.ean }}{% endif %}{% if item.ncm %} · NCM {{ item.ncm }}{% endif %}</div>
+                        {% if item.lots %}
+                        <div class="mt-1 text-[11px] text-emerald-700">
+                            {% for lot in item.lots %}Lote {{ lot.lot|default:"s/n" }}: {{ lot.quantity }}{% if lot.expiry %} · val. {{ lot.expiry }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="px-3 py-3 text-right whitespace-nowrap">{{ item.quantity|floatformat:"-4" }} <span class="text-slate-400">{{ item.unit }}</span><div class="text-[11px] text-slate-400">R$ {{ item.total|floatformat:2 }}</div></td>
+                    <td class="px-3 py-3 min-w-[18rem]">
+                        {% if doc.status == 'PREVIEW' %}
+                        <select name="item-{{ item.pk }}-decision" class="decision w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" data-item="{{ item.pk }}">
+                            {% if item.decision == 'PENDING' %}<option value="PENDING" selected>— Decidir —</option>{% endif %}
+                            <option value="LINK" {% if item.decision == 'LINK' %}selected{% endif %}>Vincular a produto existente</option>
+                            <option value="CREATE" {% if item.decision == 'CREATE' %}selected{% endif %}>Criar produto novo</option>
+                            <option value="IGNORE" {% if item.decision == 'IGNORE' %}selected{% endif %}>Ignorar</option>
+                        </select>
+                        <div class="mt-2 link-box" data-item="{{ item.pk }}" {% if item.decision != 'LINK' %}hidden{% endif %}>
+                            <input type="text" name="item-{{ item.pk }}-sku" list="dl-{{ item.pk }}" autocomplete="off"
+                                   value="{{ item.variant.sku|default:'' }}" placeholder="SKU ou EAN do produto"
+                                   class="product-search w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm font-mono">
+                            <datalist id="dl-{{ item.pk }}"></datalist>
+                            {% if item.variant %}<div class="text-[11px] text-slate-500 mt-1">→ {{ item.variant.display_name }}{% if item.match_source %} <span class="text-emerald-700">({% if item.match_source == 'SUPPLIER_MAP' %}código do fornecedor{% elif item.match_source == 'EAN' %}EAN{% elif item.match_source == 'SKU' %}SKU{% else %}escolhido{% endif %})</span>{% endif %}</div>{% endif %}
+                        </div>
+                        <div class="mt-2 space-y-1 create-box" data-item="{{ item.pk }}" {% if item.decision != 'CREATE' %}hidden{% endif %}>
+                            <input type="text" name="item-{{ item.pk }}-name" value="{{ item.new_product_name }}" maxlength="255"
+                                   class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm" placeholder="Nome do produto novo">
+                            <select name="item-{{ item.pk }}-category" class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm">
+                                <option value="">Sem categoria</option>
+                                {% for c in categories %}<option value="{{ c.pk }}" {% if item.new_product_category_id == c.pk %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        {% else %}
+                            {% if item.decision == 'IGNORE' %}<span class="text-slate-400">Ignorado</span>
+                            {% elif item.variant %}<a class="font-bold text-indigo-600" href="{% url 'products:product_detail' item.variant.product_id %}">{{ item.variant.display_name }}</a> <span class="text-xs font-mono text-slate-400">{{ item.variant.sku }}</span>{% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="px-3 py-3 text-right">
+                        {% if doc.status == 'PREVIEW' %}
+                        <input type="text" inputmode="decimal" name="item-{{ item.pk }}-factor" value="{{ item.conversion_factor|floatformat:'-4' }}"
+                               class="w-20 px-2 py-1.5 border {% if item.factor_suggested %}border-amber-400 bg-amber-50{% else %}border-slate-200{% endif %} rounded-lg text-sm text-right">
+                        {% if item.factor_suggested %}<div class="text-[10px] text-amber-700 mt-1">sugerido</div>{% endif %}
+                        {% else %}{{ item.conversion_factor|floatformat:"-4" }}{% endif %}
+                    </td>
+                    <td class="px-3 py-3 text-right font-bold whitespace-nowrap">{{ item.calc_stock_qty|floatformat:"-4" }}</td>
+                    <td class="px-3 py-3 text-right whitespace-nowrap">
+                        R$ {{ item.calc_unit_cost|floatformat:4 }}
+                        {% if item.calc_cost_total != item.total %}<div class="text-[10px] text-slate-400" title="IPI {{ item.ipi }} · ST {{ item.icms_st }} · frete {{ item.freight }} · seguro {{ item.insurance }} · outras {{ item.other }} · desconto {{ item.discount }}">total c/ impostos R$ {{ item.calc_cost_total|floatformat:2 }}</div>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if doc.status == 'PREVIEW' %}
+        <div class="mt-6 bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
+            {% if ready_errors %}
+            <ul class="text-sm text-amber-800 list-disc pl-5">{% for e in ready_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+            {% endif %}
+            {% if needs_confirm %}
+            <label class="flex items-center gap-2 text-sm font-bold text-slate-700">
+                <input type="checkbox" name="confirm_recipient" class="w-4 h-4 rounded border-slate-300 text-indigo-600">
+                Confirmo que esta nota é uma compra desta empresa.
+            </label>
+            {% endif %}
+            <div class="flex flex-wrap gap-3 justify-end">
+                <button name="action" value="discard" onclick="return confirm('Descartar esta nota? Nada entra no estoque.')"
+                        class="px-5 py-2.5 rounded-xl font-bold text-rose-600 hover:bg-rose-50">Descartar</button>
+                <button name="action" value="save" class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 hover:bg-slate-50">Salvar revisão</button>
+                <button name="action" value="import" onclick="return confirm('Dar entrada no estoque com estes itens?')"
+                        class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700">Confirmar entrada no estoque</button>
+            </div>
+        </div>
+        {% endif %}
+    </form>
+
+    {% if doc.status == 'IMPORTED' %}
+    <form method="post" action="{% url 'inventory:nfe_revert' doc.pk %}" class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {% csrf_token %}
+        <div class="text-sm text-slate-600">Importada em {{ doc.imported_at|date:"d/m/Y H:i" }} por {{ doc.imported_by.get_full_name|default:doc.imported_by.username }}.
+            Errou algo? <strong>Desfazer entrada</strong> lança saídas de estorno (o histórico fica completo). Só funciona se ainda houver saldo.</div>
+        <button onclick="return confirm('Desfazer a entrada desta nota?')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 rounded-xl font-bold hover:bg-rose-50">Desfazer entrada</button>
+    </form>
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    document.querySelectorAll('select.decision').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+            var id = sel.dataset.item;
+            document.querySelector('.link-box[data-item="' + id + '"]').hidden = sel.value !== 'LINK';
+            document.querySelector('.create-box[data-item="' + id + '"]').hidden = sel.value !== 'CREATE';
+        });
+    });
+    var timer;
+    document.querySelectorAll('input.product-search').forEach(function (input) {
+        input.addEventListener('input', function () {
+            clearTimeout(timer);
+            var q = input.value.trim();
+            if (q.length < 2) return;
+            timer = setTimeout(function () {
+                fetch('{% url "inventory:api_product_search" %}?q=' + encodeURIComponent(q), {credentials: 'same-origin'})
+                    .then(function (r) { return r.ok ? r.json() : {results: []}; })
+                    .then(function (data) {
+                        var dl = document.getElementById(input.getAttribute('list'));
+                        dl.replaceChildren();
+                        (data.results || []).forEach(function (r) {
+                            var opt = document.createElement('option');
+                            opt.value = r.sku;
+                            opt.label = r.display_name + (r.barcode ? ' · ' + r.barcode : '');
+                            dl.appendChild(opt);
+                        });
+                    }).catch(function () {});
+            }, 300);
+        });
+    });
+    lucide.createIcons();
+})();
+</script>
+{% endblock %}
+

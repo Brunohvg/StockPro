@@ -131,3 +131,28 @@ class StockLotAdmin(admin.ModelAdmin):
 class MovementLotAdmin(admin.ModelAdmin):
     list_display = ('movement', 'lot', 'quantity')
     readonly_fields = ('movement', 'lot', 'quantity')
+
+
+from .models import NfeDocument, NfeItem, NfeSettings  # noqa: E402
+
+
+class NfeItemInline(admin.TabularInline):
+    model = NfeItem
+    extra = 0
+    fields = ('item_number', 'description', 'quantity', 'unit', 'decision', 'variant', 'conversion_factor')
+    readonly_fields = fields
+    can_delete = False
+
+
+@admin.register(NfeDocument)
+class NfeDocumentAdmin(admin.ModelAdmin):
+    list_display = ('number', 'supplier_name', 'tenant', 'status', 'total_invoice', 'created_at')
+    list_filter = ('status', 'tenant')
+    search_fields = ('access_key', 'number', 'supplier_name', 'supplier_cnpj')
+    readonly_fields = ('access_key', 'warnings', 'imported_at', 'reverted_at')
+    inlines = [NfeItemInline]
+
+
+@admin.register(NfeSettings)
+class NfeSettingsAdmin(admin.ModelAdmin):
+    list_display = ('tenant', 'new_product_policy', 'sku_policy', 'updated_at')

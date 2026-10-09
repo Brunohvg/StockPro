@@ -72,10 +72,17 @@
                                         class="w-full pl-12 pr-12 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all outline-none">
 
                                     <!-- AI MAGIC BUTTON -->
+                                    {% if tenant_has_ai %}
                                     <button type="button" id="btn-ai-magic" title="Mágica: Preencher detalhes com IA"
                                         class="absolute right-2 top-2 w-10 h-10 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white rounded-xl flex items-center justify-center transition-all group/magic active:scale-90">
                                         <i data-lucide="sparkles" class="w-5 h-5 group-hover/magic:animate-pulse"></i>
                                     </button>
+                                    {% else %}
+                                    <a href="{% url 'tenants:billing' %}" title="Preenchimento com IA disponível no plano Profissional"
+                                        class="absolute right-2 top-2 w-10 h-10 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center">
+                                        <i data-lucide="lock" class="w-4 h-4"></i>
+                                    </a>
+                                    {% endif %}
                                 </div>
                             </div>
 
@@ -253,11 +260,7 @@
 
             <!-- Footer Action -->
             <div class="p-8 lg:p-12 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <label class="relative flex items-center cursor-pointer group">
-                    <input type="checkbox" name="is_active" {% if form.is_active.value or not is_edit %}checked{% endif %} class="sr-only peer">
-                    <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                    <span class="ml-3 text-sm font-bold text-slate-600 group-hover:text-slate-900 transition-colors">Produto Ativo</span>
-                </label>
+                <p class="text-xs text-slate-500 max-w-sm">Para tirar um produto de uso, use <strong>Arquivar</strong> na página do produto: o histórico fica preservado e dá para reativar depois.</p>
 
                 <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-black px-12 py-5 rounded-2xl transition-all shadow-xl shadow-slate-900/20 active:scale-95 flex items-center gap-3">
                     <i data-lucide="save" class="w-6 h-6 text-indigo-400"></i>
@@ -329,7 +332,7 @@
     // ==========================================
     // 2. AI MAGIC FILL (V2)
     // ==========================================
-    const btnMagic = document.getElementById('btn-ai-magic');
+    const btnMagic = document.getElementById('btn-ai-magic');  // ausente em plano sem IA
     const productName = document.getElementById('product_name');
 
     if (btnMagic) {

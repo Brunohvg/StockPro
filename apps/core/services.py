@@ -33,8 +33,59 @@ def parse_date_br(value):
     raise ValueError(f"Data inválida: '{value}'. Use dd/mm/aaaa.")
 
 
+class AIUnavailable(Exception):
+    """IA não liberada para a empresa (plano, assinatura ou limite diário)."""
+
+    def __init__(self, message, status=403):
+        super().__init__(message)
+        self.status = status
+
+
 class AIService:
     """Serviço unificado de IA com suporte a múltiplos provedores (V2+)"""
+
+    @staticmethod
+    def check_tenant_access(tenant):
+        """Levanta AIUnavailable se a empresa não pode usar IA agora."""
+        if tenant is None:
+            raise AIUnavailable("Empresa não identificada.")
+        if tenant.subscription_status in ('SUSPENDED', 'CANCELLED') or tenant.is_trial_expired:
+            raise AIUnavailable("Recurso de IA indisponível: assinatura inativa ou período de teste encerrado.")
+        plan = tenant.plan
+        if not plan or not plan.has_ai_matching:
+            raise AIUnavailable("Recurso de IA não disponível no seu plano.")
+
+    @classmethod
+    def tenant_has_ai(cls, tenant):
+        try:
+            cls.check_tenant_access(tenant)
+            return True
+        except AIUnavailable:
+            return False
+
+    @classmethod
+    def call_for_tenant(cls, tenant, prompt: str, schema: str = "json", max_tokens: int = None) -> Optional[str]:
+        """
+        Porta de entrada única para IA paga: confere plano/assinatura e o limite
+        diário por empresa (AI_DAILY_LIMIT_PER_TENANT, 0 = sem limite).
+        """
+        from django.core.cache import cache
+        from django.utils import timezone
+
+        cls.check_tenant_access(tenant)
+        limit = int(os.environ.get('AI_DAILY_LIMIT_PER_TENANT', '50') or 0)
+        if limit > 0:
+            key = f"ai-quota:{tenant.pk}:{timezone.localdate():%Y%m%d}"
+            cache.add(key, 0, timeout=60 * 60 * 26)
+            try:
+                used = cache.incr(key)
+            except ValueError:  # chave expirou entre o add e o incr
+                cache.set(key, 1, timeout=60 * 60 * 26)
+                used = 1
+            if used > limit:
+                raise AIUnavailable(
+                    f"Limite diário de {limit} usos de IA atingido. Volta a funcionar amanhã.", status=429)
+        return cls.call_ai(prompt, schema=schema, max_tokens=max_tokens)
 
     @staticmethod
     def get_providers():
@@ -167,6 +218,7 @@ class StockService:
         expiry_date=None,       # Validade: date ou 'dd/mm/aaaa' / 'aaaa-mm-dd'
         manufacture_date=None,  # Fabricação
         lot_id=None,            # Saída de um lote específico (senão FEFO)
+        allow_expired_lot=False, # Exclusivamente para estornos internos auditados
     ):
         """
         Create a stock movement and update stock.
@@ -228,6 +280,9 @@ class StockService:
         target = ProductVariant.objects.select_for_update().filter(pk=variant.pk, tenant=tenant).first()
         if target is None:
             raise ValueError("Variação não pertence a esta empresa.")
+        if not target.is_active or not target.product.is_active:
+            raise ValueError(
+                f"O produto '{target.sku}' está arquivado. Reative-o antes de movimentar o estoque.")
 
         # Location precisa pertencer à mesma empresa
         if location_id:
@@ -303,7 +358,7 @@ class StockService:
         # Lotes / validade (FEFO)
         allocations = StockService._apply_lots(
             tenant, target, movement_type, quantity, new_stock,
-            lot_number, expiry_date, manufacture_date, lot_id,
+            lot_number, expiry_date, manufacture_date, lot_id, allow_expired_lot,
         )
         if allocations:
             from apps.inventory.models import MovementLot
@@ -339,7 +394,7 @@ class StockService:
 
     @staticmethod
     def _apply_lots(tenant, target, movement_type, quantity, new_stock,
-                    lot_number, expiry_date, manufacture_date, lot_id):
+                    lot_number, expiry_date, manufacture_date, lot_id, allow_expired_lot=False):
         """
         Atualiza os lotes da variação. Retorna [(lote, quantidade)] para auditoria.
 
@@ -408,7 +463,7 @@ class StockService:
             from django.db.models import Q
             if lot_id:
                 lot = get_lot()
-                if lot.expiry_date is not None and lot.expiry_date < timezone.localdate():
+                if not allow_expired_lot and lot.expiry_date is not None and lot.expiry_date < timezone.localdate():
                     raise ValueError('Não é permitido consumir lote vencido. Registre descarte ou ajuste.')
                 if lot.quantity < quantity:
                     raise ValueError(f"Lote {lot.lot_number or lot.pk} tem só {lot.quantity} disponível.")

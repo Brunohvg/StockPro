@@ -241,6 +241,10 @@ if CELERY_BROKER_URL:
             'task': 'apps.tenants.backup_task.daily_backup',
             'schedule': crontab(hour=3, minute=30),
         },
+        'daily-exports-cleanup': {
+            'task': 'apps.tenants.backup_task.cleanup_old_exports',
+            'schedule': crontab(hour=4, minute=15),
+        },
         'daily-expiry-alerts': {
             'task': 'apps.tenants.tasks.send_expiry_alerts',
             'schedule': crontab(hour=7, minute=0),
@@ -308,6 +312,24 @@ LOGGING = {
 # Backup settings
 BACKUP_DIR = config('BACKUP_DIR', default='/data/backups')
 BACKUP_RETENTION_DAYS = config('BACKUP_RETENTION_DAYS', default=30, cast=int)
+# Cópia externa (S3 compatível: Backblaze B2, Cloudflare R2, AWS S3, Wasabi, MinIO).
+# Sem BACKUP_S3_BUCKET o backup continua só no volume local.
+BACKUP_S3_BUCKET = config('BACKUP_S3_BUCKET', default='')
+BACKUP_S3_ENDPOINT_URL = config('BACKUP_S3_ENDPOINT_URL', default='')
+BACKUP_S3_REGION = config('BACKUP_S3_REGION', default='')
+BACKUP_S3_ACCESS_KEY_ID = config('BACKUP_S3_ACCESS_KEY_ID', default='')
+BACKUP_S3_SECRET_ACCESS_KEY = config('BACKUP_S3_SECRET_ACCESS_KEY', default='')
+BACKUP_S3_PREFIX = config('BACKUP_S3_PREFIX', default='stockpro/')
+BACKUP_REMOTE_RETENTION_DAYS = config('BACKUP_REMOTE_RETENTION_DAYS', default=30, cast=int)
+BACKUP_REMOTE_MIN_KEEP = config('BACKUP_REMOTE_MIN_KEEP', default=7, cast=int)
+# Senha da criptografia (GPG AES-256). Guarde-a fora do servidor: sem ela o backup não abre.
+BACKUP_ENCRYPTION_PASSPHRASE = config('BACKUP_ENCRYPTION_PASSPHRASE', default='')
+BACKUP_INCLUDE_MEDIA = config('BACKUP_INCLUDE_MEDIA', default=True, cast=bool)
+BACKUP_ALERT_EMAIL = config('BACKUP_ALERT_EMAIL', default='')
+# Trial vencido fica em modo leitura. >0 suspende a empresa N dias após o fim do trial.
+TRIAL_SUSPEND_AFTER_DAYS = config('TRIAL_SUSPEND_AFTER_DAYS', default=0, cast=int)
+# Exportações (CSV/Excel) geradas pelos usuários ficam disponíveis por N dias
+EXPORT_RETENTION_DAYS = config('EXPORT_RETENTION_DAYS', default=30, cast=int)
 
 # WhatsApp de suporte (usado na página de planos/billing)
 WHATSAPP_SUPPORT = config('WHATSAPP_SUPPORT', default='5511999999999')

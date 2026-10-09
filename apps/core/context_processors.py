@@ -11,4 +11,12 @@ def global_settings(request):
         'global_settings': settings_obj,
         'tenant': getattr(request, 'tenant', None),
         'ai_active': bool(getattr(settings, 'XAI_API_KEY', None)),
+        'tenant_has_ai': _tenant_has_ai(getattr(request, 'tenant', None)),
     }
+
+
+def _tenant_has_ai(tenant):
+    if not tenant:
+        return False
+    from apps.core.services import AIService
+    return AIService.tenant_has_ai(tenant)

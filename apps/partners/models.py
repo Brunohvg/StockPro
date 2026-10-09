@@ -345,6 +345,13 @@ class SupplierProductMap(TenantMixin):
         blank=True,
         verbose_name='Última Compra'
     )
+    conversion_factor = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=1,
+        verbose_name='Fator de conversão',
+        help_text='Unidades do estoque por unidade da nota (ex.: caixa com 12 = 12)'
+    )
     total_purchased = models.PositiveIntegerField(
         default=0,
         verbose_name='Total Comprado',

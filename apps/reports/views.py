@@ -226,7 +226,7 @@ def inventory_reports(request):
     }
 
     # Generate AI insights
-    ai_insights = generate_ai_insights({
+    ai_insights = generate_ai_insights(tenant=tenant, refresh=request.GET.get('refresh_ai') == '1', data={
         'total_products': total_products,
         'total_variants': total_variants,
         'total_value': float(total_value),
@@ -245,6 +245,7 @@ def inventory_reports(request):
         'top_products': top_products,
         'movements_trend': movements_trend,
         'ai_insights': ai_insights,
+        'ai_insights_from_ai': any(i.get('source') == 'ai' for i in ai_insights),
         'total_value': total_value,
         'low_stock_count': low_stock_count,
         'entries_week': entries_week,
@@ -254,11 +255,30 @@ def inventory_reports(request):
     })
 
 
-def generate_ai_insights(data):
-    """Generate AI-powered insights based on inventory data"""
+AI_INSIGHTS_CACHE_SECONDS = 6 * 60 * 60
+
+
+def generate_ai_insights(data, tenant=None, refresh=False):
+    """
+    Insights do painel de Análises.
+
+    Com IA (plano com IA, dentro do limite diário): resultado guardado por 6 h por
+    empresa, então abrir a página várias vezes custa uma chamada. Sem IA: insights
+    calculados localmente (fallback abaixo).
+    """
     import json
 
-    from apps.core.services import AIService
+    from django.core.cache import cache
+
+    from apps.core.services import AIService, AIUnavailable
+
+    if tenant is None or not AIService.tenant_has_ai(tenant):
+        return _fallback_insights(data)
+    cache_key = f"ai-insights:{tenant.pk}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
 
     prompt = f"""Você é um consultor de gestão de estoque. Analise estes dados e forneça 3-4 insights CURTOS e ACIONÁVEIS:
 
@@ -287,16 +307,26 @@ Exemplo de formato:
 ]}}"""
 
     try:
-        response = AIService.call_ai(prompt, schema="json")
+        response = AIService.call_for_tenant(tenant, prompt, schema="json")
         if response:
             start = response.find('{')
             end = response.rfind('}')
             if start != -1 and end != -1:
                 result = json.loads(response[start:end+1])
-                return result.get('insights', [])
+                insights = [dict(i, source='ai') for i in result.get('insights', []) if isinstance(i, dict)]
+                if insights:
+                    cache.set(cache_key, insights, AI_INSIGHTS_CACHE_SECONDS)
+                    return insights
+    except AIUnavailable:
+        pass
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"AI insights failed: {e}")
+    return _fallback_insights(data)
+
+
+def _fallback_insights(data):
+    """Insights calculados sem IA."""
 
     # Fallback insights
     insights = []

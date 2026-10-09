@@ -227,6 +227,12 @@ class Product(TenantMixin):
         return True
 
     @property
+    def has_movements(self):
+        """True se o produto tem histórico: nesse caso ele é arquivado, nunca apagado."""
+        from apps.inventory.models import StockMovement
+        return StockMovement.objects.filter(variant__product=self).exists()
+
+    @property
     def delete_block_reason(self):
         """Retorna o motivo pelo qual não pode ser excluído, ou None se pode."""
         if self.can_be_safely_deleted:

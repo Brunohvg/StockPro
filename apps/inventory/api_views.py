@@ -72,7 +72,8 @@ class ProductSearchView(views.APIView):
             Q(sku__icontains=query) |
             Q(barcode=query),
             tenant=tenant,
-            is_active=True
+            is_active=True,
+            product__is_active=True,
         ).select_related('product', 'product__category', 'product__brand').order_by(
             'product__name', 'name'
         )[:20]

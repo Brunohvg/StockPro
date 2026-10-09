@@ -346,3 +346,182 @@ class ExternalOrder(TenantMixin):
 
     def __str__(self):
         return f"{self.platform} #{self.external_order_id} ({self.status})"
+
+
+# ==========================================
+# 5. NF-e de entrada (Beta)
+# ==========================================
+
+class NfeSettings(TenantMixin):
+    """Padrão de cada empresa para importar notas fiscais de compra."""
+    NEW_PRODUCT_POLICY = [
+        ('REVIEW', 'Decidir item a item na prévia (padrão)'),
+        ('AUTO_CREATE', 'Sugerir "criar produto novo" para itens não encontrados'),
+    ]
+    SKU_POLICY = [
+        ('AUTO', 'Gerar SKU automaticamente'),
+        ('SUPPLIER_CODE', 'Usar o código do fornecedor (cProd)'),
+        ('EAN', 'Usar o EAN, quando houver'),
+    ]
+
+    # Custo de entrada (rateio por item, campos da própria NF-e)
+    cost_include_ipi = models.BooleanField(default=True, verbose_name="Somar IPI ao custo")
+    cost_include_st = models.BooleanField(default=True, verbose_name="Somar ICMS-ST (e FCP-ST) ao custo")
+    cost_include_freight = models.BooleanField(default=True, verbose_name="Somar frete ao custo")
+    cost_include_insurance = models.BooleanField(default=True, verbose_name="Somar seguro ao custo")
+    cost_include_other = models.BooleanField(default=True, verbose_name="Somar outras despesas ao custo")
+    cost_subtract_discount = models.BooleanField(default=True, verbose_name="Descontar o desconto do custo")
+
+    # Como encontrar o produto (nesta ordem)
+    match_supplier_code = models.BooleanField(default=True, verbose_name="Pelo código do fornecedor já aprendido")
+    match_ean = models.BooleanField(default=True, verbose_name="Pelo código de barras (EAN)")
+    match_sku = models.BooleanField(default=False, verbose_name="Pelo SKU igual ao código do fornecedor")
+
+    # Produtos novos
+    new_product_policy = models.CharField(max_length=20, choices=NEW_PRODUCT_POLICY, default='REVIEW',
+                                          verbose_name="Itens não encontrados")
+    sku_policy = models.CharField(max_length=20, choices=SKU_POLICY, default='AUTO',
+                                  verbose_name="SKU dos produtos criados pela nota")
+    default_category = models.ForeignKey('products.Category', on_delete=models.SET_NULL, null=True, blank=True,
+                                         verbose_name="Categoria padrão dos produtos novos")
+    title_case_names = models.BooleanField(default=True, verbose_name="Ajustar nomes em MAIÚSCULAS (Caneta Azul)")
+    auto_tracks_expiry = models.BooleanField(default=True,
+                                             verbose_name="Ligar 'controla validade' quando a nota trouxer lote")
+
+    # Entrada
+    default_location = models.ForeignKey('Location', on_delete=models.SET_NULL, null=True, blank=True,
+                                         verbose_name="Local de entrada padrão")
+    require_recipient_cnpj = models.BooleanField(
+        default=True, verbose_name="Exigir confirmação quando o destinatário não for o CNPJ da empresa")
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuração de NF-e"
+        constraints = [models.UniqueConstraint(fields=['tenant'], name='unique_nfe_settings_per_tenant')]
+
+    @classmethod
+    def for_tenant(cls, tenant):
+        obj, _ = cls.objects.get_or_create(tenant=tenant)
+        return obj
+
+
+class NfeDocument(TenantMixin):
+    STATUS = [
+        ('PREVIEW', 'Em revisão'),
+        ('IMPORTED', 'Importada'),
+        ('REVERTED', 'Desfeita'),
+        ('DISCARDED', 'Descartada'),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    access_key = models.CharField(max_length=44, verbose_name="Chave de acesso")
+    number = models.CharField(max_length=20, blank=True)
+    series = models.CharField(max_length=5, blank=True)
+    issued_at = models.DateTimeField(null=True, blank=True)
+    supplier_cnpj = models.CharField(max_length=14, blank=True)
+    supplier_name = models.CharField(max_length=200, blank=True)
+    supplier_trade_name = models.CharField(max_length=200, blank=True)
+    supplier_ie = models.CharField(max_length=20, blank=True)
+    supplier_city = models.CharField(max_length=100, blank=True)
+    supplier_state = models.CharField(max_length=2, blank=True)
+    supplier = models.ForeignKey('partners.Supplier', on_delete=models.SET_NULL, null=True, blank=True)
+    recipient_cnpj = models.CharField(max_length=14, blank=True)
+    total_products = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_invoice = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    authorized = models.BooleanField(default=False, verbose_name="Tem protocolo de autorização")
+    warnings = models.JSONField(default=list, blank=True)
+    xml_file = models.FileField(upload_to='nfe/%Y/%m/')
+    status = models.CharField(max_length=20, choices=STATUS, default='PREVIEW')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    imported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='+')
+    imported_at = models.DateTimeField(null=True, blank=True)
+    reverted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "NF-e de entrada"
+        verbose_name_plural = "NF-e de entrada"
+        constraints = [
+            # A mesma nota não pode estar em revisão/importada duas vezes na mesma empresa
+            models.UniqueConstraint(fields=['tenant', 'access_key'],
+                                    condition=models.Q(status__in=['PREVIEW', 'IMPORTED']),
+                                    name='unique_active_nfe_per_tenant'),
+        ]
+
+    def __str__(self):
+        return f"NF-e {self.number} - {self.supplier_name}"
+
+    @property
+    def blocking_warnings(self):
+        return [w for w in self.warnings if w.get('blocking')]
+
+
+class NfeItem(models.Model):
+    DECISIONS = [
+        ('LINK', 'Vincular a produto existente'),
+        ('CREATE', 'Criar produto novo'),
+        ('IGNORE', 'Ignorar (não dar entrada)'),
+        ('PENDING', 'Decidir'),
+    ]
+    document = models.ForeignKey(NfeDocument, on_delete=models.CASCADE, related_name='items')
+    item_number = models.PositiveIntegerField()
+    supplier_code = models.CharField(max_length=60, blank=True)
+    ean = models.CharField(max_length=14, blank=True)
+    description = models.CharField(max_length=255)
+    ncm = models.CharField(max_length=10, blank=True)
+    cfop = models.CharField(max_length=4, blank=True)
+    unit = models.CharField(max_length=10, blank=True)
+    quantity = models.DecimalField(max_digits=15, decimal_places=4)
+    unit_price = models.DecimalField(max_digits=21, decimal_places=10, default=0)
+    total = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    freight = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    insurance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    discount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    other = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    ipi = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    icms_st = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    lots = models.JSONField(default=list, blank=True)  # [{"lot", "quantity", "manufacture", "expiry"}]
+
+    decision = models.CharField(max_length=10, choices=DECISIONS, default='PENDING')
+    variant = models.ForeignKey('products.ProductVariant', on_delete=models.SET_NULL, null=True, blank=True)
+    match_source = models.CharField(max_length=20, blank=True)  # SUPPLIER_MAP | EAN | SKU | MANUAL
+    conversion_factor = models.DecimalField(max_digits=12, decimal_places=4, default=1)
+    factor_suggested = models.BooleanField(default=False)
+    new_product_name = models.CharField(max_length=255, blank=True)
+    new_product_category = models.ForeignKey('products.Category', on_delete=models.SET_NULL, null=True, blank=True)
+    movement_ids = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['item_number']
+
+    def cost_total(self, cfg):
+        """Valor do item que vira custo, conforme a configuração da empresa."""
+        from decimal import Decimal
+        total = Decimal(self.total)
+        if cfg.cost_include_ipi:
+            total += self.ipi
+        if cfg.cost_include_st:
+            total += self.icms_st
+        if cfg.cost_include_freight:
+            total += self.freight
+        if cfg.cost_include_insurance:
+            total += self.insurance
+        if cfg.cost_include_other:
+            total += self.other
+        if cfg.cost_subtract_discount:
+            total -= self.discount
+        return max(total, Decimal('0'))
+
+    @property
+    def stock_quantity(self):
+        return self.quantity * self.conversion_factor
+
+    def unit_cost(self, cfg):
+        from decimal import ROUND_HALF_UP, Decimal
+        qty = self.stock_quantity
+        if not qty:
+            return Decimal('0')
+        return (self.cost_total(cfg) / qty).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)

@@ -414,6 +414,16 @@ def process_csv_catalog_direct(batch, dry_run=False):
                     # 4. CRIA OU ATUALIZA
                     if is_update:
                         product = variant.product
+                        if not product.is_active or not variant.is_active:
+                            # SKU de produto arquivado na planilha: reativa (conta no limite do plano)
+                            if tenant.products_limit_reached:
+                                plan = tenant.plan
+                                raise ValueError(
+                                    f"Produto arquivado não reativado: limite de "
+                                    f"{plan.max_products if plan else 0} produtos do plano atingido.")
+                            product.is_active = True
+                            variant.is_active = True
+                            log_entries.append(f"Linha {line}: produto arquivado '{variant.sku}' reativado.")
                         if not sku_pai:
                             product.name = name[:255]
                         variant.name = name[:255] if product.is_variable else variant.name
@@ -429,6 +439,9 @@ def process_csv_catalog_direct(batch, dry_run=False):
                             )
                             if product.product_type != ProductType.VARIABLE:
                                 product.product_type = ProductType.VARIABLE
+                            if not product.is_active:
+                                product.is_active = True
+                                log_entries.append(f"Linha {line}: produto pai arquivado '{product.sku}' reativado.")
                             variant = ProductVariant.objects.create(
                                 tenant=tenant, product=product, sku=(sku or '')[:50], name=name[:255],
                             )
