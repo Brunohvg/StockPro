@@ -1,5 +1,8 @@
 services:
   web:
+    networks:
+      - default
+      - coolify_shared
     build:
       context: .
       dockerfile: Dockerfile
@@ -39,6 +42,9 @@ services:
       - stockpro_backups:/data/backups
     depends_on:
       redis:
+    networks:
+      - default
+      - coolify_shared
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthcheck/ || exit 1"]
@@ -48,6 +54,9 @@ services:
       retries: 3
 
   worker:
+    networks:
+      - default
+      - coolify_shared
     build:
       context: .
       dockerfile: Dockerfile
@@ -84,6 +93,9 @@ services:
         condition: service_healthy
 
   beat:
+    networks:
+      - default
+      - coolify_shared
     build:
       context: .
       dockerfile: Dockerfile
@@ -130,6 +142,11 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+
+networks:
+  coolify_shared:
+    external: true
+    name: coolify
 
 volumes:
   stockpro_redis:
