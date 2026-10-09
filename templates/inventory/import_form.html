@@ -75,10 +75,11 @@
                     </div>
 
                     <div id="template-link-container" class="mt-4 flex animate-in fade-in duration-500">
-                        <a id="btn-download-template" href="{% url 'inventory:download_csv_template' %}?type=CATALOG_DIRECT" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                        <a id="btn-download-template" href="{% url 'inventory:download_import_template' %}?type=CATALOG_DIRECT" class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                             <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                            <span id="txt-download-template">Baixar Modelo de Catálogo</span>
+                            <span id="txt-download-template">Baixar modelo Excel de Catálogo</span>
                         </a>
+                        <p class="ml-3 self-center text-[11px] text-slate-500">O modelo tem uma aba de instruções. Aceita .xlsx ou .csv (com vírgula ou ponto e vírgula). Você vê uma prévia antes de gravar.</p>
                     </div>
                 </div>
 
@@ -86,7 +87,7 @@
                 <div class="space-y-4">
                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Carregar Documento</label>
                     <div id="drop-zone" class="relative group cursor-pointer">
-                        <input type="file" name="file" id="file-input" required
+                        <input type="file" name="file" id="file-input" required accept=".xlsx,.xlsm,.csv"
                                class="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer">
                         <div class="border-2 border-dashed border-slate-200 rounded-[2.5rem] p-16 text-center group-hover:border-indigo-400 group-hover:bg-indigo-50/20 transition-all">
                             <div class="w-20 h-20 bg-white rounded-3xl shadow-xl border border-slate-50 mx-auto flex items-center justify-center mb-6 group-hover:rotate-12 transition-all">
@@ -168,11 +169,11 @@
         const btn = document.getElementById('btn-download-template');
         const txt = document.getElementById('txt-download-template');
         if (value === 'STOCK_SYNC') {
-            btn.href = "{% url 'inventory:download_csv_template' %}?type=STOCK_SYNC";
-            txt.textContent = "Baixar Modelo de Movimentação";
+            btn.href = "{% url 'inventory:download_import_template' %}?type=STOCK_SYNC";
+            txt.textContent = "Baixar modelo Excel de Movimentação";
         } else {
-            btn.href = "{% url 'inventory:download_csv_template' %}?type=CATALOG_DIRECT";
-            txt.textContent = "Baixar Modelo de Catálogo";
+            btn.href = "{% url 'inventory:download_import_template' %}?type=CATALOG_DIRECT";
+            txt.textContent = "Baixar modelo Excel de Catálogo";
         }
     }
 
