@@ -119,3 +119,7 @@ Não foram validados nesta intervenção: login autenticado do StockPro, operaç
 | Celery não conecta | Host redis, redes comuns e saúde do Redis |
 | 502 no domínio | Saúde web e roteamento Traefik para porta 8000 |
 | Arquivos somem após deploy | Identidade e mounts dos volumes persistentes |
+
+## Healthchecks dos serviços Celery
+
+Após a validação inicial, o painel ficou Degraded embora web e Celery estivessem executando. O Dockerfile define um healthcheck HTTP; worker/Beat herdam a mesma imagem, mas não servem HTTP na porta 8000. Para evitar esse falso negativo, os dois Compose definem checagens próprias: worker responde a ping direcionado ao seu hostname via Celery, e Beat verifica seu processo PID 1 e conexão ao Redis. Preserve essas checagens em atualizações. A checagem do Beat comprova processo/broker disponíveis, não execução bem-sucedida de cada tarefa agendada.

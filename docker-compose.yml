@@ -51,6 +51,16 @@ services:
       retries: 3
 
   worker:
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; from stock_control.celery import app; result = app.control.inspect(destination=['celery@' + socket.gethostname()], timeout=5).ping(); assert result, 'Celery worker did not respond'"
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     networks:
       - default
       - coolify_shared
@@ -90,6 +100,16 @@ services:
         condition: service_healthy
 
   beat:
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os; from pathlib import Path; import redis; cmd = Path('/proc/1/cmdline').read_bytes().split(bytes([0])); assert b'celery' in cmd and b'beat' in cmd, 'Celery Beat process missing'; assert redis.Redis.from_url(os.environ['CELERY_BROKER_URL'], socket_connect_timeout=3, socket_timeout=3).ping()"
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     networks:
       - default
       - coolify_shared
