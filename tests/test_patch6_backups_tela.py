@@ -99,7 +99,7 @@ class TestTelaAdmin:
         run = BackupRun.objects.get()
         assert run.trigger == 'painel' and run.status == 'SUCCESS', run.message
         assert run.message.startswith('Pedido por')
-        assert 'Backup iniciado' in r.content.decode()
+        assert 'Solicitação enviada à fila' in r.content.decode()
 
     def test_nao_roda_dois_ao_mesmo_tempo(self, env, admin_client, run_now):
         _run('RUNNING', hours_ago=0.5)
