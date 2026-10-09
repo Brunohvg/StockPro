@@ -4,11 +4,33 @@ from typing import Optional
 import requests
 import os
 from django.db import transaction
+from django.db.models import F, Sum
 
 from apps.inventory.models import ExternalOrder, StockMovement
 from apps.products.models import Product, ProductType, ProductVariant
 
 from .models import VisualAuditLog
+
+
+def parse_date_br(value):
+    """Aceita date/datetime, 'dd/mm/aaaa', 'dd/mm/aa', 'aaaa-mm-dd' ou vazio. Retorna date ou None."""
+    import datetime as _dt
+    if value in (None, ''):
+        return None
+    if isinstance(value, _dt.datetime):
+        return value.date()
+    if isinstance(value, _dt.date):
+        return value
+    text = str(value).strip()
+    if not text or text.lower() in ('nan', 'nat', 'none'):
+        return None
+    text = text.split(' ')[0]  # '2026-03-01 00:00:00' vindo do Excel
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d/%m/%y', '%d-%m-%Y', '%d.%m.%Y'):
+        try:
+            return _dt.datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Data inválida: '{value}'. Use dd/mm/aaaa.")
 
 
 class AIService:
@@ -140,7 +162,11 @@ class StockService:
         source_doc=None,
         location_id=None,
         external_order=None, # ExternalOrder instance
-        external_order_id=None # String for resolving/creating
+        external_order_id=None, # String for resolving/creating
+        lot_number=None,        # Lote (entrada/ajuste)
+        expiry_date=None,       # Validade: date ou 'dd/mm/aaaa' / 'aaaa-mm-dd'
+        manufacture_date=None,  # Fabricação
+        lot_id=None,            # Saída de um lote específico (senão FEFO)
     ):
         """
         Create a stock movement and update stock.
@@ -164,6 +190,11 @@ class StockService:
             raise ValueError("Quantidade deve ser maior que zero.")
         if unit_cost is not None and (not unit_cost.is_finite() or unit_cost < 0):
             raise ValueError("Custo unitário não pode ser negativo.")
+        expiry_date = parse_date_br(expiry_date)
+        manufacture_date = parse_date_br(manufacture_date)
+        lot_number = (str(lot_number).strip()[:60] if lot_number else '')
+        if expiry_date and manufacture_date and manufacture_date > expiry_date:
+            raise ValueError("Data de fabricação posterior à validade.")
         # Resolve by SKU if no direct reference
         if product_sku and not product and not variant:
             # Try variant first (more specific)
@@ -228,6 +259,8 @@ class StockService:
             'avg_unit_cost': float(target.avg_unit_cost) if target.avg_unit_cost else None
         }
 
+        old_stock = target.current_stock
+
         # Calculate new stock
         if movement_type == 'IN':
             new_stock = target.current_stock + quantity
@@ -267,6 +300,17 @@ class StockService:
             external_order=external_order,
         )
 
+        # Lotes / validade (FEFO)
+        allocations = StockService._apply_lots(
+            tenant, target, movement_type, quantity, new_stock,
+            lot_number, expiry_date, manufacture_date, lot_id,
+        )
+        if allocations:
+            from apps.inventory.models import MovementLot
+            MovementLot.objects.bulk_create([
+                MovementLot(movement=movement, lot=lot, quantity=qty) for lot, qty in allocations
+            ])
+
         # Visual Audit (After & Diff)
         after_state = {
             'current_stock': float(target.current_stock),
@@ -292,6 +336,96 @@ class StockService:
         )
 
         return movement
+
+    @staticmethod
+    def _apply_lots(tenant, target, movement_type, quantity, new_stock,
+                    lot_number, expiry_date, manufacture_date, lot_id):
+        """
+        Atualiza os lotes da variação. Retorna [(lote, quantidade)] para auditoria.
+
+        - IN: soma no lote informado (cria se preciso). Sem dados de lote, vira saldo "sem lote".
+        - OUT: lote informado ou FEFO (vence antes, sai antes); o que faltar sai do saldo sem lote.
+        - ADJ: com dados de lote, o lote passa a ter todo o saldo (contagem de inventário);
+          sem dados, se o novo saldo ficar abaixo da soma dos lotes, reduz pelos que vencem antes.
+        """
+        from apps.inventory.models import StockLot
+
+        product = target.product
+        has_lot_info = bool(lot_number or expiry_date or lot_id)
+        if has_lot_info and not product.tracks_expiry:
+            Product.objects.filter(pk=product.pk).update(tracks_expiry=True)
+            product.tracks_expiry = True
+        if not product.tracks_expiry:
+            return []
+
+        lots = StockLot.objects.select_for_update().filter(variant=target)
+
+        def get_lot():
+            if lot_id:
+                lot = lots.filter(pk=lot_id).first()
+                if lot is None:
+                    raise ValueError("Lote não encontrado para esta variação.")
+                return lot
+            if not (lot_number or expiry_date):
+                return None
+            lot, _ = StockLot.objects.get_or_create(
+                tenant=tenant, variant=target, lot_number=lot_number, expiry_date=expiry_date,
+                defaults={'manufacture_date': manufacture_date},
+            )
+            if manufacture_date and not lot.manufacture_date:
+                lot.manufacture_date = manufacture_date
+            return lot
+
+        def consume_fefo(amount):
+            taken = []
+            for lot in lots.filter(quantity__gt=0).order_by(
+                F('expiry_date').asc(nulls_last=True), 'created_at'
+            ):
+                if amount <= 0:
+                    break
+                q = min(lot.quantity, amount)
+                lot.quantity -= q
+                lot.save(update_fields=['quantity', 'updated_at'])
+                taken.append((lot, q))
+                amount -= q
+            return taken
+
+        if movement_type == 'IN':
+            lot = get_lot()
+            if lot is None:
+                return []
+            lot.quantity += quantity
+            lot.save()
+            return [(lot, quantity)]
+
+        if movement_type == 'OUT':
+            if lot_id:
+                lot = get_lot()
+                if lot.quantity < quantity:
+                    raise ValueError(f"Lote {lot.lot_number or lot.pk} tem só {lot.quantity} disponível.")
+                lot.quantity -= quantity
+                lot.save(update_fields=['quantity', 'updated_at'])
+                return [(lot, quantity)]
+            return consume_fefo(quantity)
+
+        # ADJ
+        lot = get_lot()
+        if lot is not None:
+            changes = []
+            for other in lots.exclude(pk=lot.pk).filter(quantity__gt=0):
+                changes.append((other, -other.quantity))
+                other.quantity = 0
+                other.save(update_fields=['quantity', 'updated_at'])
+            delta = new_stock - lot.quantity
+            lot.quantity = new_stock
+            lot.save()
+            if delta:
+                changes.append((lot, delta))
+            return changes
+        total = lots.aggregate(t=Sum('quantity'))['t'] or Decimal('0')
+        if new_stock < total:
+            return [(lot, -q) for lot, q in consume_fefo(total - new_stock)]
+        return []
 
     @staticmethod
     def get_stock_for_product(product):
