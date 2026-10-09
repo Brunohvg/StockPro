@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Central da plataforma | StockPro{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-black text-slate-900">Central da plataforma</h1>
+            <p class="text-sm text-slate-500 mt-1">Todas as empresas, receita, uso e saúde do sistema.</p>
+        </div>
+        <a href="{% url 'tenants:platform_tenants_csv' %}{% if querystring %}?{{ querystring }}{% endif %}"
+           class="rounded-xl px-4 py-2.5 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50">Exportar lista (CSV)</a>
+    </header>
+
+    {% include 'tenants/platform/_nav.html' with tab='home' %}
+
+    <!-- Indicadores -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <div class="text-xs font-bold text-slate-500 uppercase">Receita mensal estimada</div>
+            <div class="text-2xl font-black text-slate-900 mt-1">R$ {{ ov.mrr|floatformat:2|intcomma }}</div>
+            <div class="text-xs text-slate-500 mt-1">{{ ov.by_status.ACTIVE }} empresa{{ ov.by_status.ACTIVE|pluralize }} ativa{{ ov.by_status.ACTIVE|pluralize }} com plano</div>
+            {% if ov.mrr_by_plan %}
+            <ul class="mt-3 space-y-1 text-xs text-slate-600">
+                {% for p in ov.mrr_by_plan %}<li class="flex justify-between"><span>{{ p.plan__display_name }} ({{ p.n }})</span><span class="font-semibold">R$ {{ p.total|floatformat:2|intcomma }}</span></li>{% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <div class="text-xs font-bold text-slate-500 uppercase">Empresas</div>
+            <div class="text-2xl font-black text-slate-900 mt-1">{{ ov.total }}</div>
+            <div class="text-xs text-slate-500 mt-1">{{ ov.new_this_month }} nova{{ ov.new_this_month|pluralize }} este mês</div>
+            <ul class="mt-3 space-y-1 text-xs text-slate-600">
+                <li class="flex justify-between"><span>Ativas</span><span class="font-semibold text-emerald-700">{{ ov.by_status.ACTIVE }}</span></li>
+                <li class="flex justify-between"><span>Em teste</span><span class="font-semibold text-amber-700">{{ ov.by_status.TRIAL }}</span></li>
+                <li class="flex justify-between"><span>Suspensas</span><span class="font-semibold text-rose-700">{{ ov.by_status.SUSPENDED }}</span></li>
+                <li class="flex justify-between"><span>Canceladas</span><span class="font-semibold text-slate-500">{{ ov.by_status.CANCELLED }}</span></li>
+            </ul>
+        </div>
+        <a href="?f=trial_ending" class="block bg-white rounded-2xl border {% if ov.trial_ending %}border-amber-300{% else %}border-slate-200{% endif %} p-5 hover:shadow-sm">
+            <div class="text-xs font-bold text-slate-500 uppercase">Testes vencendo (7 dias)</div>
+            <div class="text-2xl font-black {% if ov.trial_ending %}text-amber-600{% else %}text-slate-900{% endif %} mt-1">{{ ov.trial_ending }}</div>
+            <div class="text-xs text-slate-500 mt-1">Hora de oferecer a assinatura</div>
+            <div class="text-xs text-slate-600 mt-3">Teste vencido (modo leitura): <span class="font-semibold">{{ ov.trial_expired }}</span></div>
+        </a>
+        <a href="?f=overdue" class="block bg-white rounded-2xl border {% if ov.overdue %}border-rose-300{% else %}border-slate-200{% endif %} p-5 hover:shadow-sm">
+            <div class="text-xs font-bold text-slate-500 uppercase">Vencimento passado</div>
+            <div class="text-2xl font-black {% if ov.overdue %}text-rose-600{% else %}text-slate-900{% endif %} mt-1">{{ ov.overdue }}</div>
+            <div class="text-xs text-slate-500 mt-1">Ativas com "próximo vencimento" já passado</div>
+        </a>
+    </section>
+
+    <!-- Atenção -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <div class="flex items-center justify-between">
+                <h2 class="font-bold text-slate-900">Sem uso há 14+ dias</h2>
+                <a href="?f=idle" class="text-xs font-semibold text-indigo-600">ver {{ ov.idle }}</a>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">Ninguém entrou nem movimentou estoque. Risco de cancelar.</p>
+            <ul class="divide-y divide-slate-100 text-sm">
+                {% for t in ov.idle_list %}
+                <li class="py-2 flex justify-between gap-2"><a href="{% url 'tenants:platform_tenant' t.pk %}" class="font-semibold text-slate-800 hover:text-indigo-600 truncate">{{ t.name }}</a><span class="text-xs text-slate-500 whitespace-nowrap">{% if t.last_use_at %}{{ t.last_use_at|timesince }}{% else %}nunca usou{% endif %}</span></li>
+                {% empty %}<li class="py-2 text-slate-400">Nenhuma.</li>{% endfor %}
+            </ul>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <div class="flex items-center justify-between">
+                <h2 class="font-bold text-slate-900">Perto do limite do plano</h2>
+                <a href="?f=near_limit" class="text-xs font-semibold text-indigo-600">ver {{ ov.near_limit }}</a>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">80% ou mais de produtos ou usuários. Chance de upgrade.</p>
+            <ul class="divide-y divide-slate-100 text-sm">
+                {% for t in ov.near_limit_list %}
+                <li class="py-2 flex justify-between gap-2"><a href="{% url 'tenants:platform_tenant' t.pk %}" class="font-semibold text-slate-800 hover:text-indigo-600 truncate">{{ t.name }}</a><span class="text-xs text-slate-500 whitespace-nowrap">produtos {{ t.products_pct }}% · usuários {{ t.users_pct }}%</span></li>
+                {% empty %}<li class="py-2 text-slate-400">Nenhuma.</li>{% endfor %}
+            </ul>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <h2 class="font-bold text-slate-900">Saúde da plataforma</h2>
+            <ul class="mt-3 space-y-2 text-sm">
+                <li class="flex justify-between gap-2">
+                    <span>Worker e agendador</span>
+                    {% if health.worker.ok %}<span class="font-semibold text-emerald-700">ok ({{ health.worker.last|timesince }})</span>
+                    {% elif health.worker.last %}<span class="font-semibold text-rose-700">sem sinal há {{ health.worker.last|timesince }}</span>
+                    {% else %}<span class="font-semibold text-rose-700">sem sinal</span>{% endif %}
+                </li>
+                <li class="flex justify-between gap-2">
+                    <a href="{% url 'tenants:admin_backups' %}" class="hover:text-indigo-600">Backup</a>
+                    <span class="font-semibold {% if health.backup.level == 'ok' %}text-emerald-700{% elif health.backup.level == 'warning' %}text-amber-700{% else %}text-rose-700{% endif %}">{{ health.backup.headline }}</span>
+                </li>
+                <li class="flex justify-between gap-2">
+                    <span>Importações com falha (24 h)</span>
+                    <span class="font-semibold {% if health.failed_imports %}text-rose-700{% else %}text-slate-700{% endif %}">{{ health.failed_imports }}</span>
+                </li>
+                {% for b in health.failed_imports_list %}
+                <li class="text-xs text-slate-500 pl-3">{{ b.tenant.name }} · {{ b.get_type_display }} · {{ b.created_at|date:"d/m H:i" }}</li>
+                {% endfor %}
+                <li class="flex justify-between gap-2">
+                    <span>Logins bloqueados agora</span>
+                    <span class="font-semibold {% if health.locked %}text-amber-700{% else %}text-slate-700{% endif %}">{{ health.locked|length }}</span>
+                </li>
+                {% for a in health.locked %}
+                <li class="flex items-center justify-between gap-2 text-xs pl-3">
+                    <span class="truncate text-slate-600">{{ a.username }} · {{ a.ip_address }}</span>
+                    <form method="post" action="{% url 'tenants:platform_unlock_login' a.pk %}">{% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="font-semibold text-indigo-600 hover:underline">desbloquear</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if not health.worker.ok %}
+            <p class="text-xs text-slate-500 mt-3">Sem sinal = tarefas agendadas (backup, alertas, limpeza) não estão rodando. Confira os serviços worker e beat no Coolify.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Lista de empresas -->
+    <section class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <form method="get" class="p-4 flex flex-wrap gap-3 items-center border-b border-slate-200">
+            <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Nome, CNPJ ou e-mail..."
+                   class="flex-1 min-w-[200px] px-4 py-2 border border-slate-300 rounded-xl text-sm">
+            <select name="status" class="px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                <option value="">Todos os status</option>
+                {% for value, label in status_choices %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <select name="plan" class="px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                <option value="">Todos os planos</option>
+                {% for plan in plans %}<option value="{{ plan.pk }}" {% if request.GET.plan == plan.pk|stringformat:"d" %}selected{% endif %}>{{ plan.display_name }}</option>{% endfor %}
+            </select>
+            <select name="f" class="px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                <option value="">Sem atalho</option>
+                {% for key, label in quick_filters.items %}<option value="{{ key }}" {% if request.GET.f == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <select name="sort" class="px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                {% for key, label in sorts.items %}<option value="{{ key }}" {% if request.GET.sort == key %}selected{% endif %}>Ordenar: {{ label }}</option>{% endfor %}
+            </select>
+            <button class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">Filtrar</button>
+            {% if filtered %}<a href="{% url 'tenants:admin_panel' %}" class="text-sm text-slate-500 hover:underline">limpar</a>{% endif %}
+        </form>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-xs font-bold text-slate-600 uppercase">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Empresa</th>
+                        <th class="px-4 py-3 text-left">Dono</th>
+                        <th class="px-4 py-3 text-left">Plano / status</th>
+                        <th class="px-4 py-3 text-center">Produtos</th>
+                        <th class="px-4 py-3 text-center">Usuários</th>
+                        <th class="px-4 py-3 text-center">Mov. 30d</th>
+                        <th class="px-4 py-3 text-left">Último uso</th>
+                        <th class="px-4 py-3 text-left">Teste / vencimento</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for t in page %}
+                    <tr class="hover:bg-slate-50 align-top">
+                        <td class="px-4 py-3">
+                            <a href="{% url 'tenants:platform_tenant' t.pk %}" class="font-semibold text-slate-900 hover:text-indigo-600">{{ t.name }}</a>
+                            <div class="text-xs text-slate-500">{{ t.cnpj|default:"sem CNPJ" }} · desde {{ t.created_at|date:"d/m/Y" }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-slate-600">
+                            {{ t.owner_name|default:"" }}
+                            <div class="text-xs text-slate-500 break-all">{{ t.owner_email|default:"—" }}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="font-semibold text-slate-800">{{ t.plan.display_name|default:"sem plano" }}</div>
+                            <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold
+                                {% if not t.is_active %}bg-slate-200 text-slate-700
+                                {% elif t.subscription_status == 'ACTIVE' %}bg-emerald-100 text-emerald-700
+                                {% elif t.subscription_status == 'TRIAL' %}bg-amber-100 text-amber-700
+                                {% elif t.subscription_status == 'SUSPENDED' %}bg-rose-100 text-rose-700
+                                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                {% if not t.is_active %}Acesso bloqueado{% else %}{{ t.get_subscription_status_display }}{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-center {% if t.products_pct >= 100 %}text-rose-600 font-bold{% elif t.products_pct >= 80 %}text-amber-600 font-semibold{% else %}text-slate-600{% endif %}">
+                            {{ t.n_products }}/{% if t.plan.max_products %}{{ t.plan.max_products }}{% else %}∞{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center {% if t.users_pct >= 100 %}text-rose-600 font-bold{% elif t.users_pct >= 80 %}text-amber-600 font-semibold{% else %}text-slate-600{% endif %}">
+                            {{ t.n_users }}/{% if t.plan.max_users %}{{ t.plan.max_users }}{% else %}∞{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center text-slate-600">{{ t.n_moves_30d }}</td>
+                        <td class="px-4 py-3 text-xs {% if t.is_idle %}text-rose-600 font-semibold{% else %}text-slate-600{% endif %}">
+                            {% if t.last_use_at %}há {{ t.last_use_at|timesince }}{% else %}nunca{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-xs whitespace-nowrap">
+                            {% if t.trial_days_left is not None %}
+                                {% if t.trial_days_left < 0 %}<span class="text-rose-600 font-semibold">teste vencido</span>
+                                {% else %}<span class="{% if t.trial_days_left <= 7 %}text-amber-600 font-semibold{% else %}text-slate-600{% endif %}">teste: {{ t.trial_days_left }} dia{{ t.trial_days_left|pluralize }}</span>{% endif %}
+                            {% endif %}
+                            {% if t.next_due_date %}<div class="{% if t.is_overdue %}text-rose-600 font-semibold{% else %}text-slate-600{% endif %}">vence {{ t.next_due_date|date:"d/m/Y" }}</div>{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="px-4 py-12 text-center text-slate-500">Nenhuma empresa encontrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page.paginator.num_pages > 1 %}
+        <div class="p-4 flex items-center justify-between text-sm border-t border-slate-200">
+            <span class="text-slate-500">{{ page.paginator.count }} empresas · página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+            <div class="flex gap-2">
+                {% if page.has_previous %}<a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.previous_page_number }}" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50">Anterior</a>{% endif %}
+                {% if page.has_next %}<a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.next_page_number }}" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50">Próxima</a>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
