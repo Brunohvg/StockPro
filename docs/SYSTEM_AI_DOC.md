@@ -43,3 +43,9 @@ O sistema utiliza o modelo `InventoryAudit` para sessões formais de contagem f�
 - **Valor de Estoque**: Calculado somando `price * current_stock` de todas as variantes para produtos variáveis.
 - **Curva ABC**: Baseia-se no Valor Total Imobilizado (Custo Médio * Estoque).
 - **Formatos**: Moeda e Números seguem o padrão brasileiro (`pt-BR`).
+
+---
+
+## Deploy e continuidade operacional
+
+Leia [../AGENTS.md](../AGENTS.md) e [COOLIFY.md](COOLIFY.md) antes de alterar infraestrutura. O deploy validado em 09/10/2026 usa Coolify Compose, PostgreSQL 17 separado e rede externa `coolify`. O guia registra o incidente de DNS do banco, a configuração necessária no painel, volumes, bootstrap e evidências de sucesso. Preserve as duas cópias de Compose ao integrar mudanças entre branches.

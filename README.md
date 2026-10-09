@@ -59,3 +59,15 @@ StockPro/
 ├── static/           # Tailwind CSS & Assets
 └── stock_control/    # Django Core Settings
 ```
+
+## Deploy atual e continuidade para IAs
+
+O ambiente validado usa **Coolify + Docker Compose**, PostgreSQL 17 externo e Redis/Celery incluídos na stack. A configuração de produção está em `docker-compose.yml` e `docker-compose.coolify.yml` (iguais). O item Docker Swarm da tabela acima refere-se à infraestrutura legada, não ao deploy atual.
+
+- [Guia de deploy, rede, segredos e diagnóstico](docs/COOLIFY.md)
+- [Orientações para agentes e manutenção](AGENTS.md)
+- [Regras funcionais para IAs](docs/SYSTEM_AI_DOC.md)
+
+A configuração de domínio, branch, servidor e rede predefinida no painel Coolify também precisa ser preservada; veja o guia antes de atualizar ou recriar recursos.
+
+Preços padrão atuais: Gratuito R$ 0, Profissional R$ 97/mês, Empresarial R$ 697/mês. Veja [precificação e migração](docs/PRICING.md).
