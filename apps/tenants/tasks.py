@@ -27,3 +27,12 @@ def cleanup_expired_trials():
         # Aqui poderíamos disparar e-mails ou logs específicos
 
     return f"Checked {count} expired trials."
+
+
+@shared_task
+def send_expiry_alerts():
+    """Alerta diário de validade (lotes vencidos ou perto de vencer) por e-mail."""
+    from apps.inventory.services.expiry import send_expiry_alerts as _send
+    sent = _send()
+    logger.info(f"CELERY BEAT: alertas de validade enviados para {sent} empresa(s).")
+    return f"Expiry alerts sent: {sent}"
