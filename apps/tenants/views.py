@@ -170,6 +170,16 @@ def _superuser_only(request):
 
 
 @login_required
+def _backup_worker_signal():
+    """Read the heartbeat without running unrelated dashboard database queries."""
+    from django.core.cache import cache
+    from django.utils import timezone
+    from .platform import HEARTBEAT_KEY, HEARTBEAT_STALE
+
+    last = cache.get(HEARTBEAT_KEY)
+    return {'last': last, 'ok': bool(last and timezone.now() - last < HEARTBEAT_STALE)}
+
+
 def admin_backups_view(request):
     denied = _superuser_only(request)
     if denied:
@@ -221,7 +231,7 @@ def admin_backups_view(request):
     return render(request, 'tenants/admin_backups.html', {
         'health': backup_status.health(),
         'dashboard': dashboard,
-        'worker_health': __import__('apps.tenants.platform', fromlist=['platform_health']).platform_health()['worker'],
+        'worker_health': _backup_worker_signal(),
         'runs': runs,
         'disk': backup_status.local_disk(),
         'cfg': {
