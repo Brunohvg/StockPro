@@ -16,6 +16,11 @@ from .models import (
 
 class ProductForm(forms.ModelForm):
     """Formulário para criação/edição de Produto Base com Multi-tenancy"""
+    initial_lot_number = forms.CharField(max_length=60, required=False, label="Lote inicial")
+    initial_expiry_date = forms.DateField(required=False, label="Validade inicial",
+        widget=forms.DateInput(attrs={'type': 'date'}))
+    initial_manufacture_date = forms.DateField(required=False, label="Fabricação inicial",
+        widget=forms.DateInput(attrs={'type': 'date'}))
     class Meta:
         model = Product
         fields = [
@@ -81,6 +86,16 @@ class ProductForm(forms.ModelForm):
                 if qs.exists() or qs_variant.exists():
                     raise forms.ValidationError(f"Já existe um produto ou variação com o código de barras '{barcode}'.")
 
+        if not self.instance.pk:
+            amount = cleaned_data.get('current_stock') or 0
+            manufacture = cleaned_data.get('initial_manufacture_date')
+            expiry = cleaned_data.get('initial_expiry_date')
+            if manufacture and expiry and manufacture > expiry:
+                self.add_error('initial_manufacture_date', "Fabricação não pode ser posterior à validade.")
+            if amount > 0 and cleaned_data.get('product_type') == ProductType.VARIABLE:
+                self.add_error('current_stock', "Estoque inicial deve ser registrado em cada variação.")
+            if amount > 0 and cleaned_data.get('tracks_expiry') and not expiry:
+                self.add_error('initial_expiry_date', "Informe a validade ou cadastre estoque inicial zero.")
         return cleaned_data
 
 
