@@ -123,3 +123,11 @@ Não foram validados nesta intervenção: login autenticado do StockPro, operaç
 ## Healthchecks dos serviços Celery
 
 Após a validação inicial, o painel ficou Degraded embora web e Celery estivessem executando. O Dockerfile define um healthcheck HTTP; worker/Beat herdam a mesma imagem, mas não servem HTTP na porta 8000. Para evitar esse falso negativo, os dois Compose definem checagens próprias: worker responde a ping direcionado ao seu hostname via Celery, e Beat verifica seu processo PID 1 e conexão ao Redis. Preserve essas checagens em atualizações. A checagem do Beat comprova processo/broker disponíveis, não execução bem-sucedida de cada tarefa agendada.
+
+## Admin sem estilos — 09/10/2026
+
+O usuário relatou admin autenticado sem CSS. A mesma aparência foi reproduzida na primeira abertura do login; uma abertura posterior exibiu o estilo normal. A URL não versionada de base.css respondeu HTTP 200 com text/css e conteúdo correto. Isso confirma falha de carregamento observada, mas não prova a origem exata de uma resposta anterior/cache no navegador do usuário.
+
+Para tornar a publicação determinística, STORAGES.staticfiles usa CompressedManifestStaticFilesStorage: collectstatic gera manifesto, nomes com hash e compressão; templates passam a apontar para a versão coletada. Em produção WHITENOISE_USE_FINDERS=False e manifesto estrito; não confiar em fallback de fontes ou ignorar referências faltantes. O entrypoint já coleta estáticos antes do Gunicorn.
+
+Regressão tests/test_admin_staticfiles.py coleta arquivos reais do admin, exige URLs versionadas e serve CSS/JS com DEBUG=False e WhiteNoise, verificando HTTP 200, MIME correto e cache immutable. Validação local isolada com Django 5.2.10/WhiteNoise 6.11.0 passou. Após o redeploy, conferir admin/css/base, login, responsive, dark_mode, nav_sidebar e JS theme/nav_sidebar no manifesto; abrir login e conferir aparência. Não declarar operações autenticadas aprovadas sem login real. Se o navegador mantiver uma página antiga, recarregar com Ctrl+Shift+R.

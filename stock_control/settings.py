@@ -195,12 +195,14 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.StaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 
-WHITENOISE_USE_FINDERS = True  # Permite que o WhiteNoise encontre arquivos nas apps se o STATIC_ROOT estiver vazio
-WHITENOISE_MANIFEST_STRICT = False  # Permite que o sistema ignore arquivos faltando no manifest (evita crashes)
+# Em produção, sirva apenas os arquivos coletados e versionados do STATIC_ROOT.
+# URLs com hash evitam que browsers reutilizem CSS/JS de outra versão do deploy.
+WHITENOISE_USE_FINDERS = DEBUG
+WHITENOISE_MANIFEST_STRICT = True
 
 # Celery — padrão Flowlog: só configura se broker estiver definido
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='')
