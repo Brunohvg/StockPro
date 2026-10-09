@@ -323,7 +323,31 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
+    'NUM_PROXIES': config('API_NUM_PROXIES', default=1, cast=int),
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'user': config('API_THROTTLE_USER', default='1200/hour'),
+        'anon': config('API_THROTTLE_ANON', default='300/hour'),
+        'auth': config('API_THROTTLE_AUTH', default='20/minute'),
+        'cnpj': config('API_THROTTLE_CNPJ', default='20/minute'),
+    },
 }
+
+# Cache (usado pelo throttling da API). Em produção usa o Redis da stack (db 2);
+# sem Redis, cai para memória local do processo.
+_default_cache_url = ''
+if CELERY_BROKER_URL.startswith('redis://'):
+    import re as _re
+    _default_cache_url = _re.sub(r'/\d+$', '', CELERY_BROKER_URL) + '/2'
+CACHE_URL = config('CACHE_URL', default=_default_cache_url)
+if CACHE_URL:
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': CACHE_URL}}
+else:
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 
 
 SIMPLE_JWT = {

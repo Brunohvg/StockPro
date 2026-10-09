@@ -15,6 +15,8 @@ urlpatterns = [
     path('imports/bulk-delete/', views.bulk_delete_imports, name='bulk_delete_imports'),
     path('imports/template/', views.download_csv_template, name='download_csv_template'),
     path('imports/<uuid:pk>/reprocess/', views.import_reprocess, name='import_reprocess'),
+    path('pending/', views.pending_product_list, name='pending_product_list'),
+    path('pending/<int:pk>/approve/', views.pending_product_approve, name='pending_product_approve'),
 
     # Locations (V2)
     path('locations/', views.location_list, name='location_list'),

@@ -160,12 +160,12 @@ def create_movement_mobile(request):
         # SKU can come from scanner or search selection
         sku = request.POST.get('sku', '').strip()
         movement_type = request.POST.get('type', 'OUT') # Default to OUT for mobile operational use
-        if movement_type not in ('IN', 'OUT'):
-            movement_type = 'OUT'
         quantity = request.POST.get('quantity', '1').strip().replace(',', '.')
         variant_id = request.POST.get('variant_id') # Explicit variant selection
 
         try:
+            if movement_type not in ('IN', 'OUT'):
+                raise ValueError("Tipo de movimento inválido no mobile.")
             if not sku and not variant_id:
                 raise Exception("Nenhum produto selecionado.")
 
@@ -517,3 +517,37 @@ def delete_locations_batch(request):
             messages.warning(request, "Nenhum local selecionado.")
 
     return redirect('inventory:location_list')
+
+
+# ==========================================
+# 6. Curadoria de itens em staging (API ?staged=true)
+# ==========================================
+
+@login_required
+@admin_required
+def pending_product_list(request):
+    from .models import ImportItem
+    items = ImportItem.objects.filter(tenant=request.tenant, source='API', status='PENDING').order_by('-created_at')
+    return render(request, 'inventory/pending_list.html', {'items': items})
+
+
+@login_required
+@admin_required
+@trial_allows_read
+def pending_product_approve(request, pk):
+    from .models import ImportItem
+    from .services.staging import StagingError, approve_item
+    item = get_object_or_404(ImportItem, pk=pk, tenant=request.tenant, source='API')
+    if request.method == 'POST':
+        action = request.POST.get('product_action', 'create_simple')
+        try:
+            if action == 'reject':
+                from .services.staging import reject_item
+                reject_item(item)
+                messages.success(request, f"Item '{item.description}' rejeitado.")
+            else:
+                product = approve_item(item, request.user)
+                messages.success(request, f"Item aprovado: {product.name}.")
+        except StagingError as e:
+            messages.error(request, str(e))
+    return redirect('inventory:pending_product_list')

@@ -5,6 +5,7 @@ from . import views
 app_name = 'partners'
 
 urlpatterns = [
+    path('api/suppliers/cnpj/', views.SupplierCNPJLookupView.as_view(), name='supplier_cnpj_lookup'),
     path('suppliers/', views.supplier_list, name='supplier_list'),
     path('suppliers/add/', views.supplier_create, name='supplier_create'),
     path('suppliers/<int:pk>/edit/', views.supplier_edit, name='supplier_edit'),

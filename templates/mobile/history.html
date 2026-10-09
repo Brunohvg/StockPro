@@ -16,36 +16,36 @@
     <div class="bg-slate-900 rounded-2xl p-4 border border-white/5">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
-                {% if mov.movement_type == 'IN' %}bg-emerald-950 border border-emerald-800
-                {% elif mov.movement_type == 'OUT' %}bg-rose-950 border border-rose-800
+                {% if mov.type == 'IN' %}bg-emerald-950 border border-emerald-800
+                {% elif mov.type == 'OUT' %}bg-rose-950 border border-rose-800
                 {% else %}bg-slate-800 border border-slate-700{% endif %}">
                 <i data-lucide="
-                    {% if mov.movement_type == 'IN' %}arrow-down
-                    {% elif mov.movement_type == 'OUT' %}arrow-up
+                    {% if mov.type == 'IN' %}arrow-down
+                    {% elif mov.type == 'OUT' %}arrow-up
                     {% else %}refresh-cw{% endif %}"
                    class="w-5 h-5
-                    {% if mov.movement_type == 'IN' %}text-emerald-400
-                    {% elif mov.movement_type == 'OUT' %}text-rose-400
+                    {% if mov.type == 'IN' %}text-emerald-400
+                    {% elif mov.type == 'OUT' %}text-rose-400
                     {% else %}text-slate-400{% endif %}"></i>
             </div>
             <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-white truncate">
                     {% if mov.variant %}{{ mov.variant.product.name }}
-                    {% elif mov.product_sku %}{{ mov.product_sku }}
+                    {% elif mov.product %}{{ mov.product.name }}
                     {% else %}—{% endif %}
                 </p>
                 <p class="text-[10px] text-slate-500 mt-0.5">
-                    {{ mov.movement_type }} · {{ mov.created_at|time:"H:i" }} · {{ mov.reason|truncatechars:30|default:"—" }}
+                    {{ mov.type }} · {{ mov.created_at|time:"H:i" }} · {{ mov.reason|truncatechars:30|default:"—" }}
                 </p>
             </div>
             <div class="text-right flex-shrink-0">
                 <p class="text-base font-black
-                    {% if mov.movement_type == 'IN' %}text-emerald-400
-                    {% elif mov.movement_type == 'OUT' %}text-rose-400
+                    {% if mov.type == 'IN' %}text-emerald-400
+                    {% elif mov.type == 'OUT' %}text-rose-400
                     {% else %}text-slate-300{% endif %}">
-                    {% if mov.movement_type == 'IN' %}+{% elif mov.movement_type == 'OUT' %}-{% endif %}{{ mov.quantity|floatformat:0 }}
+                    {% if mov.type == 'IN' %}+{% elif mov.type == 'OUT' %}-{% endif %}{{ mov.quantity|floatformat:"-4" }}
                 </p>
-                <p class="text-[10px] text-slate-600">→ {{ mov.balance_after|floatformat:0 }}</p>
+                <p class="text-[10px] text-slate-600">→ {{ mov.balance_after|floatformat:"-4" }}</p>
             </div>
         </div>
     </div>

@@ -163,3 +163,8 @@ Logs de inicialização observados: web conectou ao PostgreSQL, No migrations to
 Verificação externa após estabilização: /healthcheck/ e /accounts/login/ HTTP 200; HSTS max-age=3600, nosniff e cookie CSRF Secure (valor omitido); HTTP redirecionou para HTTPS. Os sete CSS/JS versionados do admin responderam 200 com corpo, MIME e cache immutable; login abriu estilizado. Durante substituição dos containers houve resposta transitória 503, resolvida após inicialização.
 
 Fluxos autenticados em produção não foram exercitados; 29 regressões de segurança passaram localmente com SQLite. Teste de middleware em DEBUG=False confirmou healthcheck HTTP isento, redirect/proxy HTTPS e cookies Secure. Não há SMTP real configurado nesta intervenção. O próximo commit de registro é apenas documentação; a versão executável implantada é a acima.
+
+
+## Patch2 e consulta por CNPJ — 09/10/2026
+
+Revisão funcional/testes/limites em [PATCH2_REVIEW_2026-10-09.md](PATCH2_REVIEW_2026-10-09.md) e rotas em [API.md](API.md). Ambos os Compose encaminham CACHE_URL (RedisDB2), API_THROTTLE_AUTH/USER/ANON/CNPJ e API_NUM_PROXIES à web. Preservados RedisDB0/1 do Celery e todos os volumes/rede/healthchecks. Consulta de CNPJ usa endpoints públicos sem chave; não adicionar segredo fictício para tentar resolver. O frontend agora usa o endpoint autenticado do próprio StockPro com feedback/cache/fallback. Nenhuma migração nova.

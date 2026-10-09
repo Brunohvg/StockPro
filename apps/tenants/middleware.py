@@ -31,6 +31,9 @@ class TenantMiddleware:
         return [
             '/accounts/',
             '/signup/',
+            '/api/v1/',
+            '/inventory/api/',
+            '/partners/api/suppliers/cnpj/',
             admin_path,
             '/static/',
             '/media/',

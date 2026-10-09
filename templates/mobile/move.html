@@ -32,12 +32,12 @@
         <div class="bg-black/20 rounded-xl p-3">
             <p class="text-[10px] text-slate-500 uppercase font-bold">Qtd</p>
             <p class="text-lg font-black {% if last_movement.type == 'IN' %}text-emerald-400{% else %}text-rose-400{% endif %} mt-0.5">
-                {% if last_movement.type == 'IN' %}+{% else %}-{% endif %}{{ last_movement.quantity|floatformat:0 }}
+                {% if last_movement.type == 'IN' %}+{% else %}-{% endif %}{{ last_movement.quantity|floatformat:"-4" }}
             </p>
         </div>
         <div class="bg-black/20 rounded-xl p-3">
             <p class="text-[10px] text-slate-500 uppercase font-bold">Saldo</p>
-            <p class="text-lg font-black text-white mt-0.5">{{ last_movement.balance_after|floatformat:0 }}</p>
+            <p class="text-lg font-black text-white mt-0.5">{{ last_movement.balance_after|floatformat:"-4" }}</p>
         </div>
     </div>
 </div>
@@ -81,6 +81,11 @@
     <div class="bg-slate-900 rounded-2xl p-4 mb-4 border border-white/5 space-y-3">
         <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Produto</label>
 
+        <button type="button" id="open-scanner"
+                class="w-full py-3 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 text-sm font-black flex items-center justify-center gap-2 haptic">
+            <i data-lucide="scan-barcode" class="w-5 h-5"></i> Ler código de barras
+        </button>
+
         <div class="relative">
             <i data-lucide="search" class="absolute left-3.5 top-3.5 w-5 h-5 text-slate-500 pointer-events-none"></i>
             <input type="text" id="product_search" autocomplete="off" autocorrect="off"
@@ -116,7 +121,7 @@
     <!-- Quantidade -->
     <div class="bg-slate-900 rounded-2xl p-4 mb-4 border border-white/5">
         <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Quantidade</label>
-        <input type="number" name="quantity" id="quantity_input" min="0.001" step="0.001"
+        <input type="number" name="quantity" id="quantity_input" min="0.0001" step="0.0001"
                class="w-full text-center text-4xl font-black bg-slate-800 border-2 border-transparent rounded-xl py-5 text-white
                       focus:border-indigo-500 outline-none transition-all"
                placeholder="0" inputmode="decimal" required>
@@ -160,19 +165,19 @@
         {% for mov in recent %}
         <div class="flex items-center gap-3 p-3 bg-slate-900 rounded-xl border border-white/5">
             <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
-                {% if mov.movement_type == 'IN' %}bg-emerald-950 text-emerald-400{% else %}bg-rose-950 text-rose-400{% endif %}">
-                <i data-lucide="{% if mov.movement_type == 'IN' %}arrow-down{% else %}arrow-up{% endif %}" class="w-4 h-4"></i>
+                {% if mov.type == 'IN' %}bg-emerald-950 text-emerald-400{% else %}bg-rose-950 text-rose-400{% endif %}">
+                <i data-lucide="{% if mov.type == 'IN' %}arrow-down{% else %}arrow-up{% endif %}" class="w-4 h-4"></i>
             </div>
             <div class="flex-1 min-w-0">
                 <p class="text-xs font-bold text-white truncate">
-                    {% if mov.variant %}{{ mov.variant.product.name }}{% else %}{{ mov.product_sku }}{% endif %}
+                    {% if mov.variant %}{{ mov.variant.display_name|default:mov.variant.product.name }}{% else %}{{ mov.product.name }}{% endif %}
                 </p>
                 <p class="text-[10px] text-slate-500">{{ mov.created_at|time:"H:i" }}</p>
             </div>
             <div class="text-right">
                 <p class="text-sm font-black
-                    {% if mov.movement_type == 'IN' %}text-emerald-400{% else %}text-rose-400{% endif %}">
-                    {% if mov.movement_type == 'IN' %}+{% else %}-{% endif %}{{ mov.quantity|floatformat:0 }}
+                    {% if mov.type == 'IN' %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                    {% if mov.type == 'IN' %}+{% else %}-{% endif %}{{ mov.quantity|floatformat:"-4" }}
                 </p>
             </div>
         </div>
@@ -181,9 +186,17 @@
 </div>
 {% endif %}
 
+<!-- Scanner -->
+<div id="scanner-modal" class="hidden fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center p-6">
+    <div id="reader" class="w-full max-w-sm aspect-square overflow-hidden rounded-3xl border-4 border-indigo-500"></div>
+    <p class="mt-6 text-white/60 font-bold text-xs uppercase tracking-[0.3em]">Posicione o código de barras</p>
+    <button type="button" id="close-scanner" class="mt-6 px-6 py-3 rounded-xl bg-white/10 text-white font-bold">Cancelar</button>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 const searchInput = document.getElementById('product_search');
 const skuInput = document.getElementById('sku_input');
@@ -218,7 +231,7 @@ function selectProduct(sku, name, stock) {
     searchInput.value = name;
     selectedName.textContent = name;
     selectedSkuDisplay.textContent = sku;
-    selectedStock.textContent = parseFloat(stock).toFixed(0);
+    selectedStock.textContent = formatQty(stock);
     selectedDiv.classList.remove('hidden');
     selectedDiv.classList.add('flex');
     resultsDiv.classList.add('hidden');
@@ -226,6 +239,92 @@ function selectProduct(sku, name, stock) {
     qtyInput.focus();
     checkSubmit();
 }
+
+function renderResults(results) {
+    resultsDiv.replaceChildren();
+    if (!results.length) {
+        const p = document.createElement('p');
+        p.className = 'text-xs text-slate-600 text-center py-3';
+        p.textContent = 'Nenhum produto encontrado';
+        resultsDiv.appendChild(p);
+        resultsDiv.classList.remove('hidden');
+        return;
+    }
+    results.forEach(r => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-left haptic';
+        const info = document.createElement('div');
+        info.className = 'flex-1 min-w-0';
+        const name = document.createElement('p');
+        name.className = 'text-sm font-bold text-white truncate';
+        name.textContent = r.display_name;
+        const sku = document.createElement('p');
+        sku.className = 'text-[10px] font-mono text-slate-500';
+        sku.textContent = r.sku + (r.barcode ? ' · ' + r.barcode : '');
+        info.append(name, sku);
+        const stock = document.createElement('div');
+        stock.className = 'text-right flex-shrink-0';
+        const qty = document.createElement('p');
+        qty.className = 'text-xs font-black ' + (r.low_stock ? 'text-rose-400' : 'text-white');
+        qty.textContent = formatQty(r.current_stock);
+        const lbl = document.createElement('p');
+        lbl.className = 'text-[10px] text-slate-600';
+        lbl.textContent = 'em estoque';
+        stock.append(qty, lbl);
+        btn.append(info, stock);
+        btn.addEventListener('click', () => selectProduct(r.sku, r.display_name, r.current_stock));
+        resultsDiv.appendChild(btn);
+    });
+    resultsDiv.classList.remove('hidden');
+}
+
+function formatQty(v) {
+    return parseFloat(v).toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+}
+
+async function lookup(q) {
+    const res = await fetch(`/inventory/api/products/search/?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('Falha na busca (' + res.status + ')');
+    return (await res.json()).results || [];
+}
+
+// Scanner de código de barras
+let scanner = null;
+let scannerReady = null;
+let scannerClosing = false;
+async function closeScanner() {
+    if (scannerClosing) return;
+    scannerClosing = true;
+    const current = scanner;
+    document.getElementById('scanner-modal').classList.add('hidden');
+    try {
+        if (current) {
+            await scannerReady.catch(() => {});
+            if (current.isScanning) await current.stop();
+            current.clear();
+        }
+    } finally { scanner = null; scannerClosing = false; }
+}
+document.getElementById('close-scanner').addEventListener('click', closeScanner);
+document.getElementById('open-scanner').addEventListener('click', () => {
+    if (scanner || scannerClosing) return;
+    if (typeof Html5Qrcode === 'undefined') { alert('Leitor indisponível. Digite o código.'); return; }
+    document.getElementById('scanner-modal').classList.remove('hidden');
+    scanner = new Html5Qrcode('reader');
+    scannerReady = scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 250, height: 150 } }, async (code) => {
+        if (scannerClosing) return;
+        closeScanner();
+        if (navigator.vibrate) navigator.vibrate(100);
+        searchInput.value = code;
+        try {
+            const results = await lookup(code);
+            const exact = results.filter(r => r.barcode === code || r.sku === code);
+            if (exact.length === 1) selectProduct(exact[0].sku, exact[0].display_name, exact[0].current_stock);
+            else renderResults(results);
+        } catch (e) { console.error(e); }
+    }).catch(() => { alert('Não foi possível acessar a câmera.'); closeScanner(); });
+});
 
 clearBtn.addEventListener('click', clearProduct);
 qtyInput.addEventListener('input', checkSubmit);
@@ -240,30 +339,7 @@ searchInput.addEventListener('input', () => {
     }
     searchTimeout = setTimeout(async () => {
         try {
-            const res = await fetch(`/inventory/api/products/search/?q=${encodeURIComponent(q)}`);
-            const data = await res.json();
-            if (data.results && data.results.length > 0) {
-                resultsDiv.innerHTML = data.results.map(r => `
-                    <button type="button" onclick="selectProduct('${r.sku}','${r.display_name}','${r.current_stock}')"
-                        class="w-full flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-left haptic">
-                        <div class="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-bold text-white truncate">${r.display_name}</p>
-                            <p class="text-[10px] font-mono text-slate-500">${r.sku}</p>
-                        </div>
-                        <div class="text-right flex-shrink-0">
-                            <p class="text-xs font-black text-white">${parseFloat(r.current_stock).toFixed(0)}</p>
-                            <p class="text-[10px] text-slate-600">em estoque</p>
-                        </div>
-                    </button>
-                `).join('');
-                resultsDiv.classList.remove('hidden');
-            } else {
-                resultsDiv.innerHTML = '<p class="text-xs text-slate-600 text-center py-3">Nenhum produto encontrado</p>';
-                resultsDiv.classList.remove('hidden');
-            }
+            renderResults(await lookup(q));
         } catch (e) {
             console.error(e);
         }

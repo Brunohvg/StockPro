@@ -93,7 +93,7 @@
                         class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl font-black text-slate-600 active:bg-slate-200 transition-colors">
                     −
                 </button>
-                <input type="number" name="quantity" id="qty_input" value="1" min="1"
+                <input type="number" name="quantity" id="qty_input" value="1" min="0.0001" step="any" inputmode="decimal"
                        class="w-24 text-center text-4xl font-black bg-transparent border-0 focus:ring-0 text-slate-900">
                 <button type="button" onclick="adjustQty(1)"
                         class="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-2xl font-black text-white shadow-lg shadow-indigo-600/30 active:bg-indigo-700 transition-colors">
@@ -142,13 +142,19 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
     let scanner = null;
+    let scannerReady = null;
+    let scannerClosing = false;
+
+    function formatQty(v) {
+        return parseFloat(v).toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+    }
 
     function adjustQty(val) {
         const input = document.getElementById('qty_input');
-        input.value = Math.max(1, parseInt(input.value || 1) + val);
+        input.value = Math.max(0.0001, (parseFloat(input.value) || 0) + val);
     }
 
     function setQty(val) {
@@ -178,24 +184,28 @@
         fetch(`/inventory/api/products/search/?q=${encodeURIComponent(query)}`)
             .then(res => res.json())
             .then(data => {
-                resultsDiv.innerHTML = '';
+                resultsDiv.replaceChildren();
                 if (data.results.length === 0) {
                     resultsDiv.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">Nenhum item encontrado</p>';
                 } else {
                     data.results.forEach(item => {
                         const div = document.createElement('div');
                         div.className = "p-3 bg-white border border-slate-100 rounded-xl active:bg-indigo-50 transition-colors";
-                        div.innerHTML = `
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <p class="text-sm font-bold text-slate-900">${item.display_name}</p>
-                                    <p class="text-[10px] font-mono text-slate-500">SKU: ${item.sku}</p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-xs font-black ${item.stock > 0 ? 'text-emerald-600' : 'text-rose-500'}">Est: ${item.stock}</p>
-                                </div>
-                            </div>
-                        `;
+                        const row = document.createElement('div');
+                        row.className = 'flex justify-between items-center';
+                        const left = document.createElement('div');
+                        const name = document.createElement('p');
+                        name.className = 'text-sm font-bold text-slate-900';
+                        name.textContent = item.display_name;
+                        const sku = document.createElement('p');
+                        sku.className = 'text-[10px] font-mono text-slate-500';
+                        sku.textContent = 'SKU: ' + item.sku;
+                        left.append(name, sku);
+                        const right = document.createElement('p');
+                        right.className = 'text-xs font-black ' + (item.current_stock > 0 ? 'text-emerald-600' : 'text-rose-500');
+                        right.textContent = 'Est: ' + formatQty(item.current_stock);
+                        row.append(left, right);
+                        div.appendChild(row);
                         div.onclick = () => selectItem(item);
                         resultsDiv.appendChild(div);
                     });
@@ -210,7 +220,7 @@
         document.getElementById('variant_id_input').value = item.variant_id;
 
         document.getElementById('selected-name').innerText = item.display_name;
-        document.getElementById('selected-sku').innerText = `SKU: ${item.sku} | Saldo: ${item.stock}`;
+        document.getElementById('selected-sku').innerText = `SKU: ${item.sku} | Saldo: ${formatQty(item.current_stock)}`;
         document.getElementById('selected-product').classList.remove('hidden');
         resultsDiv.classList.add('hidden');
 
@@ -221,9 +231,11 @@
 
     // Scanner functions
     function openScanner() {
+        if (scanner || scannerClosing) return;
+        if (typeof Html5Qrcode === 'undefined') { alert('Leitor indisponível. Digite o código.'); return; }
         document.getElementById('scanner-modal').classList.remove('hidden');
         scanner = new Html5Qrcode("reader");
-        scanner.start(
+        scannerReady = scanner.start(
             { facingMode: "environment" },
             { fps: 10, qrbox: { width: 250, height: 150 } },
             onScanSuccess
@@ -234,15 +246,22 @@
         });
     }
 
-    function closeScanner() {
-        if (scanner) {
-            scanner.stop().catch(() => {});
-            scanner = null;
-        }
+    async function closeScanner() {
+        if (scannerClosing) return;
+        scannerClosing = true;
+        const current = scanner;
         document.getElementById('scanner-modal').classList.add('hidden');
+        try {
+            if (current) {
+                await scannerReady.catch(() => {});
+                if (current.isScanning) await current.stop();
+                current.clear();
+            }
+        } finally { scanner = null; scannerClosing = false; }
     }
 
     function onScanSuccess(decodedText) {
+        if (scannerClosing) return;
         closeScanner();
         // For scanner, iterate by SKU directly
         document.getElementById('product_search').value = decodedText;
@@ -250,8 +269,10 @@
         fetch(`/inventory/api/products/search/?q=${encodeURIComponent(decodedText)}`)
             .then(res => res.json())
             .then(data => {
-                if(data.results.length === 1) {
-                    selectItem(data.results[0]);
+                const exact = data.results.filter(r => r.barcode === decodedText || r.sku === decodedText);
+                if (exact.length === 1) {
+                    selectItem(exact[0]);
+
                 } else {
                     searchInput.dispatchEvent(new Event('input'));
                 }

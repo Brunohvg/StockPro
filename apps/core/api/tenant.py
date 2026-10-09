@@ -38,6 +38,17 @@ def resolve_api_membership(request):
         except (ValueError, TypeError, DjangoValidationError):
             raise ValidationError({'error': 'X-Tenant-ID inválido.'})
     else:
+        # JWT exige header em múltiplas empresas, mesmo com cookie de sessão.
+        from rest_framework.authentication import SessionAuthentication
+        if isinstance(getattr(request, 'successful_authenticator', None), SessionAuthentication):
+            active_id = request.session.get('active_tenant_id')
+            if active_id is not None:
+                try:
+                    membership = memberships.filter(tenant_id=active_id).first()
+                except (ValueError, TypeError, DjangoValidationError):
+                    raise ValidationError({'error': 'Empresa da sessão inválida. Selecione novamente.'})
+                request._api_membership = membership
+                return membership
         count = memberships.count()
         if count > 1:
             raise ValidationError({'error': 'Usuário pertence a várias empresas. Envie o header X-Tenant-ID.'})

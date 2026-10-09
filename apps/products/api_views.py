@@ -1,10 +1,14 @@
-from rest_framework import status
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from apps.core.api.tenant import HasActiveTenant, resolve_api_tenant
 from apps.core.api.views import BaseTenantViewSet
 
 from .models import Product, ProductVariant
-from .serializers import ProductSerializer, ProductVariantSerializer
+from .serializers import ProductSerializer, ProductVariantSerializer, StagingItemSerializer, StagingSubmissionSerializer
 
 
 class ProductViewSet(BaseTenantViewSet):
@@ -32,7 +36,9 @@ class ProductViewSet(BaseTenantViewSet):
 
         if staged:
             from apps.inventory.models import ImportItem
-            data = request.data
+            submission = StagingSubmissionSerializer(data=request.data)
+            submission.is_valid(raise_exception=True)
+            data = submission.validated_data
 
             # Create a pending item in the staging area
             item = ImportItem.objects.create(
@@ -43,7 +49,7 @@ class ProductViewSet(BaseTenantViewSet):
                 ean=data.get('barcode'),
                 quantity=0, # Base quantity for creation staging
                 unit_cost=data.get('avg_unit_cost', 0),
-                raw_data=data,
+                raw_data=dict(request.data),
                 status='PENDING',
                 ai_confidence=0.5, # API creates need review
                 ai_logic_summary="Item enviado via API em modo de rascunho/staging."
@@ -78,3 +84,62 @@ class ProductVariantViewSet(BaseTenantViewSet):
     """
     queryset = ProductVariant.objects.all().select_related('product')
     serializer_class = ProductVariantSerializer
+
+
+class IsTenantAdmin(HasActiveTenant):
+    """Exige OWNER/ADMIN da empresa resolvida."""
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        membership = getattr(request, 'membership', None)
+        if not membership or membership.role not in ('OWNER', 'ADMIN'):
+            self.message = 'Apenas administradores podem revisar itens em staging.'
+            return False
+        return True
+
+
+class StagingItemViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """
+    Itens enviados com POST /api/v1/products/?staged=true aguardando revisão.
+
+    GET  /api/v1/staging/                 — lista (filtro ?status=PENDING por padrão)
+    POST /api/v1/staging/<id>/approve/    — cria o produto (e a entrada, se houver quantidade)
+    POST /api/v1/staging/<id>/reject/     — rejeita
+    """
+    serializer_class = StagingItemSerializer
+    permission_classes = [IsAuthenticated, IsTenantAdmin]
+
+    def get_queryset(self):
+        from apps.inventory.models import ImportItem
+        tenant = getattr(self.request, 'tenant', None) or resolve_api_tenant(self.request)
+        qs = ImportItem.objects.filter(tenant=tenant, source='API').order_by('-created_at')
+        item_status = self.request.query_params.get('status', 'PENDING')
+        if self.action == 'list' and item_status != 'ALL':
+            qs = qs.filter(status=item_status)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        from apps.inventory.services.staging import StagingError, approve_item
+        try:
+            product = approve_item(self.get_object(), request.user)
+        except StagingError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+        return Response({'status': 'DONE', 'product_id': product.pk, 'sku': product.sku})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        from apps.inventory.services.staging import StagingError, reject_item
+        try:
+            reject_item(self.get_object())
+        except StagingError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+        return Response({'status': 'REJECTED'})
+
+
+class ThrottledTokenObtainPairView(TokenObtainPairView):
+    throttle_scope = 'auth'
+
+
+class ThrottledTokenRefreshView(TokenRefreshView):
+    throttle_scope = 'auth'

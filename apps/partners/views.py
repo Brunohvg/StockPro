@@ -94,3 +94,26 @@ def supplier_search_api(request):
         })
 
     return JsonResponse({'results': results})
+
+
+from django.core.exceptions import ValidationError
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from apps.core.api.tenant import HasActiveTenant
+
+
+class SupplierCNPJLookupView(APIView):
+    permission_classes = [IsAuthenticated, HasActiveTenant]
+    throttle_scope = 'cnpj'
+
+    def get(self, request):
+        if request.membership.role not in ('OWNER', 'ADMIN'):
+            return Response({'error': 'Consulta restrita a administradores.'}, status=403)
+        from .cnpj_lookup import CNPJLookupError, lookup_cnpj
+        try:
+            return Response(lookup_cnpj(request.query_params.get('cnpj', '')))
+        except ValidationError:
+            return Response({'error': 'CNPJ inválido. Confira os 14 dígitos.'}, status=400)
+        except CNPJLookupError as exc:
+            return Response({'error': str(exc)}, status=exc.status)

@@ -15,6 +15,12 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Configure a URL interna do PostgreSQL no Coolify}
       ALLOWED_HOSTS: stock.optarys.com.br,localhost,127.0.0.1
       PORT: "8000"
+      API_NUM_PROXIES: ${API_NUM_PROXIES:-1}
+      CACHE_URL: ${CACHE_URL:-redis://redis:6379/2}
+      API_THROTTLE_CNPJ: ${API_THROTTLE_CNPJ:-20/minute}
+      API_THROTTLE_AUTH: ${API_THROTTLE_AUTH:-20/minute}
+      API_THROTTLE_USER: ${API_THROTTLE_USER:-1200/hour}
+      API_THROTTLE_ANON: ${API_THROTTLE_ANON:-300/hour}
       EMAIL_HOST: ${EMAIL_HOST:-}
       EMAIL_PORT: ${EMAIL_PORT:-587}
       EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
