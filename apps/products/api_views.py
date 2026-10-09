@@ -173,6 +173,14 @@ class StagingItemViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_scope = 'auth'
 
+    def finalize_response(self, request, response, *args, **kwargs):
+        # O django-axes marca o bloqueio no Request do DRF; o AxesMiddleware só
+        # enxerga o HttpRequest original. Repassa a marca para ele responder 429.
+        if getattr(request, 'axes_locked_out', False):
+            request._request.axes_locked_out = True
+            request._request.axes_credentials = getattr(request, 'axes_credentials', None)
+        return super().finalize_response(request, response, *args, **kwargs)
+
 
 class ThrottledTokenRefreshView(TokenRefreshView):
     throttle_scope = 'auth'

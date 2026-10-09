@@ -461,7 +461,10 @@ def export_page(request):
     completed_count = exports.filter(status='COMPLETED').count()
     error_count = exports.filter(status='FAILED').count()
 
+    from apps.tenants.backup_status import last_success_for_clients
+
     return render(request, 'reports/export.html', {
+        'last_backup_at': last_success_for_clients(),
         'exports': exports,
         'completed_count': completed_count,
         'error_count': error_count

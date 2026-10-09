@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="max-w-md mx-auto pb-24">
@@ -142,7 +143,7 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{% static 'vendor/html5-qrcode-2.3.8.min.js' %}"></script>
 <script>
     let scanner = null;
     let scannerReady = null;

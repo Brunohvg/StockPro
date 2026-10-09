@@ -4,7 +4,7 @@ from rest_framework import status
 
 from apps.core.models import VisualAuditLog
 from apps.inventory.models import StockMovement
-from tests.factories import ProductFactory
+from tests.factories import ProductFactory, stock_in
 
 
 @pytest.mark.django_db
@@ -22,7 +22,8 @@ class TestAPIOrders:
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
 
         # Product with stock
-        product = ProductFactory(tenant=tenant, current_stock=100, sku="SKU-ORDER-1")
+        product = ProductFactory(tenant=tenant, sku="SKU-ORDER-1")
+        stock_in(product, 100, user=user)
 
         consume_url = reverse('api-order-consume')
         payload = {

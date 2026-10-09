@@ -43,6 +43,8 @@ LOGIN_REDIRECT_URL = '/app/'
 LOGOUT_REDIRECT_URL = '/'
 
 AUTHENTICATION_BACKENDS = [
+    # Precisa ser o primeiro: bloqueia antes de testar a senha (ver apps/accounts/security.py)
+    'apps.accounts.security.AxesBackend',
     'apps.accounts.backends.EmailBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
@@ -70,6 +72,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'django_htmx',
     'corsheaders',
+    'axes',
 
     # Local Apps
     'apps.tenants',
@@ -93,6 +96,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
     'apps.tenants.middleware.TenantMiddleware',
+    # Último: transforma o bloqueio de login em resposta 429 (web e API)
+    'axes.middleware.AxesMiddleware',
 ]
 
 ROOT_URLCONF = 'stock_control.urls'
@@ -245,6 +250,10 @@ if CELERY_BROKER_URL:
             'task': 'apps.tenants.backup_task.cleanup_old_exports',
             'schedule': crontab(hour=4, minute=15),
         },
+        'daily-login-logs-cleanup': {
+            'task': 'apps.accounts.tasks.cleanup_login_logs',
+            'schedule': crontab(hour=4, minute=30),
+        },
         'daily-expiry-alerts': {
             'task': 'apps.tenants.tasks.send_expiry_alerts',
             'schedule': crontab(hour=7, minute=0),
@@ -382,3 +391,19 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
+
+
+# ─── Limite de tentativas de login (django-axes) ─────────────────────────────
+# Vale para o login do site, o /admin/ e o token da API/app. Ver apps/accounts/security.py.
+AXES_ENABLED = config('AXES_ENABLED', default=True, cast=bool)
+AXES_FAILURE_LIMIT = config('AXES_FAILURE_LIMIT', default=5, cast=int)
+AXES_COOLOFF_TIME = timedelta(minutes=config('AXES_COOLOFF_MINUTES', default=15, cast=int))
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
+AXES_RESET_ON_SUCCESS = True
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False  # não estende o bloqueio a cada nova tentativa
+AXES_NUM_PROXIES = config('AXES_NUM_PROXIES', default=REST_FRAMEWORK['NUM_PROXIES'], cast=int)
+AXES_CLIENT_IP_CALLABLE = 'apps.accounts.security.client_ip'
+AXES_USERNAME_CALLABLE = 'apps.accounts.security.normalize_username'
+AXES_LOCKOUT_CALLABLE = 'apps.accounts.security.lockout_response'
+AXES_SENSITIVE_PARAMETERS = ['password', 'token', 'refresh', 'access']
+AXES_ACCESS_LOG_RETENTION_DAYS = config('AXES_ACCESS_LOG_RETENTION_DAYS', default=90, cast=int)

@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR" class="h-full">
 <head>
@@ -8,8 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{% block title %}StockPro Mobile{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="{% static 'vendor/lucide-1.48.0.min.js' %}"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -19,6 +19,7 @@
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
         .haptic:active { transform: scale(0.97); transition: transform 0.1s; }
     </style>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body class="bg-slate-950 text-white min-h-dvh flex flex-col">
 

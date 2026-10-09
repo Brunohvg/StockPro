@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% load humanize %}
 
 {% block content %}
@@ -218,7 +219,7 @@
 </div>
 
 <!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'vendor/chart-4.5.1.umd.min.js' %}"></script>
 {{ category_labels|json_script:"category-labels" }}
 {{ category_values|json_script:"category-values" }}
 {{ movements_trend|json_script:"movements-trend" }}

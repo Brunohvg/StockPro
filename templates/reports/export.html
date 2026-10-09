@@ -8,6 +8,17 @@
         <p class="text-slate-500 font-medium">Baixe seus dados em diferentes formatos para backup ou integração.</p>
     </div>
 
+    {% if last_backup_at %}
+    <div class="mb-8 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4">
+        <i data-lucide="shield-check" class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5"></i>
+        <p class="text-sm text-emerald-900">
+            <span class="font-bold">Seus dados estão protegidos.</span>
+            A cópia de segurança automática foi feita em {{ last_backup_at|date:"d/m/Y \à\s H:i" }}.
+            Se quiser uma cópia sua, baixe as planilhas abaixo.
+        </p>
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <!-- Products Export -->

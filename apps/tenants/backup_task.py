@@ -25,6 +25,42 @@ def daily_backup():
 
 
 @shared_task
+def manual_backup(requested_by=''):
+    """Backup pedido pelo painel da plataforma."""
+    from .backup import run_backup
+    run = run_backup(trigger='painel')
+    if requested_by:
+        run.message = (f"Pedido por {requested_by}.\n" + run.message).strip()
+        run.save(update_fields=['message'])
+    return f"Backup {run.get_status_display()}"
+
+
+@shared_task
+def verify_backup(requested_by=''):
+    """Baixa o último dump do bucket, descriptografa e confere. Registra como BackupRun(trigger='verify')."""
+    from .backup import verify_latest_remote
+    from .backup_status import VERIFY
+    from .models import BackupRun
+
+    run = BackupRun.objects.create(trigger=VERIFY)
+    prefix = f"Pedido por {requested_by}.\n" if requested_by else ''
+    try:
+        key = verify_latest_remote()
+    except Exception as exc:
+        run.status = 'FAILED'
+        run.message = f"{prefix}{type(exc).__name__}: {exc}"
+        logger.exception("Conferência do backup falhou")
+    else:
+        run.status = 'SUCCESS'
+        run.remote_keys = [key]
+        run.encrypted = key.endswith('.gpg')
+        run.message = f"{prefix}{key} baixado, aberto e conferido: íntegro e completo."
+    run.finished_at = timezone.now()
+    run.save()
+    return run.get_status_display()
+
+
+@shared_task
 def cleanup_old_exports():
     """
     Remove exportações (registro + arquivo):

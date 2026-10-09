@@ -19,6 +19,7 @@ dependencies = [
     "pandas",
     "openpyxl",
     "django-cors-headers",
+    "django-axes>=8.3",
     "Pillow>=10.0.0",
     "requests",
     "djangorestframework-simplejwt>=5.5.1",

@@ -255,10 +255,10 @@ def _make_csv(rows, header="nome,sku,categoria,marca,unidade,custo_medio,estoque
 
 def _make_batch(tenant, user, csv_path, batch_type='CATALOG_DIRECT'):
     """Helper to create an ImportBatch with a file"""
+    from django.core.files.base import ContentFile
     batch = ImportBatchFactory(tenant=tenant, user=user, type=batch_type)
-    batch.file.name = csv_path
-    batch.save()
-    batch.file.path = csv_path
+    with open(csv_path, 'rb') as f:
+        batch.file.save(os.path.basename(csv_path), ContentFile(f.read()))
     return batch
 
 
@@ -272,7 +272,7 @@ class TestCatalogImport:
 
         result = process_csv_catalog_direct(batch)
 
-        assert "1 itens criados" in result
+        assert "1 criados" in result
         product = Product.objects.filter(tenant=tenant, name="Parafuso 8mm").first()
         assert product is not None
         assert product.sku == "PAR-001"
@@ -285,7 +285,7 @@ class TestCatalogImport:
 
         result = process_csv_catalog_direct(batch)
 
-        assert "1 itens criados" in result
+        assert "1 criados" in result
         product = Product.objects.filter(tenant=tenant, name="Parafuso 8mm").first()
         assert product is not None
         assert product.sku  # Should have auto-generated SKU
@@ -314,7 +314,7 @@ class TestCatalogImport:
         result = process_csv_catalog_direct(batch)
 
         assert "1 erros" in result
-        assert "Nome ausente" in result
+        assert "Nome vazio" in result
 
         os.unlink(csv_path)
 
@@ -327,7 +327,7 @@ class TestCatalogImport:
 
         result = process_csv_catalog_direct(batch)
 
-        assert "1 itens criados" in result
+        assert "1 criados" in result
         assert Product.objects.filter(tenant=tenant, sku="SKU-GOOD").exists()
 
         os.unlink(csv_path)
@@ -367,7 +367,7 @@ class TestStockAdjustmentCSV:
 
         variant.refresh_from_db()
         assert variant.current_stock == 15  # 10 + 5
-        assert "Sucessos: 1" in result
+        assert "1 atualizados" in result
 
         os.unlink(csv_path)
 
@@ -377,7 +377,7 @@ class TestStockAdjustmentCSV:
 
         result = process_csv_stock_adjustment(batch)
 
-        assert "Erros: 1" in result
+        assert "1 erros" in result
         assert "FAKE-SKU" in result
 
         os.unlink(csv_path)
@@ -397,8 +397,8 @@ class TestStockAdjustmentCSV:
 
         variant.refresh_from_db()
         assert variant.current_stock == 10
-        assert "Sucessos: 1" in result
-        assert "Erros: 1" in result
+        assert "1 atualizados" in result
+        assert "1 erros" in result
 
         os.unlink(csv_path)
 
@@ -463,6 +463,6 @@ class TestStockAdjustmentPortugueseAliases:
 
         variant.refresh_from_db()
         assert variant.current_stock == 100
-        assert "Sucessos: 1" in result
+        assert "1 atualizados" in result
 
         os.unlink(csv_path)

@@ -1,0 +1,11 @@
+{
+  "name": "stockpro-assets",
+  "private": true,
+  "description": "Gera o CSS do Tailwind (static/css/app.css). Não há JavaScript de aplicação aqui.",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i static/src/tailwind.css -o static/css/app.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.19"
+  }
+}

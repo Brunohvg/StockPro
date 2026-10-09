@@ -1,4 +1,5 @@
 {% extends 'mobile/base_mobile.html' %}
+{% load static %}
 
 {% block title %}Movimentação — StockPro{% endblock %}
 {% block subtitle %}Entrada & Saída{% endblock %}
@@ -206,7 +207,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{% static 'vendor/html5-qrcode-2.3.8.min.js' %}"></script>
 <script>
 const searchInput = document.getElementById('product_search');
 const skuInput = document.getElementById('sku_input');

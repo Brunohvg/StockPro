@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br" class="h-full bg-slate-50">
 <head>
@@ -6,44 +7,14 @@
     <title>StockPro Enterprise | Gestão Especializada</title>
 
     <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="{% static 'vendor/htmx-1.9.10.min.js' %}"></script>
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Icons (Lucide & FontAwesome) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Ícones (Lucide, versão fixa) -->
+    <script src="{% static 'vendor/lucide-1.48.0.min.js' %}"></script>
 
-    <script shadow>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        brand: {
-                            50: '#f0f4ff',
-                            100: '#e0e9fe',
-                            200: '#c1d3fe',
-                            300: '#92b2fd',
-                            400: '#5c89fa',
-                            500: '#345df1',
-                            600: '#2544e3',
-                            700: '#1d33cd',
-                            800: '#1e2ba6',
-                            900: '#1e2a84',
-                            950: '#11184f',
-                        },
-                    },
-                }
-            }
-        }
-    </script>
 
     <style>
         [hx-indicator].htmx-request { display: block; }
@@ -54,6 +25,9 @@
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
     {% block extra_css %}{% endblock %}
+    <!-- Tailwind CSS (gerado no build: npm run build:css, ver tailwind.config.js).
+         Fica no fim do <head>, como o CDN antigo injetava, para manter a mesma precedência. -->
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body class="h-full font-sans text-slate-900 overflow-hidden">
 
@@ -175,6 +149,13 @@
                                 <i data-lucide="settings" class="mr-3 flex-shrink-0 h-5 w-5"></i>
                                 Configurações
                             </a>
+
+                            {% if request.user.is_superuser %}
+                            <a href="{% url 'tenants:admin_panel' %}" class="group flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all {% if 'admin-panel' in request.path %}bg-indigo-600 text-white shadow-lg shadow-indigo-600/20{% else %}text-slate-400 hover:bg-slate-800 hover:text-white{% endif %}">
+                                <i data-lucide="shield" class="mr-3 flex-shrink-0 h-5 w-5"></i>
+                                Painel da plataforma
+                            </a>
+                            {% endif %}
 
                         </div>
                     </nav>

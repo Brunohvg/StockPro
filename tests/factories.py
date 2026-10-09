@@ -162,3 +162,18 @@ class InventoryAuditItemFactory(factory.django.DjangoModelFactory):
     product = factory.SubFactory(ProductFactory, tenant=factory.SelfAttribute('..audit.tenant'))
     ledger_quantity = 10
     physical_quantity = 10
+
+
+def stock_in(product=None, quantity=0, unit_cost=None, user=None, variant=None):
+    """Dá entrada pelo ledger, o único caminho que altera o saldo de uma variação.
+
+    Criar produto com ``current_stock=...`` não gera saldo: a variação nasce zerada
+    e o estoque só muda por StockService.create_movement.
+    """
+    from apps.core.services import StockService
+    target = variant or product
+    return StockService.create_movement(
+        target.tenant, user or UserFactory(), 'IN', quantity,
+        product=product if variant is None else None, variant=variant,
+        unit_cost=unit_cost, reason='Saldo inicial do teste',
+    )

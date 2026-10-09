@@ -27,7 +27,8 @@ class TestProductNormalization:
 
         # Check if data was copied correctly
         assert variant.sku == product.sku
-        assert variant.current_stock == 50
+        # O saldo só nasce pelo ledger: current_stock do produto não vira estoque.
+        assert variant.current_stock == 0
         assert variant.barcode == "12345678"
         assert variant.tenant == product.tenant
 

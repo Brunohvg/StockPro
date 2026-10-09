@@ -1,17 +1,18 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login Digital | StockPro Enterprise</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="{% static 'vendor/lucide-1.48.0.min.js' %}"></script>
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
         .bg-pattern { background-image: radial-gradient(#4f46e5 0.5px, transparent 0.5px); background-size: 24px 24px; }
     </style>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body class="h-full bg-slate-950 flex flex-col md:flex-row overflow-hidden">
 
@@ -56,7 +57,12 @@
                 <p class="text-slate-400 font-medium mt-2">Digite suas credenciais de segurança.</p>
             </div>
 
-            {% if form.errors %}
+            {% if lockout_message %}
+            <div class="bg-amber-500/10 border border-amber-500/30 text-amber-300 p-4 rounded-2xl mb-8 text-sm flex items-start gap-3" role="alert">
+                <i data-lucide="shield-alert" class="w-5 h-5 shrink-0 mt-0.5"></i>
+                <span class="font-semibold">{{ lockout_message }}</span>
+            </div>
+            {% elif form.errors %}
             <div class="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-2xl mb-8 text-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
                 <i data-lucide="alert-circle" class="w-5 h-5"></i>
                 <span class="font-bold uppercase tracking-tighter">Erro de Autenticação</span>

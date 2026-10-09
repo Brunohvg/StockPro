@@ -6,7 +6,7 @@ from apps.core.services import StockService
 from apps.inventory.models import StockMovement
 from apps.products.models import Product, ProductType, ProductVariant
 from apps.tenants.models import Tenant
-from tests.factories import ProductFactory, ProductVariantFactory
+from tests.factories import ProductFactory, ProductVariantFactory, stock_in
 
 
 @pytest.mark.django_db
@@ -14,7 +14,8 @@ class TestInventoryLogic:
     def test_stock_in_and_cost_averaging(self, tenant, user):
         """Verify IN movement increases stock and updates weighted average cost"""
         # Start with 10 items at 5.0 cost
-        product = ProductFactory(tenant=tenant, current_stock=10, avg_unit_cost=5.0)
+        product = ProductFactory(tenant=tenant)
+        stock_in(product, 10, unit_cost=5.0, user=user)
 
         # Add 10 items at 15.0 cost
         StockService.create_movement(
@@ -34,7 +35,8 @@ class TestInventoryLogic:
 
     def test_stock_out_and_protection(self, tenant, user):
         """Verify OUT movement decreases stock and blocks insufficient balance"""
-        product = ProductFactory(tenant=tenant, current_stock=10)
+        product = ProductFactory(tenant=tenant)
+        stock_in(product, 10, user=user)
 
         # Valid OUT
         StockService.create_movement(
