@@ -1,0 +1,29 @@
+name: Patch 4 and 5 validation
+on:
+  push:
+    branches: [feature/patch4-5-protecao-nfe]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DEBUG: "True"
+      SECRET_KEY: "ci-only-key-long-enough-for-tests-0123456"
+      DATABASE_URL: ""
+      DB_HOST: ""
+      CELERY_BROKER_URL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pytest pytest-django pytest-cov factory-boy Faker
+      - name: Migration consistency
+        run: python manage.py makemigrations --check --dry-run
+      - name: Patch 4 and 5 regression suite
+        run: python -m pytest -q -o addopts="" tests/test_patch4_arquivo.py tests/test_patch4_backup.py tests/test_patch4_ia_trial.py tests/test_patch5_nfe.py
