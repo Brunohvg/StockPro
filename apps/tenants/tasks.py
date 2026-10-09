@@ -23,10 +23,20 @@ def cleanup_expired_trials():
 
     count = expired.count()
     if count > 0:
-        logger.info(f"CELERY BEAT: Detectados {count} tenants com trial expirado.")
-        # Aqui poderíamos disparar e-mails ou logs específicos
+        logger.info(f"CELERY BEAT: Detectados {count} tenants com trial expirado (modo leitura).")
 
-    return f"Checked {count} expired trials."
+    # Suspensão automática é decisão comercial: desligada por padrão (0).
+    from django.conf import settings
+    suspend_after = getattr(settings, 'TRIAL_SUSPEND_AFTER_DAYS', 0)
+    suspended = 0
+    if suspend_after > 0:
+        suspended = expired.filter(
+            trial_ends_at__lt=now - timezone.timedelta(days=suspend_after)
+        ).update(subscription_status='SUSPENDED')
+        if suspended:
+            logger.info(f"CELERY BEAT: {suspended} empresa(s) suspensa(s) após {suspend_after} dias de trial vencido.")
+
+    return f"Checked {count} expired trials. Suspended {suspended}."
 
 
 @shared_task
