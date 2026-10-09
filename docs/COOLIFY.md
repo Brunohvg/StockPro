@@ -1,3 +1,15 @@
+## Domínio definido para a Bibelô
+
+- URL pública: `https://stock.optarys.com.br`
+- Serviço com domínio: `web` na porta interna `8000`
+- SSL/Traefik: habilitar via Coolify
+- `DOMAIN` e `SITE_URL`: recebidos das variáveis automáticas `SERVICE_FQDN_WEB_8000` e `SERVICE_URL_WEB_8000`
+- Banco: PostgreSQL 17 existente, informado por `DATABASE_URL`
+- Redis: serviço `redis` provisionado pelo Compose
+- Celery: serviço `worker` provisionado pelo Compose; broker/backend são internos e não precisam constar no .env do painel
+
+Verifique no editor de serviços do Coolify que o domínio foi associado à aplicação `web`, não ao `worker` ou `redis`.
+
 # Deploy Coolify — Banco PostgreSQL existente
 
 Esta stack usa o PostgreSQL 17 que já foi criado no Coolify. Não cria outro banco.
