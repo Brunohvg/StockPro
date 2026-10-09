@@ -27,6 +27,17 @@ O dump `.sql.gz` também fica no volume `stockpro_backups` (`/data/backups`) por
 
 **Recomendado no bucket:** mantenha-o privado, ligue o versionamento ou o Object Lock (proteção contra exclusão por uma chave vazada) e configure uma regra de ciclo de vida de 35 dias como reforço.
 
+## Tela de backups (painel da plataforma)
+
+Superusuário: menu **Painel da plataforma → Ver backups** (`/admin-panel/backups/`).
+
+- Mostra se o backup está em dia, atrasado (mais de 26 h sem concluir), falhando ou só no servidor; a configuração do bucket e da criptografia; o espaço no disco do servidor; e o histórico com tamanhos, chaves no bucket e mensagens de erro.
+- **Fazer backup agora** e **Conferir último backup** rodam no worker (Celery). A conferência baixa o último dump do bucket, descriptografa e confere se está completo, e fica registrada no histórico como "Conferência".
+- Não há download pelo navegador: o arquivo tem os dados de todas as empresas.
+- Um backup "em andamento" há mais de 3 h aparece como **Interrompido** (worker reiniciado no meio) e não impede um novo.
+
+Para o cliente, a tela **Exportar Dados** mostra "Seus dados estão protegidos" com a data do último backup concluído nas últimas 48 h. Se o backup estiver atrasado, o aviso simplesmente some (o cliente não vê erros técnicos).
+
 ## Comandos
 
 ```bash
