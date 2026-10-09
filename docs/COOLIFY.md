@@ -152,3 +152,14 @@ Nenhuma credencial foi inserida no admin nesta verificação; navegação autent
 Revisão/aplicação documentada em [PATCH_REVIEW_2026-10-09.md](PATCH_REVIEW_2026-10-09.md). Inclui cookies Secure, redirect HTTPS com /healthcheck/ isento e HSTS inicial de 3600 segundos. Ambos os Compose encaminham EMAIL_HOST/PORT/HOST_USER/HOST_PASSWORD/USE_TLS, DEFAULT_FROM_EMAIL e opções SECURE_SSL_REDIRECT/SECURE_HSTS_SECONDS. Valores SMTP reais ficam no painel; sem EMAIL_HOST não há envio em produção nem tokens em logs. Recuperação de senha continua dependente de SMTP funcional.
 
 Preservar o header X-Tenant-ID nos clientes da API com múltiplas empresas. O patch não resolve todos os achados da revisão anterior; consulte os limites no novo documento. Limpeza da árvore Git não limpa histórico nem altera volumes de produção.
+
+
+### Verificação do patch implantado
+
+Commit executável `66bdf2fbecdcc18e84c955989787c37755dd1b6d`; deploy `qjntzjt7j4fu6of32tobgxkr`: Success (03m29s), início 09/10/2026 12:42:36 America/Sao_Paulo. Aplicação Running após inicialização; os quatro containers têm sufixo `20261009T154308`.
+
+Logs de inicialização observados: web conectou ao PostgreSQL, No migrations to apply, collectstatic 166 arquivos/478 pós-processados, Gunicorn gthread iniciou; worker conectado ao Redis e ready; Beat iniciou PersistentScheduler em /data/celerybeat/celerybeat-schedule; Redis carregou AOF e Ready to accept connections. Nenhum erro fatal observado nesses trechos. Isso não comprova execução de tarefas de backup ou todos os fluxos de negócio.
+
+Verificação externa após estabilização: /healthcheck/ e /accounts/login/ HTTP 200; HSTS max-age=3600, nosniff e cookie CSRF Secure (valor omitido); HTTP redirecionou para HTTPS. Os sete CSS/JS versionados do admin responderam 200 com corpo, MIME e cache immutable; login abriu estilizado. Durante substituição dos containers houve resposta transitória 503, resolvida após inicialização.
+
+Fluxos autenticados em produção não foram exercitados; 29 regressões de segurança passaram localmente com SQLite. Teste de middleware em DEBUG=False confirmou healthcheck HTTP isento, redirect/proxy HTTPS e cookies Secure. Não há SMTP real configurado nesta intervenção. O próximo commit de registro é apenas documentação; a versão executável implantada é a acima.
