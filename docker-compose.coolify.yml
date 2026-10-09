@@ -10,12 +10,7 @@ services:
       DOMAIN: ${SERVICE_FQDN_WEB_8000}
       SITE_URL: ${SERVICE_URL_WEB_8000}
       SERVICE_URL_WEB_8000: /
-      DB_TYPE: postgres
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_NAME: stockpro
-      DB_USER: stockpro
-      DB_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
+      DATABASE_URL: ${DATABASE_URL:?Configure a URL interna do PostgreSQL no Coolify}
       PORT: "8000"
       DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH:-ops19x/}
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
@@ -31,8 +26,6 @@ services:
       - stockpro_imports:/app/imports
       - stockpro_backups:/data/backups
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -51,12 +44,7 @@ services:
     environment:
       SECRET_KEY: ${SERVICE_HEX_64_DJANGO}
       DEBUG: "False"
-      DB_TYPE: postgres
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_NAME: stockpro
-      DB_USER: stockpro
-      DB_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
+      DATABASE_URL: ${DATABASE_URL:?Configure a URL interna do PostgreSQL no Coolify}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH:-ops19x/}
@@ -71,21 +59,6 @@ services:
       redis:
         condition: service_healthy
 
-  db:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: stockpro
-      POSTGRES_USER: stockpro
-      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
-    volumes:
-      - stockpro_postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U stockpro -d stockpro"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -99,7 +72,6 @@ services:
       retries: 10
 
 volumes:
-  stockpro_postgres:
   stockpro_redis:
   stockpro_media:
   stockpro_imports:
