@@ -291,7 +291,7 @@ def variant_edit(request, pk):
 
 def _zero_stock_requested(request):
     # Checkbox "zerar saldo" vem marcado por padrão no formulário
-    return request.POST.get('zero_stock', 'on') in ('on', '1', 'true')
+    return request.POST.get('zero_stock', 'off') in ('on', '1', 'true')
 
 
 @login_required
