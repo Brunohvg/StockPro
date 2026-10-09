@@ -169,6 +169,16 @@ def _superuser_only(request):
     return None
 
 
+def _backup_worker_signal():
+    """Read the heartbeat without running unrelated dashboard database queries."""
+    from django.core.cache import cache
+    from django.utils import timezone
+    from .platform import HEARTBEAT_KEY, HEARTBEAT_STALE
+
+    last = cache.get(HEARTBEAT_KEY)
+    return {'last': last, 'ok': bool(last and timezone.now() - last < HEARTBEAT_STALE)}
+
+
 @login_required
 def admin_backups_view(request):
     denied = _superuser_only(request)
@@ -221,6 +231,7 @@ def admin_backups_view(request):
     return render(request, 'tenants/admin_backups.html', {
         'health': backup_status.health(),
         'dashboard': dashboard,
+        'worker_health': _backup_worker_signal(),
         'runs': runs,
         'disk': backup_status.local_disk(),
         'cfg': {
@@ -260,7 +271,7 @@ def admin_backup_run(request):
         messages.warning(request, "Já existe um backup em andamento. Aguarde ele terminar.")
         return redirect('tenants:admin_backups')
     return _enqueue(request, manual_backup,
-                    "Backup iniciado. Atualize a página em alguns minutos para ver o resultado.")
+                    "Solicitação enviada à fila. O backup só aparecerá no histórico quando um worker iniciar a tarefa; se não aparecer, confira o Celery Worker no Coolify.")
 
 
 @login_required
@@ -276,4 +287,4 @@ def admin_backup_verify(request):
         messages.error(request, "A conferência baixa o backup do bucket, e o bucket não está configurado (BACKUP_S3_BUCKET).")
         return redirect('tenants:admin_backups')
     return _enqueue(request, verify_backup,
-                    "Conferência iniciada: o último backup será baixado, aberto e checado.")
+                    "Solicitação de conferência enviada à fila; aguarde o worker executar e atualizar o histórico.")

@@ -1,0 +1,34 @@
+/* StockPro Superadmin — estilos exclusivos de /admin-panel/.
+   Não carrega nas telas operacionais dos clientes. */
+.platform-shell {font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:#f7f9fe;color:#111d36;}
+.platform-shell .platform-sidebar {background:linear-gradient(170deg,#0d1730 0%,#0a1328 100%);box-shadow:5px 0 26px rgba(15,23,42,.06);}
+.platform-sidebar nav>a {min-height:45px;transition:background .18s ease,color .18s ease,transform .18s ease;font-weight:600;letter-spacing:-.01em;}
+.platform-sidebar nav>a:hover {background:rgba(148,163,184,.12);transform:translateX(2px);}
+.platform-sidebar nav>a.bg-indigo-600 {background:linear-gradient(105deg,#5549ed,#3d47c5);color:#fff;box-shadow:0 9px 18px rgba(75,74,220,.2);}
+.platform-sidebar nav>p {letter-spacing:.19em!important;font-size:.65rem;}
+.platform-topbar {min-height:72px;border-color:#e9eef8;background:rgba(255,255,255,.96);}
+.platform-content {max-width:1600px;}
+.platform-content h1 {letter-spacing:-.045em;line-height:1.19;font-weight:800;}
+.platform-content h2,.platform-content h3 {letter-spacing:-.025em;}
+.platform-content .bg-white.rounded-2xl {background:#fff;border-color:#e6eaf3;box-shadow:0 3px 14px rgba(19,35,65,.035);transition:box-shadow .18s ease,border-color .18s ease;}
+.platform-content .bg-white.rounded-2xl:hover {box-shadow:0 8px 25px rgba(19,35,65,.06);}
+.platform-content .bg-white.rounded-xl {border-color:#e6eaf3;}
+.platform-content .rounded-2xl {border-radius:17px;}
+.platform-content .rounded-xl {border-radius:12px;}
+.platform-content .text-slate-500 {color:#687991;}
+.platform-content input:not([type=checkbox]):not([type=radio]),.platform-content select,.platform-content textarea {border:1px solid #d8e1ee;border-radius:11px;min-height:40px;background-color:#fff;color:#1b2a45;box-shadow:0 1px 2px rgba(11,31,66,.025);}
+.platform-content input:focus,.platform-content select:focus,.platform-content textarea:focus {outline:2px solid rgba(79,70,229,.22);outline-offset:1px;border-color:#6366f1;}
+.platform-content button,.platform-content a {transition:color .15s ease,background-color .15s ease,box-shadow .15s ease;}
+.platform-content button:focus-visible,.platform-content a:focus-visible,.platform-sidebar a:focus-visible {outline:3px solid #9d94ff;outline-offset:2px;}
+.platform-content a.bg-indigo-600,.platform-content button.bg-indigo-600 {background:linear-gradient(100deg,#5747f2,#483fd6);box-shadow:0 6px 14px rgba(79,70,229,.16);}
+.platform-content table {border-collapse:separate;border-spacing:0;}
+.platform-content table thead {background:#f7f9fc;}
+.platform-content table th {font-size:11px;letter-spacing:.035em;white-space:nowrap;color:#64748b;}
+.platform-content table tbody tr:hover {background:#f8faff;}
+.platform-content table td {vertical-align:middle;}
+.platform-content .bg-slate-950.rounded-2xl {background:#0e162b;border:1px solid #222f4a;box-shadow:0 14px 34px rgba(15,23,42,.11);}
+.platform-content .bg-slate-900 {background:#151f36;border-color:#293551;}
+.platform-content .bg-slate-900 .text-slate-400 {color:#a1aec4;}
+.platform-content [id="empresas"],.platform-content [id="saude"],.platform-content [id="alertas"] {scroll-margin-top:30px;}
+@media (max-width:1023px){.platform-sidebar{position:relative;z-index:10;}.platform-content{padding:22px 16px;}.platform-content table{min-width:760px;}.platform-topbar{min-height:60px;}}
+@media (prefers-reduced-motion:reduce){.platform-shell *{transition:none!important;scroll-behavior:auto!important;}}
