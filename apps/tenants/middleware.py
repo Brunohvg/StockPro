@@ -49,8 +49,25 @@ class TenantMiddleware:
         '/upgrade/',
     ]
 
+    SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
+    # Gravações liberadas com trial vencido: apagar exportações e o painel do superusuário
+    TRIAL_WRITE_ALLOWED = ('/app/export/', '/inventory/exports/', '/admin-panel/')
+
     def __init__(self, get_response):
         self.get_response = get_response
+
+    @staticmethod
+    def _trial_blocked_response(request):
+        from django.http import JsonResponse
+        msg = ("Seu período de teste terminou: o sistema está em modo leitura. "
+               "Você pode consultar e exportar, mas não gravar. Fale conosco para ativar um plano.")
+        wants_json = (request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                      or request.headers.get('HX-Request')
+                      or 'application/json' in request.headers.get('Accept', ''))
+        if wants_json:
+            return JsonResponse({'error': msg, 'upgrade_url': reverse('tenants:billing')}, status=403)
+        messages.warning(request, msg)
+        return redirect('tenants:billing')
 
     def __call__(self, request):
         # Initialize request attributes
@@ -101,14 +118,17 @@ class TenantMiddleware:
             messages.error(request, "Esta empresa foi desativada.")
             return redirect('accounts:no_company')
 
-        # Check trial expiration
-        if tenant.is_trial_expired:
-            request.trial_expired = True
-            # Don't block, but flag for views to handle
-
         # Set request attributes
         request.tenant = tenant
         request.membership = membership
+
+        # Trial vencido = modo leitura em TODA a aplicação web (não só nas views
+        # com @trial_allows_read). API e rotas isentas usam HasActiveTenant.
+        if tenant.is_trial_expired:
+            request.trial_expired = True
+            if (request.method not in self.SAFE_METHODS and not self._is_billing_path(request.path)
+                    and not request.path.startswith(self.TRIAL_WRITE_ALLOWED)):
+                return self._trial_blocked_response(request)
 
         return self.get_response(request)
 
