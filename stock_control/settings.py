@@ -250,6 +250,10 @@ if CELERY_BROKER_URL:
             'task': 'apps.tenants.backup_task.cleanup_old_exports',
             'schedule': crontab(hour=4, minute=15),
         },
+        'platform-heartbeat': {
+            'task': 'apps.tenants.tasks.platform_heartbeat',
+            'schedule': crontab(minute='*/5'),
+        },
         'daily-login-logs-cleanup': {
             'task': 'apps.accounts.tasks.cleanup_login_logs',
             'schedule': crontab(hour=4, minute=30),
@@ -390,6 +394,8 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    # Login pelo app também atualiza o "último acesso" (Central da plataforma)
+    'UPDATE_LAST_LOGIN': True,
 }
 
 
