@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-8 space-y-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-black text-slate-900">Notas fiscais de entrada</h1>
+                {% include 'inventory/nfe/_beta.html' %}
+            </div>
+            <p class="text-sm text-slate-500 mt-1">Envie o XML da NF-e de compra. O sistema mostra uma prévia item a item e só dá entrada no estoque quando você confirmar.</p>
+        </div>
+        <a href="{% url 'inventory:nfe_settings' %}" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+            <i data-lucide="settings-2" class="w-4 h-4"></i> Padrão da empresa
+        </a>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
+        <strong>Funcionalidade em teste.</strong> Confira sempre a prévia (quantidades, fator de conversão e custo) antes de confirmar. Se algo sair errado, use <em>Desfazer entrada</em> na nota: o sistema lança saídas de estorno e nada é apagado.
+    </div>
+
+    <form method="post" action="{% url 'inventory:nfe_upload' %}" enctype="multipart/form-data"
+          class="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
+        {% csrf_token %}
+        <i data-lucide="file-up" class="w-8 h-8 text-indigo-500"></i>
+        <div class="flex-1">
+            <input type="file" name="files" multiple accept=".xml,.zip,application/xml,text/xml,application/zip" required
+                   class="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-indigo-50 file:text-indigo-700 file:font-bold">
+            <p class="text-xs text-slate-400 mt-2">XML da NF-e (de preferência o autorizado, "nfeProc") ou um .zip com vários XMLs. Até 5 MB por nota e 50 notas por envio.</p>
+        </div>
+        <button type="submit" class="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Ler notas</button>
+    </form>
+
+    <div class="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-[10px] font-black uppercase text-slate-500">
+                <tr>
+                    <th class="px-4 py-3 text-left">Nota</th>
+                    <th class="px-4 py-3 text-left">Fornecedor</th>
+                    <th class="px-4 py-3 text-left">Emissão</th>
+                    <th class="px-4 py-3 text-right">Valor</th>
+                    <th class="px-4 py-3 text-left">Situação</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+                {% for doc in documents %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3"><a class="font-bold text-indigo-600" href="{% url 'inventory:nfe_detail' doc.pk %}">Nº {{ doc.number }}{% if doc.series %} / série {{ doc.series }}{% endif %}</a></td>
+                    <td class="px-4 py-3 text-slate-700">{{ doc.supplier_trade_name|default:doc.supplier_name }}</td>
+                    <td class="px-4 py-3 text-slate-500">{{ doc.issued_at|date:"d/m/Y" }}</td>
+                    <td class="px-4 py-3 text-right font-mono">R$ {{ doc.total_invoice|floatformat:2 }}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase
+                            {% if doc.status == 'IMPORTED' %}bg-emerald-50 text-emerald-700{% elif doc.status == 'PREVIEW' %}bg-amber-50 text-amber-700{% else %}bg-slate-100 text-slate-500{% endif %}">
+                            {{ doc.get_status_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="px-4 py-10 text-center text-slate-400">Nenhuma nota enviada ainda.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>lucide.createIcons();</script>
+{% endblock %}
+
