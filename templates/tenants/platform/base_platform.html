@@ -29,7 +29,7 @@
   <a href="{% url 'tenants:admin_panel' %}#saude" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="server" class="w-5 h-5"></i>Saúde da plataforma</a>
   <a href="{% url 'tenants:admin_panel' %}#alertas" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="bell" class="w-5 h-5"></i>Alertas e oportunidades</a>
   <a href="{% url 'tenants:admin_panel' %}#empresas" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="shield-check" class="w-5 h-5"></i>Auditoria e empresas</a>
-  {% if request.user.is_staff %}<a href="/{{ admin_url|default:'admin' }}/" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="settings" class="w-5 h-5"></i>Admin do Django</a>{% endif %}
+  {% if request.user.is_staff %}<a href="{% url 'admin:index' %}" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="settings" class="w-5 h-5"></i>Admin do Django</a>{% endif %}
  </nav>
  <div class="border-t border-slate-800 px-5 py-5">
  <div class="text-sm font-semibold">{{ request.user.get_full_name|default:request.user.username }}</div>
