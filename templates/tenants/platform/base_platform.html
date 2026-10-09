@@ -1,0 +1,53 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Administração da Plataforma | StockPro{% endblock %}</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+<script src="{% static 'vendor/htmx-1.9.10.min.js' %}" defer></script>
+<script src="{% static 'vendor/lucide-1.48.0.min.js' %}" defer></script>
+{% block extra_css %}{% endblock %}
+</head>
+<body class="font-sans bg-slate-50 text-slate-900">
+<div class="min-h-screen lg:flex">
+<aside class="bg-slate-950 text-white lg:w-64 lg:min-h-screen lg:flex-shrink-0">
+ <div class="px-5 pt-5 pb-4 flex items-center justify-between">
+  <a href="{% url 'tenants:admin_panel' %}" class="flex items-center gap-3 font-extrabold text-xl">
+  <span class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center"><i data-lucide="package" class="w-6 h-6"></i></span>StockPro</a>
+  <button type="button" class="lg:hidden p-2 rounded-lg bg-slate-800" aria-label="Abrir menu da plataforma" aria-expanded="false" aria-controls="platform-menu" onclick="const el=document.getElementById('platform-menu');let opened=el.classList.toggle('hidden');this.setAttribute('aria-expanded',String(!opened))"><i data-lucide="menu"></i></button>
+ </div>
+ <div id="platform-menu" class="hidden lg:flex lg:flex-col lg:h-full">
+ <nav aria-label="Administração da plataforma" class="px-3 space-y-1 flex-1 pb-5">
+  <p class="px-3 py-3 text-xs text-slate-400 font-bold uppercase tracking-widest">Plataforma</p>
+  <a href="{% url 'tenants:admin_panel' %}" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl {% if request.path == '/admin-panel/' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:bg-slate-800{% endif %}"><i data-lucide="layout-dashboard" class="w-5 h-5"></i>Visão geral</a>
+  <a href="{% url 'tenants:admin_panel' %}#empresas" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="building-2" class="w-5 h-5"></i>Empresas e clientes</a>
+  <a href="{% url 'tenants:platform_plans' %}" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl {% if '/plans/' in request.path %}bg-indigo-600 text-white{% else %}text-slate-300 hover:bg-slate-800{% endif %}"><i data-lucide="credit-card" class="w-5 h-5"></i>Planos e assinaturas</a>
+  <a href="{% url 'tenants:admin_backups' %}" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl {% if '/backups/' in request.path %}bg-indigo-600 text-white{% else %}text-slate-300 hover:bg-slate-800{% endif %}"><i data-lucide="database-backup" class="w-5 h-5"></i>Backups</a>
+  <a href="{% url 'tenants:admin_panel' %}#saude" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="server" class="w-5 h-5"></i>Saúde da plataforma</a>
+  <a href="{% url 'tenants:admin_panel' %}#alertas" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="bell" class="w-5 h-5"></i>Alertas e oportunidades</a>
+  <a href="{% url 'tenants:admin_panel' %}#empresas" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="shield-check" class="w-5 h-5"></i>Auditoria e empresas</a>
+  {% if request.user.is_staff %}<a href="/{{ admin_url|default:'admin' }}/" class="flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-slate-300 hover:bg-slate-800"><i data-lucide="settings" class="w-5 h-5"></i>Admin do Django</a>{% endif %}
+ </nav>
+ <div class="border-t border-slate-800 px-5 py-5">
+ <div class="text-sm font-semibold">{{ request.user.get_full_name|default:request.user.username }}</div>
+ <div class="text-xs text-indigo-300">Superadministrador</div>
+ <form action="{% url 'logout' %}" method="post" class="mt-3">{% csrf_token %}<button type="submit" class="text-sm text-slate-400 hover:text-white">Sair do sistema</button></form>
+ </div></div>
+</aside>
+<div class="min-w-0 flex-1">
+ <header class="bg-white border-b border-slate-200 px-5 lg:px-8 py-4 flex justify-between items-center gap-4">
+ <div class="text-sm text-slate-500">StockPro <span class="mx-2 text-slate-300">/</span> <strong class="text-slate-800">Administração global</strong></div>
+ <div class="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold">Superadmin</div>
+ </header>
+ <main class="px-4 py-6 md:px-8 lg:py-8 max-w-screen-2xl mx-auto">
+ {% if messages %}<div class="space-y-2 mb-6">{% for message in messages %}<div class="rounded-xl px-4 py-3 border border-slate-200 bg-white text-sm">{{ message }}</div>{% endfor %}</div>{% endif %}
+ {% block content %}{% endblock %}
+ </main>
+</div>
+</div>
+<script>document.addEventListener('DOMContentLoaded',()=>{if(window.lucide)lucide.createIcons()});document.body.addEventListener('htmx:afterSwap',()=>{if(window.lucide)lucide.createIcons()});</script>
+{% block extra_js %}{% endblock %}
+</body></html>
