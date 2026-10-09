@@ -80,3 +80,6 @@ test_import_*.xml
 *.sqlite3*
 db.sqlite3.*
 imports/
+
+# Tailwind build (npm run build:css)
+node_modules/
