@@ -2,6 +2,18 @@
 # StockPro / Bibelo - Production Dockerfile
 # Padrao de deploy inspirado no VidalysFlow/Coolify
 # ===========================================
+# ---- Etapa 1: gera o CSS do Tailwind a partir dos templates ----
+# (substitui o cdn.tailwindcss.com; ver tailwind.config.js)
+FROM node:22-bookworm-slim AS assets
+WORKDIR /build
+COPY package.json package-lock.json tailwind.config.js ./
+RUN npm ci --no-audit --no-fund
+COPY templates ./templates
+COPY apps ./apps
+COPY static ./static
+RUN npm run build:css
+
+# ---- Etapa 2: aplicação ----
 FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -40,6 +52,8 @@ COPY docker/entrypoint.prod.sh /usr/local/bin/entrypoint.prod.sh
 RUN chmod +x /usr/local/bin/entrypoint.prod.sh
 
 COPY . /app
+# CSS recém-gerado na etapa 1 (sobrescreve o static/css/app.css do repositório)
+COPY --from=assets /build/static/css/app.css /app/static/css/app.css
 
 RUN mkdir -p /app/static /app/staticfiles /app/media /app/imports /data/backups
 
