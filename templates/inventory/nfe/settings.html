@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-8">
+    <div class="flex items-center gap-3 mb-1">
+        <h1 class="text-2xl font-black text-slate-900">Padrão de importação de NF-e</h1>
+        {% include 'inventory/nfe/_beta.html' %}
+    </div>
+    <p class="text-sm text-slate-500 mb-6">Cada empresa trabalha de um jeito. Estas escolhas valem para as próximas notas desta empresa e podem ser ajustadas item a item na prévia.</p>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+        {% if form.errors %}<div class="bg-rose-50 text-rose-700 p-3 rounded-xl text-sm">{{ form.errors }}</div>{% endif %}
+
+        <section class="bg-white rounded-2xl border border-slate-100 p-6">
+            <h2 class="font-black text-slate-800">Custo de entrada</h2>
+            <p class="text-xs text-slate-500 mb-4">O custo unitário é o valor do item, mais/menos os itens marcados, dividido pela quantidade convertida. Empresas do Simples Nacional normalmente somam IPI, ST e frete.</p>
+            <div class="grid md:grid-cols-2 gap-3 text-sm">
+                {% for f in form %}{% if f.name|slice:":5" == "cost_" %}
+                <label class="flex items-center gap-2">{{ f }} {{ f.label }}</label>
+                {% endif %}{% endfor %}
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl border border-slate-100 p-6">
+            <h2 class="font-black text-slate-800">Como encontrar o produto da nota</h2>
+            <p class="text-xs text-slate-500 mb-4">Nesta ordem. Ao confirmar uma nota, o sistema aprende o código de cada fornecedor e o fator de conversão; nas próximas notas o item já vem vinculado.</p>
+            <div class="space-y-2 text-sm">
+                <label class="flex items-center gap-2">{{ form.match_supplier_code }} {{ form.match_supplier_code.label }}</label>
+                <label class="flex items-center gap-2">{{ form.match_ean }} {{ form.match_ean.label }}</label>
+                <label class="flex items-center gap-2">{{ form.match_sku }} {{ form.match_sku.label }} <span class="text-xs text-slate-400">(útil quando o SKU interno é o código do fornecedor)</span></label>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+            <h2 class="font-black text-slate-800">Produtos novos</h2>
+            <div class="grid md:grid-cols-2 gap-4 text-sm">
+                <div><label class="block text-xs font-bold text-slate-500 mb-1">{{ form.new_product_policy.label }}</label>{{ form.new_product_policy }}</div>
+                <div><label class="block text-xs font-bold text-slate-500 mb-1">{{ form.sku_policy.label }}</label>{{ form.sku_policy }}</div>
+                <div><label class="block text-xs font-bold text-slate-500 mb-1">{{ form.default_category.label }}</label>{{ form.default_category }}</div>
+            </div>
+            <label class="flex items-center gap-2 text-sm">{{ form.title_case_names }} {{ form.title_case_names.label }}</label>
+            <label class="flex items-center gap-2 text-sm">{{ form.auto_tracks_expiry }} {{ form.auto_tracks_expiry.label }}</label>
+        </section>
+
+        <section class="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+            <h2 class="font-black text-slate-800">Entrada e conferência</h2>
+            <div class="text-sm"><label class="block text-xs font-bold text-slate-500 mb-1">{{ form.default_location.label }}</label>{{ form.default_location }}</div>
+            <label class="flex items-center gap-2 text-sm">{{ form.require_recipient_cnpj }} {{ form.require_recipient_cnpj.label }}</label>
+        </section>
+
+        <div class="flex justify-end gap-3">
+            <a href="{% url 'inventory:nfe_list' %}" class="px-5 py-2.5 rounded-xl font-bold text-slate-600">Voltar</a>
+            <button class="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Salvar padrão</button>
+        </div>
+    </form>
+</div>
+<script>lucide.createIcons();</script>
+{% endblock %}
+
