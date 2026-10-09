@@ -14,9 +14,9 @@ from apps.tenants.models import Plan
 def test_enterprise_pricing_migration_preserves_other_plans_and_custom_prices():
     migration = import_module("apps.tenants.migrations.0004_enterprise_price_697")
     editor = SimpleNamespace(connection=connection)
-    enterprise = Plan.objects.create(name="EMPRESARIAL", price=247, max_users=999)
-    professional = Plan.objects.create(name="PROFISSIONAL", price=97)
-    free = Plan.objects.create(name="GRATUITO", price=0)
+    enterprise = Plan.objects.update_or_create(name="EMPRESARIAL", defaults={"price": 247, "max_users": 999})[0]
+    professional = Plan.objects.update_or_create(name="PROFISSIONAL", defaults={"price": 97})[0]
+    free = Plan.objects.update_or_create(name="GRATUITO", defaults={"price": 0})[0]
 
     migration.update_enterprise_price(apps, editor)
     migration.update_enterprise_price(apps, editor)
