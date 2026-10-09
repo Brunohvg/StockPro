@@ -11,6 +11,7 @@ urlpatterns = [
     path('<int:pk>/', views.product_detail, name='product_detail'),
     path('<int:pk>/edit/', views.product_edit, name='product_edit'),
     path('<int:pk>/delete/', views.product_delete, name='product_delete'),
+    path('<int:pk>/restore/', views.product_restore, name='product_restore'),
     path('bulk-delete/', views.bulk_delete, name='bulk_delete'),
 
     # Variants
