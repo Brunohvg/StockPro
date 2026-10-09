@@ -34,6 +34,10 @@ while True:
 PY
 }
 
+if [ "${SKIP_DJANGO_BOOTSTRAP:-False}" = "True" ]; then
+    exec "$@"
+fi
+
 if [ -n "${DATABASE_URL:-}" ] || [ -n "${DB_HOST:-}" ]; then
     wait_for_database
 fi
