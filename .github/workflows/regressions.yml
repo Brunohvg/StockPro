@@ -44,6 +44,7 @@ jobs:
             tests/test_supplier_cnpj_lookup.py \
             tests/test_admin_staticfiles.py \
             tests/test_plan_pricing_migration.py \
+            tests/test_catalog_initial_lot.py \
             tests/test_import_validade.py
 
 # Deliberately no deploy job. Production deployment is manual in Coolify.
