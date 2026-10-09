@@ -6,6 +6,7 @@ import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -94,15 +95,32 @@ def product_create(request):
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES, tenant=tenant)
         if form.is_valid():
+            from apps.core.services import StockService
+            initial_stock = form.cleaned_data.get('current_stock') or 0
             product = form.save(commit=False)
             product.tenant = tenant
-            product.save()
-            messages.success(request, f"Produto '{product.name}' criado com sucesso!")
+            # O saldo da variante so pode ser alterado pelo ledger.
+            product.current_stock = 0
+            try:
+                with transaction.atomic():
+                    product.save()
+                    if product.is_simple and initial_stock > 0:
+                        StockService.create_movement(
+                            tenant, request.user, 'IN', initial_stock,
+                            product=product, source='MANUAL', reason='Estoque inicial no cadastro',
+                            unit_cost=form.cleaned_data.get('avg_unit_cost'),
+                            lot_number=form.cleaned_data.get('initial_lot_number'),
+                            expiry_date=form.cleaned_data.get('initial_expiry_date'),
+                            manufacture_date=form.cleaned_data.get('initial_manufacture_date'),
+                        )
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, f"Produto '{product.name}' criado com sucesso!")
+                if product.is_variable:
+                    return redirect('products:product_detail', pk=product.pk)
+                return redirect('products:product_list')
 
-            # Se for variável, redireciona para adicionar variações
-            if product.is_variable:
-                return redirect('products:product_detail', pk=product.pk)
-            return redirect('products:product_list')
     else:
         form = ProductForm(tenant=tenant)
 
