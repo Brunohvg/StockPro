@@ -260,7 +260,7 @@ def admin_backup_run(request):
         messages.warning(request, "Já existe um backup em andamento. Aguarde ele terminar.")
         return redirect('tenants:admin_backups')
     return _enqueue(request, manual_backup,
-                    "Backup iniciado. Atualize a página em alguns minutos para ver o resultado.")
+                    "Solicitação enviada à fila. O backup só aparecerá no histórico quando um worker iniciar a tarefa; se não aparecer, confira o Celery Worker no Coolify.")
 
 
 @login_required
@@ -276,4 +276,4 @@ def admin_backup_verify(request):
         messages.error(request, "A conferência baixa o backup do bucket, e o bucket não está configurado (BACKUP_S3_BUCKET).")
         return redirect('tenants:admin_backups')
     return _enqueue(request, verify_backup,
-                    "Conferência iniciada: o último backup será baixado, aberto e checado.")
+                    "Solicitação de conferência enviada à fila; aguarde o worker executar e atualizar o histórico.")
