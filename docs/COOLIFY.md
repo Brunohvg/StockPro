@@ -1,4 +1,37 @@
-# Deploy do StockPro no Coolify
+# Recomendado: Docker Compose no Coolify
+
+O deploy da Bibelô deve utilizar **docker-compose.coolify.yml** versionado nesta
+branch, não o compose de desenvolvimento `docker-compose.yml`.
+
+1. No Coolify, crie **New Resource → Application → GitHub**.
+2. Selecione `Brunohvg/StockPro`, branch `feature/bibelo-coolify-deploy`.
+3. Escolha **Docker Compose** como Build Pack.
+4. Informe `/docker-compose.coolify.yml` como Compose File.
+5. Salve. No serviço **web**, configure o domínio no painel do Coolify,
+   com HTTPS habilitado. O serviço usa porta interna 8000.
+6. Em **Environment Variables**, preencha apenas o necessário:
+   `DJANGO_SUPERUSER_EMAIL` e `DJANGO_SUPERUSER_PASSWORD` para criar o
+   primeiro admin. Recomenda-se manter estas variáveis em segredo.
+7. Faça deploy e confira os logs do `web`, `db`, `redis` e `worker`.
+
+O próprio Coolify gera e compartilha:
+- `SERVICE_HEX_64_DJANGO`: segredo Django;
+- `SERVICE_PASSWORD_64_POSTGRES`: senha do PostgreSQL 17;
+- `SERVICE_FQDN_WEB_8000` e `SERVICE_URL_WEB_8000`: domínio e URL HTTPS
+  escolhidos no painel do serviço web.
+
+O Django recebe `DOMAIN` e `SITE_URL` a partir dessas variáveis.
+Não é preciso duplicar domínio em um arquivo `.env`. O compose usa
+`DB_HOST=db`, rede interna e PostgreSQL 17; não publica a porta 5432.
+
+**Atenção:** o modo Compose cria um banco PostgreSQL novo. Não aponte uma
+instância existente com dados de produção para esta stack sem backup e plano
+de migração. A operação do StockPro/Bibelô ainda precisa de validação funcional,
+mesmo que os contêineres iniciem corretamente.
+
+---
+
+# Alternativa: Dockerfile com banco externo
 
 Esta branch esta preparada para subir o StockPro diretamente pelo `Dockerfile`,
 seguindo o mesmo padrao operacional usado no VidalysFlow.
