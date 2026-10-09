@@ -221,6 +221,7 @@ def admin_backups_view(request):
     return render(request, 'tenants/admin_backups.html', {
         'health': backup_status.health(),
         'dashboard': dashboard,
+        'worker_health': __import__('apps.tenants.platform', fromlist=['platform_health']).platform_health()['worker'],
         'runs': runs,
         'disk': backup_status.local_disk(),
         'cfg': {
