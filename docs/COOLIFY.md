@@ -131,3 +131,11 @@ O usuário relatou admin autenticado sem CSS. A mesma aparência foi reproduzida
 Para tornar a publicação determinística, STORAGES.staticfiles usa CompressedManifestStaticFilesStorage: collectstatic gera manifesto, nomes com hash e compressão; templates passam a apontar para a versão coletada. Em produção WHITENOISE_USE_FINDERS=False e manifesto estrito; não confiar em fallback de fontes ou ignorar referências faltantes. O entrypoint já coleta estáticos antes do Gunicorn.
 
 Regressão tests/test_admin_staticfiles.py coleta arquivos reais do admin, exige URLs versionadas e serve CSS/JS com DEBUG=False e WhiteNoise, verificando HTTP 200, MIME correto e cache immutable. Validação local isolada com Django 5.2.10/WhiteNoise 6.11.0 passou. Após o redeploy, conferir admin/css/base, login, responsive, dark_mode, nav_sidebar e JS theme/nav_sidebar no manifesto; abrir login e conferir aparência. Não declarar operações autenticadas aprovadas sem login real. Se o navegador mantiver uma página antiga, recarregar com Ctrl+Shift+R.
+
+### Causa confirmada na verificação externa
+
+Os logs da web mostraram requests de CSS/JS com 200 e corpo de 0 bytes, seguidos de erro em gunicorn.http.wsgi.sendfile/socket.sendfile: ValueError: non-blocking sockets are not supported. O processo usa Gunicorn 24.0.0, worker gthread e Python 3.11. Isso explica o admin sem CSS mesmo com collectstatic bem-sucedido e arquivos existentes.
+
+O CMD do Dockerfile agora inclui --no-sendfile, opção documentada pelo Gunicorn, para enviar arquivos pelo caminho de escrita normal compatível com os sockets do worker. Preserve essa opção; hash/cache de estáticos sozinho não resolve o erro de transporte. Teste local com Gunicorn 24.0.0, WhiteNoise e gthread: 28 downloads concorrentes de CSS completos, sem o erro. O teste local de manifesto/CSS/JS do admin também passou.
+
+Revisão de segurança solicitada pelo usuário: [SECURITY_REVIEW_2026-10-09.md](SECURITY_REVIEW_2026-10-09.md). Achados críticos permanecem pendentes e não são resolvidos por este ajuste de infraestrutura.
