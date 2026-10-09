@@ -1,0 +1,47 @@
+name: StockPro regressions
+
+on:
+  push:
+    branches:
+      - feature/bibelo-coolify-deploy
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEBUG: "True"
+      SECRET_KEY: "ci-only-not-for-production-0123456789"
+      DATABASE_URL: ""
+      DB_HOST: ""
+      CELERY_BROKER_URL: ""
+      CELERY_RESULT_BACKEND: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install app and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest pytest-django pytest-cov factory-boy Faker
+      - name: Check migrations
+        run: python manage.py makemigrations --check --dry-run
+      - name: Focused security API mobile CNPJ and staticfiles regressions
+        run: |
+          python -m pytest -q -o addopts="" \
+            tests/test_security_fixes.py \
+            tests/test_api_mobile_v2.py \
+            tests/test_patch2_review_regressions.py \
+            tests/test_supplier_cnpj_lookup.py \
+            tests/test_admin_staticfiles.py \
+            tests/test_plan_pricing_migration.py
+
+# Deliberately no deploy job. Production deployment is manual in Coolify.
