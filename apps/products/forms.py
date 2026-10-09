@@ -21,7 +21,7 @@ class ProductForm(forms.ModelForm):
         fields = [
             'name', 'product_type', 'sku', 'barcode', 'photo',
             'description', 'category', 'brand', 'default_supplier', 'default_location', 'uom',
-            'current_stock', 'minimum_stock', 'avg_unit_cost', 'is_active'
+            'current_stock', 'minimum_stock', 'avg_unit_cost', 'sale_price', 'tracks_expiry', 'is_active'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold'}),
