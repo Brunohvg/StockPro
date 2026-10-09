@@ -1,37 +1,26 @@
-# Recomendado: Docker Compose no Coolify
+# Deploy Coolify — Banco PostgreSQL existente
 
-O deploy da Bibelô deve utilizar **docker-compose.coolify.yml** versionado nesta
-branch, não o compose de desenvolvimento `docker-compose.yml`.
+Esta stack usa o PostgreSQL 17 que já foi criado no Coolify. Não cria outro banco.
 
-1. No Coolify, crie **New Resource → Application → GitHub**.
-2. Selecione `Brunohvg/StockPro`, branch `feature/bibelo-coolify-deploy`.
-3. Escolha **Docker Compose** como Build Pack.
-4. Informe `/docker-compose.coolify.yml` como Compose File.
-5. Salve. No serviço **web**, configure o domínio no painel do Coolify,
-   com HTTPS habilitado. O serviço usa porta interna 8000.
-6. Em **Environment Variables**, preencha apenas o necessário:
-   `DJANGO_SUPERUSER_EMAIL` e `DJANGO_SUPERUSER_PASSWORD` para criar o
-   primeiro admin. Recomenda-se manter estas variáveis em segredo.
-7. Faça deploy e confira os logs do `web`, `db`, `redis` e `worker`.
+1. Em **Applications**, selecione o repositório `Brunohvg/StockPro`.
+2. Branch: `feature/bibelo-coolify-deploy`.
+3. Build Pack: **Docker Compose**.
+4. Compose File: `/docker-compose.coolify.yml`.
+5. Configure o domínio público no serviço `web`, porta `8000`.
+6. Em Environment Variables defina `DATABASE_URL` com a **URL interna** do PostgreSQL existente, como segredo. Exemplo: `postgresql://usuario:senha@host-interno:5432/stockpro`.
+7. Configure opcionalmente `DJANGO_SUPERUSER_EMAIL` e `DJANGO_SUPERUSER_PASSWORD` para criar o admin inicial.
+8. Verifique se o banco e a aplicação compartilham a rede Docker necessária para resolução do host interno.
+9. Faça deploy e confirme os logs de `web`, `worker` e `redis`, além de `/healthcheck/`.
 
-O próprio Coolify gera e compartilha:
-- `SERVICE_HEX_64_DJANGO`: segredo Django;
-- `SERVICE_PASSWORD_64_POSTGRES`: senha do PostgreSQL 17;
-- `SERVICE_FQDN_WEB_8000` e `SERVICE_URL_WEB_8000`: domínio e URL HTTPS
-  escolhidos no painel do serviço web.
+O Coolify fornece `SERVICE_HEX_64_DJANGO` como segredo de Django e `SERVICE_FQDN_WEB_8000`/`SERVICE_URL_WEB_8000` para o domínio e URL da aplicação. Não é necessário configurar `DOMAIN` ou `SITE_URL` manualmente.
 
-O Django recebe `DOMAIN` e `SITE_URL` a partir dessas variáveis.
-Não é preciso duplicar domínio em um arquivo `.env`. O compose usa
-`DB_HOST=db`, rede interna e PostgreSQL 17; não publica a porta 5432.
+O banco é **externo a este Compose**; portanto a disponibilidade do PostgreSQL depende do recurso de banco separado no Coolify. O Docker entrypoint da web aguarda a conexão antes de migrar.
 
-**Atenção:** o modo Compose cria um banco PostgreSQL novo. Não aponte uma
-instância existente com dados de produção para esta stack sem backup e plano
-de migração. A operação do StockPro/Bibelô ainda precisa de validação funcional,
-mesmo que os contêineres iniciem corretamente.
+Redis e Celery permanecem incluídos no YAML. O Redis tem volume persistente. O worker usa o mesmo `DATABASE_URL` do serviço web e só inicia quando o healthcheck web estiver saudável.
 
----
+## Alternativa: Dockerfile puro
 
-# Alternativa: Dockerfile com banco externo
+
 
 Esta branch esta preparada para subir o StockPro diretamente pelo `Dockerfile`,
 seguindo o mesmo padrao operacional usado no VidalysFlow.
