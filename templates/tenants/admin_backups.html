@@ -22,6 +22,11 @@
 
   {% include 'tenants/platform/_nav.html' with tab='backups' %}
 
+  <div class="rounded-2xl border px-5 py-4 flex flex-wrap gap-3 justify-between items-center {% if worker_health.ok %}bg-emerald-50 border-emerald-200 text-emerald-900{% else %}bg-amber-50 border-amber-200 text-amber-950{% endif %}">
+    <div><p class="font-bold text-sm">Processamento de tarefas: {% if worker_health.ok %}sinal recente detectado{% else %}sem sinal recente{% endif %}</p>
+    <p class="text-xs mt-1">{% if worker_health.ok %}Último heartbeat: {{ worker_health.last|date:"d/m/Y H:i:s" }}. Isso indica atividade da rotina de monitoramento, mas não comprova a execução do backup.{% else %}Solicitações podem permanecer na fila. Verifique o Celery Worker e o Celery Beat no Coolify antes de considerar o backup protegido.{% endif %}</p></div>
+    <a href="{% url 'tenants:admin_panel' %}#saude" class="text-sm font-semibold underline">Ver saúde da plataforma</a>
+  </div>
   <section class="rounded-2xl border border-slate-800 bg-slate-950 text-slate-100 p-5 md:p-6 space-y-5">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div><h2 class="text-lg font-bold">Visão geral da plataforma</h2><p class="text-xs text-slate-400 mt-1">Indicadores reais dos registros de backup · últimos 14 dias</p></div>
