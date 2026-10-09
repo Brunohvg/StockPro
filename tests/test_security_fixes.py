@@ -57,10 +57,11 @@ class TestLogin:
 class TestBilling:
     def test_membro_nao_muda_plano(self):
         u, tenant = _member('OWNER')
-        caro = Plan.objects.create(name='EMPRESARIAL', display_name='Empresarial', price=697)
+        caro, _ = Plan.objects.get_or_create(name='EMPRESARIAL', defaults={'display_name': 'Empresarial', 'price': 697})
+        plano_original = tenant.plan_id
         _client(u).post(f'/billing/upgrade/{caro.pk}/')
         tenant.refresh_from_db()
-        assert tenant.plan_id != caro.pk
+        assert tenant.plan_id == plano_original
 
     def test_suspensa_nao_se_reativa(self):
         u, tenant = _member('OWNER')
