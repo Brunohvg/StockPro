@@ -28,11 +28,20 @@ def test_tailwind_nao_vem_mais_do_cdn():
         assert 'cdn.tailwindcss.com' not in text and 'tailwind.config =' not in text, path
 
 
+def _baixados_no_build():
+    """Arquivos que scripts/fetch_vendor.mjs baixa (com checksum) durante o build do Docker."""
+    script = Path(settings.BASE_DIR) / 'scripts' / 'fetch_vendor.mjs'
+    if not script.is_file():
+        return set()
+    return {m.removeprefix('static/') for m in re.findall(r"writeFile\('([^']+)'", script.read_text())}
+
+
 def test_arquivos_referenciados_existem():
     faltando = []
+    no_build = _baixados_no_build()
     for path in _templates():
         for ref in re.findall(r"{% static '([^']+)' %}", path.read_text()):
-            if not (STATIC / ref).is_file():
+            if not (STATIC / ref).is_file() and ref not in no_build:
                 faltando.append(f"{path.relative_to(TEMPLATES)}: {ref}")
     assert faltando == []
 
