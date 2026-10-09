@@ -3,6 +3,7 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+import dj_database_url
 from decouple import AutoConfig, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -102,10 +103,21 @@ TEMPLATES = [
 WSGI_APPLICATION = 'stock_control.wsgi.application'
 
 # Database Configuration
+# Coolify: prefira DATABASE_URL. DB_* continua disponível como fallback.
+DATABASE_URL = config('DATABASE_URL', default='')
 DB_HOST = config('DB_HOST', default='')
-DB_TYPE = config('DB_TYPE', default='postgres' if DB_HOST else 'sqlite')
+DB_TYPE = config('DB_TYPE', default='postgres' if (DATABASE_URL or DB_HOST) else 'sqlite')
 
-if DB_TYPE == 'postgres' and DB_HOST:
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=60,
+        )
+    }
+    DATABASES['default'].setdefault('OPTIONS', {})
+    DATABASES['default']['OPTIONS'].setdefault('connect_timeout', 10)
+elif DB_TYPE == 'postgres' and DB_HOST:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
