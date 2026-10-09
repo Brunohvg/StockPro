@@ -9,7 +9,6 @@ services:
       DEBUG: "False"
       DOMAIN: ${SERVICE_FQDN_WEB_8000}
       SITE_URL: ${SERVICE_URL_WEB_8000}
-      SERVICE_URL_WEB_8000: /
       DATABASE_URL: ${DATABASE_URL:?Configure a URL interna do PostgreSQL no Coolify}
       PORT: "8000"
       DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH:-ops19x/}
@@ -83,6 +82,42 @@ services:
       redis:
         condition: service_healthy
 
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "stock_control", "beat", "-l", "info", "--schedule=/data/celerybeat/celerybeat-schedule"]
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SERVICE_HEX_64_DJANGO}
+      DEBUG: "False"
+      DATABASE_URL: ${DATABASE_URL:?Configure a URL interna do PostgreSQL no Coolify}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      XAI_MODEL: ${XAI_MODEL:-grok-2-latest}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS:-500}
+      WHATSAPP_SUPPORT: ${WHATSAPP_SUPPORT:-5511999999999}
+      BACKUP_DIR: /data/backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH:-ops19x/}
+      SKIP_DJANGO_BOOTSTRAP: "True"
+    volumes:
+      - stockpro_beat:/data/celerybeat
+      - stockpro_backups:/data/backups
+    depends_on:
+      web:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -97,6 +132,7 @@ services:
 
 volumes:
   stockpro_redis:
+  stockpro_beat:
   stockpro_media:
   stockpro_imports:
   stockpro_backups:
