@@ -78,7 +78,7 @@
                                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                         <i data-lucide="hash" class="w-5 h-5 text-slate-400 group-focus-within:text-amber-500"></i>
                                     </div>
-                                    <input type="number" name="quantity" id="quantity" required min="1"
+                                    <input type="number" name="quantity" id="quantity" required min="0.001" step="any"
                                         class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all font-black"
                                         placeholder="0">
                                 </div>
@@ -125,6 +125,26 @@
                                     placeholder="0,00">
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Lote e validade (entrada) -->
+                    <div class="mt-6 p-5 rounded-2xl bg-emerald-50 border border-emerald-100">
+                        <p class="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-3">Validade (entrada de produto perecível, opcional)</p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <label class="block">
+                                <span class="text-[10px] font-black text-slate-500 uppercase">Validade</span>
+                                <input type="date" name="expiry_date" class="mt-1 w-full px-3 py-3 bg-white border border-slate-200 rounded-xl font-bold">
+                            </label>
+                            <label class="block">
+                                <span class="text-[10px] font-black text-slate-500 uppercase">Lote</span>
+                                <input type="text" name="lot_number" maxlength="60" class="mt-1 w-full px-3 py-3 bg-white border border-slate-200 rounded-xl font-bold">
+                            </label>
+                            <label class="block">
+                                <span class="text-[10px] font-black text-slate-500 uppercase">Fabricação</span>
+                                <input type="date" name="manufacture_date" class="mt-1 w-full px-3 py-3 bg-white border border-slate-200 rounded-xl font-bold">
+                            </label>
+                        </div>
+                        <p class="mt-2 text-[11px] text-slate-500">Na saída não precisa informar: o sistema baixa primeiro o lote que vence antes.</p>
                     </div>
                 </div>
             </div>
