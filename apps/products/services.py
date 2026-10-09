@@ -199,46 +199,121 @@ class ConsolidationService:
             is_active=True,
         )
 
-        # Convert each SIMPLE product to a variant
+        # Cada produto SIMPLE vira variação do pai: a variação existente é
+        # reaproveitada (mesmo SKU, saldo, custo, lotes e histórico).
         for product in products:
             parsed = self._parse_product_name(product.name)
             attr_value = parsed[2] if parsed else product.name
 
-            # Determina se mantém SKU antigo ou gera novo
-            # Se o SKU antigo for o padrão PROD-..., forçamos a geração do novo padrão [PAI]-[ATTR]
-            old_sku = product.sku
-            new_sku = old_sku
-            if old_sku.startswith('PROD-') or '-' not in old_sku:
-                new_sku = None # Força o save() do ProductVariant a gerar o padrão baseado no PAI
+            variant = product.variants.select_for_update().first()
+            if variant is None:  # estado inesperado: cria a variação padrão
+                variant = ProductVariant.objects.create(
+                    tenant=self.tenant, product=product, sku=product.sku, name="Padrão")
 
-            # Create variant
-            variant = ProductVariant.objects.create(
-                tenant=self.tenant,
-                product=parent,
-                sku=new_sku,
-                name=product.name,
-                barcode=product.barcode,
-                current_stock=product.current_stock,
-                minimum_stock=product.minimum_stock,
-                avg_unit_cost=product.avg_unit_cost,
-                photo=product.photo,
-                is_active=True,
-            )
+            variant.product = parent
+            variant.name = product.name
+            variant.is_active = True
+            if not variant.photo and product.photo:
+                variant.photo = product.photo
+            variant.save()
 
-            # Create attribute value
-            VariantAttributeValue.objects.create(
+            VariantAttributeValue.objects.update_or_create(
                 variant=variant,
                 attribute_type=attr_type,
-                value=attr_value.title()
+                defaults={'value': attr_value.title()},
             )
 
-            # Migrate stock movements from product to variant
-            StockMovement.objects.filter(product=product).update(
-                product=None,
-                variant=variant
-            )
+            # Referências ao produto antigo passam para o pai antes de removê-lo
+            StockMovement.objects.filter(product=product).update(product=parent)
+            from apps.partners.models import SupplierProductMap
+            SupplierProductMap.objects.filter(product=product).update(product=parent)
+            from apps.inventory.models import InventoryAuditItem
+            InventoryAuditItem.objects.filter(product=product).update(product=parent)
 
-            # Delete the original SIMPLE product
+            # Produto SIMPLE agora vazio (sem variações nem movimentações)
             product.delete()
 
         return parent
+
+
+class ArchiveError(Exception):
+    pass
+
+
+class ProductArchiveService:
+    """
+    Remoção segura de produtos e variações.
+
+    - Sem nenhuma movimentação: exclusão definitiva (não há histórico a perder).
+    - Com movimentações: arquiva (is_active=False). O histórico é preservado e,
+      se pedido, o saldo é zerado com um ajuste registrado ("Arquivamento").
+    """
+
+    ARCHIVE_REASON = "Arquivamento do produto"
+
+    @staticmethod
+    def variant_has_movements(variant):
+        return StockMovement.objects.filter(variant=variant).exists()
+
+    @classmethod
+    def has_movements(cls, product):
+        return StockMovement.objects.filter(variant__product=product).exists() or \
+            StockMovement.objects.filter(product=product).exists()
+
+    @classmethod
+    def _zero_variant(cls, variant, user, reason):
+        from apps.core.services import StockService
+        if variant.current_stock and variant.current_stock > 0:
+            StockService.create_movement(
+                tenant=variant.tenant, user=user, movement_type='ADJ', quantity=0,
+                variant=variant, reason=reason, source='ARCHIVE',
+            )
+
+    @classmethod
+    @transaction.atomic
+    def remove_product(cls, product, user, zero_stock=True):
+        """Retorna 'deleted' ou 'archived'."""
+        product = Product.objects.select_for_update().get(pk=product.pk)
+        if not cls.has_movements(product):
+            product.delete()
+            return 'deleted'
+        variants = list(product.variants.select_for_update())
+        if zero_stock:
+            for variant in variants:
+                cls._zero_variant(variant, user, cls.ARCHIVE_REASON)
+        ProductVariant.objects.filter(pk__in=[v.pk for v in variants]).update(is_active=False)
+        Product.objects.filter(pk=product.pk).update(is_active=False)
+        return 'archived'
+
+    @classmethod
+    @transaction.atomic
+    def remove_variant(cls, variant, user, zero_stock=True):
+        variant = ProductVariant.objects.select_for_update().get(pk=variant.pk)
+        if not cls.variant_has_movements(variant):
+            variant.delete()
+            return 'deleted'
+        if zero_stock:
+            cls._zero_variant(variant, user, "Arquivamento da variação")
+        ProductVariant.objects.filter(pk=variant.pk).update(is_active=False)
+        return 'archived'
+
+    @classmethod
+    @transaction.atomic
+    def restore_product(cls, product):
+        from apps.tenants.models import Tenant
+        tenant = Tenant.objects.select_for_update().get(pk=product.tenant_id)
+        product = Product.objects.select_for_update().get(pk=product.pk)
+        if product.is_active:
+            return product
+        variants = product.variants.all()
+        plan = tenant.plan
+        if plan and plan.max_products:
+            needed = variants.count() or 1
+            if tenant.products_count + needed > plan.max_products:
+                raise ArchiveError(
+                    f"Limite de {plan.max_products} produtos do plano '{plan.display_name}' atingido. "
+                    "Arquive outro produto ou faça upgrade para reativar este.")
+        variants.update(is_active=True)
+        Product.objects.filter(pk=product.pk).update(is_active=True)
+        product.refresh_from_db()
+        return product
