@@ -26,15 +26,25 @@ class DecimalEncoder(json.JSONEncoder):
 
 
 class ProductExporter:
-    """Export products and variants to various formats"""
+    """
+    Exporta o catálogo no MESMO formato do modelo de importação (CATALOG_SPEC):
+    uma linha por item vendável. Produto simples = 1 linha; produto com
+    variação = 1 linha por variação, com sku_pai e atributos ("Cor:Azul").
+    O arquivo exportado pode ser editado e importado de volta sem perder nada.
+    """
 
     def __init__(self, tenant):
         self.tenant = tenant
 
+    @staticmethod
+    def columns():
+        from apps.inventory.services.template_xlsx import CATALOG_SPEC
+        return [c[0] for c in CATALOG_SPEC]
+
     def get_products(self, include_inactive=False):
         """Fetch all products with variants"""
         qs = Product.objects.filter(tenant=self.tenant).select_related(
-            'category', 'brand'
+            'category', 'brand', 'default_supplier', 'default_location',
         ).prefetch_related(
             'variants', 'variants__attribute_values', 'variants__attribute_values__attribute_type'
         )
@@ -42,188 +52,129 @@ class ProductExporter:
             qs = qs.filter(is_active=True)
         return qs.order_by('name')
 
-    def _simple_row(self, product):
-        """Generate CSV row for simple product"""
-        # Stock e custo vivem na variante, não no produto legado
-        variant = product.variants.first()
+    @staticmethod
+    def _variants(product, include_inactive=False):
+        variants = [v for v in product.variants.all() if include_inactive or v.is_active]
+        return sorted(variants, key=lambda v: (v.sku or '', v.pk))
+
+    @staticmethod
+    def _attributes(variant):
+        values = sorted(variant.attribute_values.all(), key=lambda a: a.attribute_type.name.lower())
+        return '; '.join(f"{a.attribute_type.name}:{a.value}" for a in values if a.value)
+
+    def _row(self, product, variant):
+        """Linha no formato do modelo de importação."""
+        supplier = product.default_supplier
+        is_variable = product.product_type == ProductType.VARIABLE
+        sale_price = (variant.sale_price if variant and variant.sale_price is not None else product.sale_price)
+        if is_variable:
+            name = variant.display_name
+        else:
+            name = product.name
+        barcode = ((variant.barcode if variant else None) or product.barcode or '') if not is_variable \
+            else (variant.barcode or '')
         return {
-            'sku': product.sku,
-            'name': product.name,
-            'type': 'SIMPLE',
-            'category': product.category.name if product.category else '',
-            'brand': product.brand.name if product.brand else '',
-            'uom': product.uom,
-            'stock': variant.current_stock if variant else 0,
-            'minimum_stock': variant.minimum_stock if variant else 0,
-            'cost': float(variant.avg_unit_cost) if variant and variant.avg_unit_cost else 0,
-            'barcode': (variant.barcode if variant and variant.barcode else product.barcode) or '',
+            'nome': name,
+            'sku': (variant.sku if variant else product.sku) or '',
+            'categoria': product.category.name if product.category else '',
+            'marca': product.brand.name if product.brand else '',
+            'unidade': product.uom or '',
+            'codigo_barras': barcode,
+            'custo': variant.avg_unit_cost if variant else None,
+            'preco_venda': sale_price,
+            'estoque': variant.current_stock if variant else Decimal('0'),
+            'estoque_minimo': variant.minimum_stock if variant else Decimal('0'),
+            'validade': '',
+            'lote': '',
+            'fabricacao': '',
+            'fornecedor': (supplier.trade_name or supplier.company_name) if supplier else '',
+            'cnpj': supplier.cnpj if supplier else '',
+            'local': product.default_location.name if product.default_location else '',
+            'sku_pai': product.sku if is_variable else '',
+            'atributos': self._attributes(variant) if is_variable and variant else '',
+            'descricao_detalhada': product.description or '',
         }
 
+    def rows(self, include_variants=True, include_inactive=False):
+        for product in self.get_products(include_inactive):
+            if product.product_type == ProductType.SIMPLE:
+                variants = self._variants(product, include_inactive=True)
+                yield self._row(product, variants[0] if variants else None)
+            elif include_variants:
+                for variant in self._variants(product, include_inactive):
+                    yield self._row(product, variant)
 
-    def _parent_row(self, product):
-        """Generate CSV row for variable product (parent)"""
-        return {
-            'sku': product.sku,
-            'name': product.name,
-            'type': 'VARIABLE',
-            'category': product.category.name if product.category else '',
-            'brand': product.brand.name if product.brand else '',
-            'uom': product.uom,
-            'stock': '',  # Stock is on variants
-            'minimum_stock': '',
-            'cost': '',
-            'barcode': '',
-        }
+    @staticmethod
+    def _number_text(value):
+        """Número para CSV no padrão brasileiro, sem casas desnecessárias (12,5 / 40)."""
+        if value is None or value == '':
+            return ''
+        d = Decimal(value).normalize()
+        text = format(d, 'f')
+        if '.' in text:
+            text = text.rstrip('0').rstrip('.')
+        return text.replace('.', ',')
 
-    def _variant_row(self, variant, attr_columns):
-        """Generate CSV row for variant"""
-        row = {
-            'sku': variant.sku,
-            'name': variant.name or '',
-            'type': f'VARIANT:{variant.product.sku}',
-            'category': '',
-            'brand': '',
-            'uom': variant.product.uom,
-            'stock': variant.current_stock,
-            'minimum_stock': variant.minimum_stock,
-            'cost': float(variant.avg_unit_cost) if variant.avg_unit_cost else 0,
-            'barcode': variant.barcode or '',
-        }
-
-        # Add attribute values
-        for attr in variant.attribute_values.all():
-            col_name = f'attr_{attr.attribute_type.name.lower()}'
-            row[col_name] = attr.value
-
-        # Ensure all attr columns exist
-        for col in attr_columns:
-            if col not in row:
-                row[col] = ''
-
-        return row
-
-    def _get_all_attr_columns(self, products):
-        """Collect all unique attribute column names"""
-        attr_cols = set()
-        for product in products:
-            if product.is_variable:
-                for variant in product.variants.all():
-                    for attr_val in variant.attribute_values.all():
-                        attr_cols.add(f'attr_{attr_val.attribute_type.name.lower()}')
-        return sorted(attr_cols)
+    NUMERIC = ('custo', 'preco_venda', 'estoque', 'estoque_minimo')
 
     def export_csv(self, include_variants=True, include_inactive=False):
-        """Export products to CSV format"""
-        products = self.get_products(include_inactive)
-        attr_columns = self._get_all_attr_columns(products) if include_variants else []
-
-        rows = []
-        for product in products:
-            if product.product_type == ProductType.SIMPLE:
-                row = self._simple_row(product)
-                for col in attr_columns:
-                    row[col] = ''
-                rows.append(row)
-            else:
-                row = self._parent_row(product)
-                for col in attr_columns:
-                    row[col] = ''
-                rows.append(row)
-
-                if include_variants:
-                    for variant in product.variants.filter(is_active=True):
-                        rows.append(self._variant_row(variant, attr_columns))
-
-        # Build CSV
+        """CSV com ';' e vírgula decimal (abre direto no Excel em português)."""
+        columns = self.columns()
         output = io.StringIO()
-        base_fieldnames = ['sku', 'name', 'type', 'category', 'brand', 'uom', 'stock', 'minimum_stock', 'cost', 'barcode']
-        fieldnames = base_fieldnames + attr_columns
-
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
+        output.write('\ufeff')  # BOM: o Excel reconhece UTF-8 e mantém os acentos
+        writer = csv.writer(output, delimiter=';', lineterminator='\r\n')
+        writer.writerow(columns)
+        for row in self.rows(include_variants, include_inactive):
+            writer.writerow([
+                self._number_text(row[c]) if c in self.NUMERIC else row[c]
+                for c in columns
+            ])
         return output.getvalue()
 
     def export_excel(self, include_variants=True, include_inactive=False):
-        """Export products to Excel format"""
+        """Planilha .xlsx com aba "Produtos" igual à do modelo de importação."""
         if not HAS_OPENPYXL:
             raise ImportError("openpyxl não instalado. Execute: pip install openpyxl")
-
-        products = self.get_products(include_inactive)
-        attr_columns = self._get_all_attr_columns(products) if include_variants else []
+        from openpyxl.styles import Alignment
+        from openpyxl.utils import get_column_letter
+        from apps.inventory.services.template_xlsx import (
+            CATALOG_SPEC, HEADER_FILL, HEADER_FONT, OPTIONAL_LOT_FILL, REQUIRED_FILL,
+        )
 
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Produtos"
+        for col, (name, required, width, fmt, _help, _ex) in enumerate(CATALOG_SPEC, start=1):
+            cell = ws.cell(row=1, column=col, value=name)
+            cell.font = HEADER_FONT
+            cell.fill = REQUIRED_FILL if required else (
+                OPTIONAL_LOT_FILL if name in ('validade', 'lote', 'fabricacao') else HEADER_FILL)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            ws.column_dimensions[get_column_letter(col)].width = width
+        ws.freeze_panes = 'A2'
 
-        # Header
-        base_headers = ['SKU', 'Nome', 'Tipo', 'Categoria', 'Marca', 'UOM', 'Estoque', 'Est. Mínimo', 'Custo', 'Código de Barras']
-        attr_headers = [col.replace('attr_', '').title() for col in attr_columns]
-        headers = base_headers + attr_headers
-
-        for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.font = openpyxl.styles.Font(bold=True)
-
-        # Data rows
-        row_num = 2
-        for product in products:
-            if product.product_type == ProductType.SIMPLE:
-                row = self._simple_row(product)
-                for col in attr_columns:
-                    row[col] = ''
-                self._write_excel_row(ws, row_num, row, attr_columns)
-                row_num += 1
-            else:
-                row = self._parent_row(product)
-                for col in attr_columns:
-                    row[col] = ''
-                self._write_excel_row(ws, row_num, row, attr_columns)
-                row_num += 1
-
-                if include_variants:
-                    for variant in product.variants.filter(is_active=True):
-                        row = self._variant_row(variant, attr_columns)
-                        self._write_excel_row(ws, row_num, row, attr_columns)
-                        row_num += 1
-
-        # Auto-width columns
-        for col in ws.columns:
-            max_length = max(len(str(cell.value or '')) for cell in col)
-            ws.column_dimensions[col[0].column_letter].width = min(max_length + 2, 50)
+        formats = {c[0]: c[3] for c in CATALOG_SPEC}
+        for r, row in enumerate(self.rows(include_variants, include_inactive), start=2):
+            for c, name in enumerate(formats, start=1):
+                value = row[name]
+                if value is None or value == '':
+                    continue
+                if name in self.NUMERIC:
+                    value = float(value)
+                cell = ws.cell(row=r, column=c, value=value)
+                if formats[name]:
+                    cell.number_format = formats[name]
 
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
         return output.getvalue()
 
-    def _write_excel_row(self, ws, row_num, data, attr_columns):
-        """Write a row to Excel worksheet"""
-        values = [
-            data['sku'],
-            data['name'],
-            data['type'],
-            data['category'],
-            data['brand'],
-            data['uom'],
-            data['stock'],
-            data['minimum_stock'],
-            data['cost'],
-            data['barcode'],
-        ]
-        values.extend(data.get(col, '') for col in attr_columns)
-
-        for col, value in enumerate(values, 1):
-            ws.cell(row=row_num, column=col, value=value)
-
     def export_json(self, include_variants=True, include_inactive=False):
-        """Export products to JSON format"""
-        products = self.get_products(include_inactive)
-
+        """JSON aninhado: o produto e, dentro dele, as variações."""
         result = []
-        for product in products:
+        for product in self.get_products(include_inactive):
+            supplier = product.default_supplier
             item = {
                 'sku': product.sku,
                 'name': product.name,
@@ -232,36 +183,49 @@ class ProductExporter:
                 'brand': product.brand.name if product.brand else None,
                 'uom': product.uom,
                 'description': product.description,
-                'barcode': product.barcode,
+                'sale_price': product.sale_price,
+                'supplier': {
+                    'name': supplier.trade_name or supplier.company_name,
+                    'cnpj': supplier.cnpj,
+                } if supplier else None,
+                'location': product.default_location.name if product.default_location else None,
                 'is_active': product.is_active,
             }
 
+            variants = self._variants(product, include_inactive=product.is_simple or include_inactive)
             if product.product_type == ProductType.SIMPLE:
-                variant = product.variants.first()
+                variant = variants[0] if variants else None
+                item['barcode'] = ((variant.barcode if variant else None) or product.barcode) or ''
                 item['stock'] = variant.current_stock if variant else 0
                 item['minimum_stock'] = variant.minimum_stock if variant else 0
-                item['cost'] = float(variant.avg_unit_cost) if variant and variant.avg_unit_cost else 0
-                item['barcode'] = (variant.barcode if variant and variant.barcode else product.barcode) or ''
+                item['cost'] = self._cost(product, variant)
             else:
                 item['variants'] = []
                 if include_variants:
-                    for variant in product.variants.filter(is_active=True):
-                        var_data = {
+                    for variant in variants:
+                        item['variants'].append({
                             'sku': variant.sku,
-                            'name': variant.name,
+                            'name': variant.display_name,
                             'barcode': variant.barcode,
                             'stock': variant.current_stock,
                             'minimum_stock': variant.minimum_stock,
-                            'cost': variant.avg_unit_cost,
-                            'attributes': {}
-                        }
-                        for attr_val in variant.attribute_values.all():
-                            var_data['attributes'][attr_val.attribute_type.name] = attr_val.value
-                        item['variants'].append(var_data)
-
+                            'cost': self._cost(product, variant),
+                            'sale_price': variant.sale_price if variant.sale_price is not None else product.sale_price,
+                            'is_active': variant.is_active,
+                            'attributes': {
+                                a.attribute_type.name: a.value for a in variant.attribute_values.all()
+                            },
+                        })
             result.append(item)
 
         return json.dumps(result, indent=2, cls=DecimalEncoder, ensure_ascii=False)
+
+    @staticmethod
+    def _cost(product, variant):
+        """Custo médio da variação; sem ele, o custo médio antigo do produto."""
+        if variant is not None and variant.avg_unit_cost is not None:
+            return variant.avg_unit_cost
+        return product.avg_unit_cost
 
     def export_movements_csv(self, days=30):
         """Export stock movements to CSV"""

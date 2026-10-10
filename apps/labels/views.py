@@ -84,6 +84,32 @@ def nfe_items(request, pk):
     return JsonResponse({'results': items, 'source': f'NF-e {doc.number}'})
 
 
+@login_required
+@require_POST
+def save_text(request, pk):
+    """Grava o nome e o código impressos na etiqueta deste produto (vazio = padrão do cadastro)."""
+    from .models import VariantLabel
+    variant = get_object_or_404(services.variants_qs(request.tenant), pk=pk)
+    name = ' '.join((request.POST.get('name') or '').split())
+    code = ' '.join((request.POST.get('code') or '').split())
+    if len(name) > 80 or len(code) > 30:
+        return HttpResponseBadRequest('Nome com até 80 letras e código com até 30.')
+    cfg = _cfg(request)
+    defaults = {services.default_title(variant).upper(), variant.product.name.upper()}
+    if name.upper() in defaults:
+        name = ''
+    if code == (variant.sku or ''):
+        code = ''
+    if name or code:
+        VariantLabel.objects.update_or_create(
+            tenant=request.tenant, variant=variant,
+            defaults={'name': name, 'code': code, 'updated_by': request.user})
+    else:
+        VariantLabel.objects.filter(tenant=request.tenant, variant=variant).delete()
+    variant = services.variants_qs(request.tenant).get(pk=pk)
+    return JsonResponse({'item': services.variant_json(variant, cfg)})
+
+
 def _override(cfg, params):
     """Aplica na configuração (sem salvar) os valores do formulário, para a prévia ao vivo."""
     form = LabelSettingsForm(params, instance=copy(cfg))
@@ -106,7 +132,7 @@ def preview_svg(request):
         variants = {v.pk: v for v in services.variants_qs(request.tenant).filter(pk__in=ids)}
         items = [services.item_from_variant(variants[int(i)], store) for i in ids if int(i) in variants]
         if not items:
-            sample = copy(services.SAMPLE)
+            sample = copy(services.SAMPLE_CODE_NAME if cfg.layout == 'code_name' else services.SAMPLE)
             sample.store = store
             items = [sample] * int(cfg.columns)
         labels = [build_label(item, cfg) for item in items]

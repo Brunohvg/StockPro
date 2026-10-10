@@ -9,6 +9,9 @@ from .layout import LabelItem
 
 SAMPLE = LabelItem(name='Caneta gel Pilot G2 0.7 azul', variant='Azul', price=Decimal('12.90'),
                    sku='CAN-G2-AZ', barcode='7891234567895')
+# Exemplo do estilo "código + nome" (o mesmo da etiqueta de atacado que a loja já usa)
+SAMPLE_CODE_NAME = LabelItem(name='Aplique flor prensada - PCT 50 UN', price=Decimal('18.90'), sku='APL-FLOR',
+                             barcode='7890000139557', code='139557', title='Aplique flor prensada - PCT 50 UN')
 
 
 def store_name(tenant):
@@ -36,21 +39,40 @@ def variant_barcode(variant):
     return ''
 
 
+def label_override(variant):
+    """Texto editado da etiqueta (VariantLabel) ou None."""
+    from django.core.exceptions import ObjectDoesNotExist
+    try:
+        return variant.label_text
+    except ObjectDoesNotExist:
+        return None
+
+
+def default_title(variant):
+    """Nome padrão no estilo "código + nome": produto com a variação."""
+    return variant.display_name
+
+
 def item_from_variant(variant, store=''):
+    override = label_override(variant)
+    custom_name = (override.name if override else '').strip()
+    custom_code = (override.code if override else '').strip()
     return LabelItem(
-        name=variant.product.name,
+        name=custom_name or variant.product.name,
         variant=variant_text(variant),
         price=variant.sale_price if variant.sale_price is not None else variant.product.sale_price,
         sku=variant.sku or '',
         barcode=variant_barcode(variant),
         store=store,
+        code=custom_code or variant.sku or '',
+        title=custom_name or default_title(variant),
     )
 
 
 def variants_qs(tenant):
     from apps.products.models import ProductVariant
     return (ProductVariant.objects.filter(tenant=tenant, is_active=True, product__is_active=True)
-            .select_related('product').prefetch_related('attribute_values'))
+            .select_related('product', 'label_text').prefetch_related('attribute_values'))
 
 
 def search_variants(tenant, query, limit=20):
@@ -66,7 +88,12 @@ def search_variants(tenant, query, limit=20):
 def variant_json(variant, cfg, qty=1):
     item = item_from_variant(variant)
     code = choose_code(item.barcode, item.sku, cfg.code_source)
+    override = label_override(variant)
     return {
+        'label_name': override.name if override else '',
+        'label_code': override.code if override else '',
+        'default_name': default_title(variant) if cfg.layout == 'code_name' else variant.product.name,
+        'default_code': variant.sku or '',
         'id': variant.pk,
         'name': item.name,
         'variant': item.variant,

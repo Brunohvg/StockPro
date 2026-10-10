@@ -14,257 +14,117 @@ from apps.inventory.models import StockMovement
 from apps.products.models import Category, Product
 
 
+def _greeting(now):
+    hour = timezone.localtime(now).hour
+    if hour < 12:
+        return 'Bom dia'
+    if hour < 18:
+        return 'Boa tarde'
+    return 'Boa noite'
+
+
 @login_required
 def dashboard(request):
+    """Visão Geral: o que fazer hoje. Números de apps/reports/metrics.py."""
+    from . import metrics
+
     tenant = request.tenant
-    today = timezone.now().date()
+    now = timezone.now()
+    data = metrics.overview(tenant, now)
 
-    from decimal import Decimal
-
-    from apps.products.models import ProductType, ProductVariant
-
-    # Products (including VARIABLE parents and SIMPLE)
-    products = Product.objects.filter(tenant=tenant, is_active=True)
-    variants = ProductVariant.objects.filter(tenant=tenant, is_active=True)
-
-    # Counting
-    simple_products = products.filter(product_type=ProductType.SIMPLE)
-    variable_products = products.filter(product_type=ProductType.VARIABLE)
-    total_simple = simple_products.count()
-    total_variable = variable_products.count()
-    total_variants = variants.count()
-    total_products = total_simple + total_variable  # Parent products only
-
-    # Stock Value Calculation (SIMPLE + VARIANTS)
-    simple_stock_value = sum(
-        Decimal(p.current_stock or 0) * Decimal(p.avg_unit_cost or 0)
-        for p in simple_products
-    )
-    variant_stock_value = sum(
-        Decimal(v.current_stock or 0) * Decimal(v.avg_unit_cost or 0)
-        for v in variants
-    )
-    total_stock_value = simple_stock_value + variant_stock_value
-
-    # Total Units in Stock
-    simple_units = sum(p.current_stock or 0 for p in simple_products)
-    variant_units = sum(v.current_stock or 0 for v in variants)
-    total_units = simple_units + variant_units
-
-    # Low Stock Alerts (SIMPLE products where stock <= minimum)
-    low_stock_simple = simple_products.filter(
-        current_stock__lte=models.F('minimum_stock')
-    ).exclude(minimum_stock=0)[:8]
-
-    # Low Stock Alerts (VARIANTS where stock <= minimum)
-    low_stock_variants = variants.filter(
-        current_stock__lte=models.F('minimum_stock')
-    ).exclude(minimum_stock=0).select_related('product')[:8]
-
-    low_stock_count = low_stock_simple.count() + low_stock_variants.count()
-
-    # Integrity Health (Divergent variants)
-    divergent_count = variants.filter(inventory_status='DIVERGENT').count()
-
-    # Today's Movements
-    today_movements = StockMovement.objects.filter(tenant=tenant, created_at__date=today)
-    total_movements_today = today_movements.count()
-    entries_today = today_movements.filter(type='IN').aggregate(
-        total=Sum('quantity')
-    )['total'] or 0
-    exits_today = today_movements.filter(type='OUT').aggregate(
-        total=Sum('quantity')
-    )['total'] or 0
-
-    # Recent Movements (with variants support)
     recent_movements = StockMovement.objects.filter(tenant=tenant).select_related(
-        'product', 'variant', 'variant__product', 'user', 'location'
-    ).order_by('-created_at')[:10]
+        'variant', 'variant__product', 'user'
+    ).prefetch_related('variant__attribute_values').order_by('-created_at')[:10]
 
     from apps.inventory.services.expiry import expiring_lots
-    expiry_window = 30
     settings_obj = SystemSetting.get_settings(tenant) if tenant else None
-    if settings_obj:
-        expiry_window = settings_obj.expiry_alert_days
+    expiry_window = settings_obj.expiry_alert_days if settings_obj else 30
     expired_lots, expiring_soon_lots = expiring_lots(tenant, expiry_window)
 
+    onboarding = metrics.onboarding(tenant)
     return render(request, 'reports/dashboard.html', {
+        **data,
+        'greeting': _greeting(now),
+        'now_local': timezone.localtime(now),
+        'recent_movements': recent_movements,
         'expired_lots': expired_lots[:10],
         'expired_lots_count': len(expired_lots),
         'expiring_lots': expiring_soon_lots[:10],
         'expiring_lots_count': len(expiring_soon_lots),
         'expiry_window': expiry_window,
-        'total_products': total_products,
-        'total_simple': total_simple,
-        'total_variable': total_variable,
-        'total_variants': total_variants,
-        'total_units': total_units,
-        'total_stock_value': total_stock_value,
-        'simple_stock_value': simple_stock_value,
-        'variant_stock_value': variant_stock_value,
-        'low_stock_count': low_stock_count,
-        'low_stock_products': low_stock_simple,
-        'low_stock_variants': low_stock_variants,
-        'total_movements_today': total_movements_today,
-        'entries_today': entries_today,
-        'exits_today': exits_today,
-        'recent_movements': recent_movements,
-        'divergent_count': divergent_count,
+        'onboarding': onboarding,
+        'is_new_company': data['stock']['skus'] == 0,
+        'checked_at': timezone.localtime(now),
     })
 
 
 @login_required
 def inventory_reports(request):
-    """Business Intelligence View with Chart.js data and AI Insights"""
+    """Inteligência: como está indo o negócio no período, comparado com o anterior."""
+    from apps.core.services import AIService
+
+    from . import metrics
+
     tenant = request.tenant
-    from decimal import Decimal
+    per = metrics.period(request.GET.get('periodo', '30'))
+    data = metrics.intelligence(tenant, per)
+    rule_insights = metrics.insights(data)
 
-    from apps.products.models import ProductType, ProductVariant
+    ai_ready = metrics.has_history(tenant) and data['sales']['units'] > 0
+    insights = rule_insights
+    if ai_ready and AIService.tenant_has_ai(tenant):
+        insights = generate_ai_insights(tenant=tenant, refresh=request.GET.get('refresh_ai') == '1',
+                                        fallback=rule_insights, data={
+            'period_days': per.days,
+            'skus': data['stock']['skus'],
+            'stock_value': float(data['stock']['value']),
+            'units': float(data['sales']['units']),
+            'revenue': float(data['sales']['revenue']),
+            'margin_pct': data['sales']['margin_pct'],
+            'units_change': data['changes']['units'],
+            'coverage_days': data['coverage_days'],
+            'low_count': data['low_count'],
+            'stalled_count': data['stalled']['count'],
+            'stalled_value': float(data['stalled']['value']),
+            'abc_a': data['abc']['A']['count'],
+            'top': [r['variant'].display_name for r in data['top'][:5]],
+            'categories': [c['name'] for c in data['categories'][:5]],
+        })
 
-    # Category breakdown (include variants for VARIABLE products)
-    categories = Category.objects.filter(tenant=tenant)
-    category_data = []
-    for cat in categories:
-        # Stock value from SIMPLE products
-        simple_val = Product.objects.filter(
-            category=cat,
-            product_type=ProductType.SIMPLE,
-            is_active=True
-        ).aggregate(total=Sum(F('current_stock') * F('avg_unit_cost')))['total'] or 0
+    # Formato único para o template (regras usam "tone"; a IA devolve "type" e "icon")
+    insights = [{'icon': i.get('icon', ''), 'title': i.get('title', ''), 'text': i.get('text', ''),
+                 'source': i.get('source', ''), 'tone': i.get('tone') or i.get('type') or 'info'}
+                for i in insights]
 
-        # Stock value from VARIANTS of VARIABLE products
-        variant_val = ProductVariant.objects.filter(
-            product__category=cat,
-            is_active=True
-        ).aggregate(total=Sum(F('current_stock') * F('avg_unit_cost')))['total'] or 0
-
-        total_cat_value = simple_val + variant_val
-        if total_cat_value > 0:
-            category_data.append({
-                'name': cat.name,
-                'total_value': float(total_cat_value)
-            })
-
-    category_data.sort(key=lambda x: x['total_value'], reverse=True)
-    category_labels = [c['name'] for c in category_data]
-    category_values = [c['total_value'] for c in category_data]
-
-    end_date = timezone.now().date()
-    start_date = end_date - timezone.timedelta(days=14)
-
-    movements_trend = list(StockMovement.objects.filter(
-        tenant=tenant,
-        created_at__date__range=[start_date, end_date]
-    ).values('created_at__date', 'type').annotate(
-        total_qty=Sum('quantity')
-    ).order_by('created_at__date'))
-    # Serializável para json_script (date/Decimal quebravam o JS do template)
-    movements_trend = [
-        {
-            'created_at__date': m['created_at__date'].isoformat(),
-            'type': m['type'],
-            'total_qty': float(m['total_qty'] or 0),
-        }
-        for m in movements_trend
-    ]
-
-    # Collect data for AI insights
-    from .services import BIService
-    abc_classification = BIService.calculate_abc_analysis(tenant)
-    stock_health = BIService.get_inventory_health(tenant)
-
-    # Top products by stock value (include variants for VARIABLE products)
-    all_products = Product.objects.filter(tenant=tenant, is_active=True).prefetch_related('variants')
-    products_with_value = []
-    for p in all_products:
-        value = p.total_stock_value  # This property handles both SIMPLE and VARIABLE
-        if value and value > 0:
-            products_with_value.append({
-                'product': p,
-                'stock_value': value,
-                'name': p.name,
-                'sku': p.sku,
-                'current_stock': p.total_stock,
-                'uom': p.uom,
-            })
-    products_with_value.sort(key=lambda x: x['stock_value'], reverse=True)
-    top_products = products_with_value[:10]
-
-    products = Product.objects.filter(tenant=tenant, is_active=True)
-    variants = ProductVariant.objects.filter(tenant=tenant, is_active=True)
-
-    total_products = products.count()
-    total_variants = variants.count()
-
-    # Stock value
-    simple_value = sum(Decimal(p.current_stock or 0) * Decimal(p.avg_unit_cost or 0)
-                       for p in products.filter(product_type=ProductType.SIMPLE))
-    variant_value = sum(Decimal(v.current_stock or 0) * Decimal(v.avg_unit_cost or 0)
-                        for v in variants)
-    total_value = simple_value + variant_value
-
-    # Low stock count
-    low_stock_count = products.filter(
-        current_stock__lte=models.F('minimum_stock'),
-        product_type=ProductType.SIMPLE
-    ).exclude(minimum_stock=0).count()
-
-    # Movement stats (last 7 days)
-    week_ago = end_date - timezone.timedelta(days=7)
-    week_movements = StockMovement.objects.filter(
-        tenant=tenant,
-        created_at__date__gte=week_ago
-    )
-    entries_week = week_movements.filter(type='IN').aggregate(total=Sum('quantity'))['total'] or 0
-    exits_week = week_movements.filter(type='OUT').aggregate(total=Sum('quantity'))['total'] or 0
-
-    # Prepare prompt-friendly data
-    abc_counts = {
-        'A': list(abc_classification.values()).count('A'),
-        'B': list(abc_classification.values()).count('B'),
-        'C': list(abc_classification.values()).count('C'),
+    series = data['series']
+    chart = {
+        'labels': [d['label'] for d in series],
+        'in': [d['in'] for d in series],
+        'out': [d['out'] for d in series],
+        'cat_labels': [c['name'] for c in data['categories'][:8]],
+        'cat_values': [float(c['value']) for c in data['categories'][:8]],
     }
-
-    # Generate AI insights
-    ai_insights = generate_ai_insights(tenant=tenant, refresh=request.GET.get('refresh_ai') == '1', data={
-        'total_products': total_products,
-        'total_variants': total_variants,
-        'total_value': float(total_value),
-        'low_stock_count': low_stock_count,
-        'entries_week': entries_week,
-        'exits_week': exits_week,
-        'category_data': category_data[:5],
-        'abc_counts': abc_counts,
-        'dead_stock_count': stock_health['item_count'],
-        'dead_stock_value': float(stock_health['dead_stock_value']),
-    })
-
     return render(request, 'reports/reports.html', {
-        'category_labels': category_labels,
-        'category_values': category_values,
-        'top_products': top_products,
-        'movements_trend': movements_trend,
-        'ai_insights': ai_insights,
-        'ai_insights_from_ai': any(i.get('source') == 'ai' for i in ai_insights),
-        'total_value': total_value,
-        'low_stock_count': low_stock_count,
-        'entries_week': entries_week,
-        'exits_week': exits_week,
-        'abc_counts': abc_counts,
-        'stock_health': stock_health,
+        **data,
+        'periods': metrics.PERIODS,
+        'abc_rows': [(g, data['abc'][g]) for g in 'ABC'],
+        'chart': chart,
+        'has_series': any(d['in'] or d['out'] for d in series),
+        'ai_insights': insights,
+        'ai_insights_from_ai': any(i.get('source') == 'ai' for i in insights),
+        'ai_ready': ai_ready,
+        'stalled_days': metrics.STALLED_DAYS,
     })
 
 
 AI_INSIGHTS_CACHE_SECONDS = 6 * 60 * 60
 
 
-def generate_ai_insights(data, tenant=None, refresh=False):
+def generate_ai_insights(data, tenant=None, refresh=False, fallback=None):
     """
-    Insights do painel de Análises.
-
-    Com IA (plano com IA, dentro do limite diário): resultado guardado por 6 h por
-    empresa, então abrir a página várias vezes custa uma chamada. Sem IA: insights
-    calculados localmente (fallback abaixo).
+    Insights com IA (plano com IA, dentro do limite diário), guardados por 6 h por
+    empresa: abrir a página várias vezes custa uma chamada. Sem IA ou se a IA
+    falhar, devolve `fallback` (as regras de apps/reports/metrics.py).
     """
     import json
 
@@ -272,39 +132,31 @@ def generate_ai_insights(data, tenant=None, refresh=False):
 
     from apps.core.services import AIService, AIUnavailable
 
+    fallback = fallback or []
     if tenant is None or not AIService.tenant_has_ai(tenant):
-        return _fallback_insights(data)
+        return fallback
     cache_key = f"ai-insights:{tenant.pk}"
     if not refresh:
         cached = cache.get(cache_key)
         if cached:
             return cached
 
-    prompt = f"""Você é um consultor de gestão de estoque. Analise estes dados e forneça 3-4 insights CURTOS e ACIONÁVEIS:
+    prompt = f"""Você é um consultor de gestão de estoque de uma loja pequena. Analise os números e escreva 3 ou 4 insights CURTOS e ACIONÁVEIS, sem repetir os números à toa e sem frases que se contradigam.
 
-**Dados do Estoque:**
-- Total de produtos: {data['total_products']}
-- Total de variações: {data['total_variants']}
-- Valor total em estoque: R$ {data['total_value']:,.2f}
-- Produtos em estoque crítico: {data['low_stock_count']}
-- Entradas (últimos 7 dias): {data['entries_week']} unidades
-- Saídas (últimos 7 dias): {data['exits_week']} unidades
-- Categorias principais: {', '.join([c['name'] for c in data.get('category_data', [])])}
-- Curva ABC: {data.get('abc_counts', {})}
-- Estoque Parado (>60 dias): {data.get('dead_stock_count', 0)} itens (R$ {data.get('dead_stock_value', 0):,.2f})
+Período: últimos {data['period_days']} dias.
+- Itens ativos: {data['skus']}
+- Valor em estoque (custo): R$ {data['stock_value']:,.2f}
+- Vendido no período: {data['units']:,.0f} unidades, R$ {data['revenue']:,.2f} pelo preço de venda
+- Margem bruta: {data['margin_pct'] if data['margin_pct'] is not None else 'sem preço de venda'}
+- Variação das vendas contra o período anterior: {data['units_change'] if data['units_change'] is not None else 'sem base'}
+- Cobertura (dias que o estoque dura no ritmo atual): {data['coverage_days'] if data['coverage_days'] is not None else 'sem vendas'}
+- Itens no estoque mínimo: {data['low_count']}
+- Parados há 60+ dias: {data['stalled_count']} itens, R$ {data['stalled_value']:,.2f}
+- Itens da classe A (80% do faturamento): {data['abc_a']}
+- Mais vendidos: {', '.join(data['top']) or 'nenhum'}
+- Categorias com mais valor: {', '.join(data['categories']) or 'nenhuma'}
 
-**Instruções:**
-Analise principalmente o "Estoque Parado" e a "Curva ABC". Se houver muito capital em itens 'C' parados, sugira liquidação. Se itens 'A' estiverem em nível crítico, sugira compra imediata.
-Retorne um JSON com insights práticos e SUGESTÕES DE COMPRA. Cada insight deve ter:
-- icon: emoji representativo
-- title: título curto (max 6 palavras)
-- text: descrição CURTA de 1-2 linhas
-- type: "success" | "warning" | "info" | "danger"
-
-Exemplo de formato:
-{{"insights": [
-  {{"icon": "📦", "title": "Estoque saudável", "text": "Seu nível de estoque está adequado.", "type": "success"}}
-]}}"""
+Retorne JSON: {{"insights": [{{"icon": "emoji", "title": "até 6 palavras", "text": "1 ou 2 linhas", "type": "success|warning|info|danger"}}]}}"""
 
     try:
         response = AIService.call_for_tenant(tenant, prompt, schema="json")
@@ -322,36 +174,7 @@ Exemplo de formato:
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"AI insights failed: {e}")
-    return _fallback_insights(data)
-
-
-def _fallback_insights(data):
-    """Insights calculados sem IA."""
-
-    # Fallback insights
-    insights = []
-    if data['low_stock_count'] > 0:
-        insights.append({
-            'icon': '⚠️',
-            'title': 'Atenção ao estoque',
-            'text': f"{data['low_stock_count']} produto(s) precisam de reposição.",
-            'type': 'warning'
-        })
-    if data['exits_week'] > data['entries_week']:
-        insights.append({
-            'icon': '📉',
-            'title': 'Mais saídas que entradas',
-            'text': 'Considere reabastecer o estoque em breve.',
-            'type': 'info'
-        })
-    if data['total_value'] > 0:
-        insights.append({
-            'icon': '💰',
-            'title': 'Capital em estoque',
-            'text': f"R$ {data['total_value']:,.0f} investidos em inventário.",
-            'type': 'info'
-        })
-    return insights
+    return fallback
 
 
 @login_required

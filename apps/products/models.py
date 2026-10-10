@@ -368,6 +368,39 @@ class ProductVariant(TenantMixin):
             return f"{product_name} - {name}"
         return name
 
+    def auto_name(self):
+        """Nome montado pelos atributos: "Produto - Azul / M". Sem atributos, vazio."""
+        values = [a.value.strip() for a in self.attribute_values.select_related('attribute_type')
+                  .order_by('attribute_type__name') if a.value and a.value.strip()]
+        if not values:
+            return ''
+        return f"{self.product.name} - {' / '.join(values)}"[:255]
+
+    def has_placeholder_name(self):
+        """Nome vazio, igual ao produto ou só "Produto -" (sobra do formulário antigo)."""
+        name = (self.name or '').strip()
+        product_name = (self.product.name or '').strip() if self.product_id else ''
+        if not name or name == 'Padrão':
+            return True
+        bare = name.rstrip(' -–').strip()
+        return bare.lower() == product_name.lower()
+
+    def refresh_auto_name(self, previous_auto=''):
+        """
+        Dá nome à variação depois que os atributos foram gravados.
+        Só troca nomes vazios, provisórios ("Produto -") ou que eram o nome
+        automático anterior (atributo editado). Nome digitado pelo usuário fica.
+        """
+        current = (self.name or '').strip()
+        if not (self.has_placeholder_name() or (previous_auto and current == previous_auto)):
+            return False
+        new_name = self.auto_name()
+        if not new_name or new_name == current:
+            return False
+        self.name = new_name
+        ProductVariant.objects.filter(pk=self.pk).update(name=new_name)
+        return True
+
     @property
     def can_be_safely_deleted(self):
         """Variante pode ser excluída se não possui saídas (OUT)."""

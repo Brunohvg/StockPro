@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -55,16 +55,25 @@ def product_list(request):
         products = products.filter(category_id=category)
     if product_type:
         products = products.filter(product_type=product_type)
+    # Saldo vem das variações (o campo current_stock do produto é legado e fica zerado)
     if stock_filter == 'low':
         products = products.filter(
-            Q(product_type=ProductType.SIMPLE, current_stock__lte=10) |
-            Q(product_type=ProductType.VARIABLE, variants__current_stock__lte=10)
+            variants__is_active=True, variants__minimum_stock__gt=0,
+            variants__current_stock__lte=F('variants__minimum_stock'),
         ).distinct()
     elif stock_filter == 'out':
-        products = products.filter(
-            Q(product_type=ProductType.SIMPLE, current_stock=0) |
-            Q(product_type=ProductType.VARIABLE, variants__current_stock=0)
-        ).distinct()
+        products = products.filter(variants__is_active=True, variants__current_stock__lte=0).distinct()
+    elif stock_filter == 'divergent':
+        products = products.filter(variants__is_active=True, variants__inventory_status='DIVERGENT').distinct()
+    missing = request.GET.get('falta', '')
+    if missing == 'preco':
+        # sem preço na variação e sem preço no produto
+        products = products.filter(variants__is_active=True, variants__sale_price__isnull=True,
+                                   sale_price__isnull=True).distinct()
+    elif missing == 'codigo':
+        products = products.filter(variants__is_active=True).filter(
+            Q(variants__barcode__isnull=True) | Q(variants__barcode='')
+        ).exclude(product_type=ProductType.SIMPLE, barcode__gt='').distinct()
 
     # Pagination
     paginator = Paginator(products, ITEMS_PER_PAGE)
@@ -86,6 +95,7 @@ def product_list(request):
         'selected_category': category,
         'selected_type': product_type,
         'stock_filter': stock_filter,
+        'missing_filter': missing,
         'status_filter': status_filter,
         'archived_count': Product.objects.filter(tenant=tenant, is_active=False).count(),
         'view_mode': view_mode,
@@ -216,6 +226,7 @@ def variant_create(request, product_pk):
     if request.method == 'POST':
         form = ProductVariantForm(request.POST, request.FILES, tenant=request.tenant)
         if form.is_valid():
+            auto_sku = not form.cleaned_data.get('sku')
             variant = form.save(commit=False)
             variant.product = product
             variant.tenant = request.tenant
@@ -223,19 +234,27 @@ def variant_create(request, product_pk):
 
             # Processar atributos
             for attr_type in attribute_types:
-                value = request.POST.get(f'attr_{attr_type.id}')
+                value = (request.POST.get(f'attr_{attr_type.id}') or '').strip()
                 if value:
                     VariantAttributeValue.objects.create(
                         variant=variant,
                         attribute_type=attr_type,
-                        value=value.strip()
+                        value=value
                     )
+
+            # Nome e SKU só podem ser montados depois dos atributos gravados
+            variant.refresh_auto_name()
+            if auto_sku:
+                sku = variant.generate_sku()
+                if sku and not ProductVariant.objects.filter(tenant=request.tenant, sku__iexact=sku) \
+                        .exclude(pk=variant.pk).exists():
+                    variant.sku = sku
+                    ProductVariant.objects.filter(pk=variant.pk).update(sku=sku)
 
             messages.success(request, f"Variação '{variant.display_name}' adicionada!")
             return redirect('products:product_detail', pk=product.pk)
     else:
         form = ProductVariantForm(tenant=request.tenant, initial={
-            'name': f"{product.name} - ",
             'avg_unit_cost': product.avg_unit_cost
         })
 
@@ -255,6 +274,7 @@ def variant_edit(request, pk):
     attribute_types = AttributeType.objects.filter(tenant=request.tenant)
 
     if request.method == 'POST':
+        previous_auto = variant.auto_name()
         form = ProductVariantForm(request.POST, request.FILES, instance=variant, tenant=request.tenant)
         if form.is_valid():
             form.save()
@@ -270,6 +290,7 @@ def variant_edit(request, pk):
                 if not created and value:
                     attr_value.value = value.strip()
                     attr_value.save()
+            variant.refresh_auto_name(previous_auto)
 
             messages.success(request, "Variação atualizada!")
             return redirect('products:product_detail', pk=variant.product.pk)

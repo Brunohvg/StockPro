@@ -17,11 +17,10 @@ def _element(el, dx):
                 f'^FB{el.width},1,0,{el.align},0^FH_^FD{escape(el.text)}^FS')
     if isinstance(el, Barcode):
         head = f'^FO{x},{el.y}^BY{el.module},2,{el.height}'
-        if el.kind == 'EAN13':
-            return f'{head}^BEN,{el.height},N,N^FD{el.value[:12]}^FS'
-        if el.kind == 'EAN8':
-            # EAN-8 desenhado barra a barra (^GB): mesmo resultado em qualquer firmware.
-            return _bars(el, x)
+        if el.kind in ('EAN13', 'EAN8'):
+            # EAN desenhado barra a barra (^GB): as barras de guarda descem mais
+            # (padrão do varejo) e o resultado é o mesmo em qualquer firmware.
+            return _bars(el, dx)
         from .barcodes import code128_zpl_data
         return f'{head}^BCN,{el.height},N,N,N,N^FH_^FD{escape(code128_zpl_data(el.value))}^FS'
     if isinstance(el, Box):
@@ -29,19 +28,8 @@ def _element(el, dx):
     raise TypeError(el)
 
 
-def _bars(el, x):
-    out, i, mods = [], 0, el.modules
-    while i < len(mods):
-        if mods[i] == '1':
-            j = i
-            while j < len(mods) and mods[j] == '1':
-                j += 1
-            w = (j - i) * el.module
-            out.append(f'^FO{x + i * el.module},{el.y}^GB{w},{el.height},{w}^FS')
-            i = j
-        else:
-            i += 1
-    return ''.join(out)
+def _bars(el, dx):
+    return ''.join(f'^FO{bx + dx},{el.y}^GB{w},{h},{w}^FS' for bx, w, h in el.bars())
 
 
 def _header(cfg):
