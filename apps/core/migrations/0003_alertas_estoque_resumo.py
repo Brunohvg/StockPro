@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
             model_name="systemsetting",
             name="low_stock_alerts_enabled",
             field=models.BooleanField(
-                default=True,
+                default=False,
                 verbose_name="Avisar quando produtos chegarem ao estoque mínimo",
             ),
         ),
@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
             model_name="systemsetting",
             name="weekly_summary_enabled",
             field=models.BooleanField(
-                default=True, verbose_name="Resumo semanal na segunda de manhã"
+                default=False, verbose_name="Resumo semanal na segunda de manhã"
             ),
         ),
     ]
