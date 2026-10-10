@@ -50,8 +50,8 @@ class TenantMiddleware:
     ]
 
     SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
-    # Gravações liberadas com trial vencido: apagar exportações e o painel do superusuário
-    TRIAL_WRITE_ALLOWED = ('/app/export/', '/inventory/exports/', '/admin-panel/')
+    # Liberados com trial vencido: apagar exportações, painel do superusuário e gerar etiquetas (não grava nada)
+    TRIAL_WRITE_ALLOWED = ('/app/export/', '/inventory/exports/', '/admin-panel/', '/etiquetas/gerar/')
 
     def __init__(self, get_response):
         self.get_response = get_response
