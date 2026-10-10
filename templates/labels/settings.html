@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl space-y-6 py-2" data-labels-settings
+     data-preview-url="{% url 'labels:preview' %}" data-generate-url="{% url 'labels:generate' %}">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <a href="{% url 'labels:index' %}" class="text-xs font-medium text-slate-500 hover:text-indigo-600">← Imprimir etiquetas</a>
+            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Modelo de etiqueta</h1>
+            <p class="pf-muted mt-1">Tamanho do rolo, impressora e o que aparece na etiqueta. Vale para toda a equipe.</p>
+        </div>
+        <span data-printer class="pf-badge-gray">Procurando a Zebra…</span>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <form method="post" data-label-form class="space-y-6 lg:col-span-3" novalidate>
+            {% csrf_token %}
+            <section class="pf-card">
+                <div class="pf-card-header"><h2 class="pf-card-title">Tamanho do rolo</h2></div>
+                <div class="pf-card-body space-y-5">
+                    <div>
+                        <p class="pf-label">Tamanhos comuns</p>
+                        <div class="flex flex-wrap gap-2">
+                            {% for p in presets %}
+                            <button type="button" class="pf-btn-secondary px-3 py-1.5 text-xs" data-preset data-w="{{ p.w }}" data-h="{{ p.h }}" data-cols="{{ p.cols }}" data-gap="{{ p.gap }}">{{ p.label }}</button>
+                            {% endfor %}
+                        </div>
+                        <p class="pf-help">Meça uma etiqueta do rolo com régua, sem contar o papel de fundo.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        {% include 'labels/_field.html' with field=form.width_mm %}
+                        {% include 'labels/_field.html' with field=form.height_mm %}
+                        {% include 'labels/_field.html' with field=form.columns %}
+                        {% include 'labels/_field.html' with field=form.column_gap_mm %}
+                    </div>
+                </div>
+            </section>
+
+            <section class="pf-card">
+                <div class="pf-card-header"><h2 class="pf-card-title">O que aparece</h2></div>
+                <div class="pf-card-body space-y-4">
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {% include 'labels/_check.html' with field=form.show_store %}
+                        {% include 'labels/_check.html' with field=form.show_name %}
+                        {% include 'labels/_check.html' with field=form.show_variant %}
+                        {% include 'labels/_check.html' with field=form.show_price %}
+                        {% include 'labels/_check.html' with field=form.show_sku %}
+                        {% include 'labels/_check.html' with field=form.show_barcode %}
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {% include 'labels/_field.html' with field=form.store_text %}
+                        {% include 'labels/_field.html' with field=form.code_source %}
+                    </div>
+                    <p class="pf-help">Quando falta espaço, a etiqueta tira primeiro o nome da loja, depois a variação e a segunda linha do nome. O código de barras nunca fica menor que 4 mm de altura.</p>
+                </div>
+            </section>
+
+            <section class="pf-card">
+                <div class="pf-card-header"><h2 class="pf-card-title">Impressora</h2></div>
+                <div class="pf-card-body space-y-4">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {% include 'labels/_field.html' with field=form.dpi %}
+                        {% include 'labels/_field.html' with field=form.print_speed %}
+                        {% include 'labels/_field.html' with field=form.darkness %}
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {% include 'labels/_field.html' with field=form.offset_x_mm %}
+                        {% include 'labels/_field.html' with field=form.offset_y_mm %}
+                    </div>
+                    <p class="pf-help">A resolução está na etiqueta embaixo da impressora (203 ou 300 dpi). A ZD220 e a ZD230 comuns são 203 dpi.</p>
+                </div>
+            </section>
+
+            <div class="flex items-center justify-end gap-2">
+                <a href="{% url 'labels:index' %}" class="pf-btn-ghost">Cancelar</a>
+                <button type="submit" class="pf-btn-primary"><i data-lucide="check" class="h-4 w-4"></i>Salvar modelo</button>
+            </div>
+        </form>
+
+        <aside class="lg:col-span-2">
+            <div class="space-y-6 lg:sticky lg:top-6">
+                <section class="pf-card">
+                    <div class="pf-card-header">
+                        <h2 class="pf-card-title">Prévia</h2>
+                        <label class="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" data-show-test class="h-4 w-4 rounded border-slate-300 text-indigo-600">Etiqueta de teste</label>
+                    </div>
+                    <div class="pf-card-body space-y-3">
+                        <div class="rounded-md bg-slate-100 p-4"><div data-preview class="mx-auto max-w-md"></div></div>
+                        <ul data-warnings hidden class="list-disc space-y-1 rounded-md border border-amber-200 bg-amber-50 py-2 pl-8 pr-3 text-xs text-amber-900"></ul>
+                        <p class="text-xs text-slate-500">Exemplo com um produto fictício. A prévia muda enquanto você edita.</p>
+                    </div>
+                </section>
+                <section class="pf-card">
+                    <div class="pf-card-header"><h2 class="pf-card-title">Testar e calibrar</h2></div>
+                    <div class="pf-card-body space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" data-test-zebra class="pf-btn-secondary"><i data-lucide="printer" class="h-4 w-4"></i>Teste na Zebra</button>
+                            <button type="button" data-test-browser class="pf-btn-secondary"><i data-lucide="monitor" class="h-4 w-4"></i>Teste no navegador</button>
+                        </div>
+                        <button type="button" data-calibrate class="pf-btn-ghost w-full"><i data-lucide="scan-line" class="h-4 w-4"></i>Calibrar sensor da Zebra</button>
+                        <p class="text-xs text-slate-500">A etiqueta de teste tem uma moldura 1 mm para dentro. Se ela sair cortada de um lado, ajuste o deslocamento. Calibre quando trocar o rolo ou se a Zebra pular etiquetas.</p>
+                        <p data-message hidden role="status"></p>
+                    </div>
+                </section>
+                {% include 'labels/_help.html' %}
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/labels.js' %}"></script>{% endblock %}
