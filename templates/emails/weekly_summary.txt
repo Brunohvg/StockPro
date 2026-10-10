@@ -1,0 +1,17 @@
+StockPro · {{ company }}
+Resumo da semana {{ start|date:"d/m" }} a {{ end|date:"d/m" }}
+
+Saídas: {{ out_qty|floatformat:"-2" }} un. Entradas: {{ in_qty|floatformat:"-2" }} un (R$ {{ in_value|floatformat:2 }}). Valor em estoque: R$ {{ stock_value|floatformat:2 }}.
+
+O que mais saiu:
+{% for t in top %}{{ forloop.counter }}. {{ t.variant.display_name }}: {{ t.qty|floatformat:"-2" }}
+{% empty %}Nenhuma saída na semana.
+{% endfor %}
+Acabando ({{ low_count }} no mínimo):
+{% for v in low %}- {{ v.display_name }}: {{ v.current_stock|floatformat:"-2" }} / mín. {{ v.minimum_stock|floatformat:"-2" }}
+{% empty %}Nada abaixo do mínimo.
+{% endfor %}
+Parado há 60+ dias: {{ stalled_count }} itens, R$ {{ stalled_value|floatformat:2 }}.
+Validade: {{ expired }} lote(s) vencido(s), {{ expiring_count }} vencendo em 30 dias.
+{% if link_replenish %}
+Sugestão de compra: {{ link_replenish }}{% endif %}
