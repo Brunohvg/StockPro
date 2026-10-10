@@ -52,6 +52,13 @@ class TestIA:
 
     def test_insights_ficam_em_cache(self):
         u, t = _member(plan__has_ai_matching=True)
+        # Patch 10: a IA só entra com histórico de vendas (14 dias) e venda no período
+        from apps.inventory.models import StockMovement
+        p = Product.objects.create(tenant=t, name='Caneta', sku='CAN-1', sale_price=5)
+        StockService.create_movement(t, u, 'IN', 10, product=p, unit_cost=2)
+        old = StockService.create_movement(t, u, 'OUT', 1, product=p)
+        StockMovement.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=20))
+        StockService.create_movement(t, u, 'OUT', 2, product=p)
         with mock.patch.object(AIService, 'call_ai', return_value=AI_JSON) as call:
             c = _client(u)
             for _ in range(3):

@@ -120,7 +120,8 @@ class TestLayoutEZpl:
         label = build_label(LabelItem('Papel_A4 ^ ~ especial', '', Decimal('5'), 'PAP-1', '7891234567895'), cfg)
         out = zpl.render_row([label], cfg, copies=3)
         assert out.startswith('^XA^CI28^PW400^LL240')
-        assert '^BEN,' in out and '^FD789123456789^FS' in out  # EAN-13: 12 dígitos, a Zebra calcula o 13º
+        # EAN-13 barra a barra (^GB), números no padrão: 7 | 891234 | 567895
+        assert '^GB' in out and '^FD7^FS' in out and '^FD891234^FS' in out and '^FD567895^FS' in out
         assert '_5F' in out and '_5E' in out and '_7E' in out
         assert 'Papel_A4' not in out
         assert out.rstrip().endswith('^PQ3,0,1,Y^XZ')

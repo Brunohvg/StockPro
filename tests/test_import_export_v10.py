@@ -205,10 +205,10 @@ class TestExportSimpleRow:
         Product.objects.filter(pk=product.pk).update(current_stock=0, avg_unit_cost=None)
 
         exporter = ProductExporter(tenant)
-        row = exporter._simple_row(product)
+        row = exporter._row(product, product.variants.first())
 
-        assert row['stock'] == 42
-        assert row['cost'] == 15.50
+        assert row['estoque'] == 42
+        assert row['custo'] == Decimal("15.50")
 
     def test_simple_row_reads_variant_barcode(self, tenant):
         product = ProductFactory(tenant=tenant, product_type=ProductType.SIMPLE)
@@ -216,9 +216,9 @@ class TestExportSimpleRow:
         ProductVariant.objects.filter(pk=variant.pk).update(barcode="7891234567890")
 
         exporter = ProductExporter(tenant)
-        row = exporter._simple_row(product)
+        row = exporter._row(product, product.variants.first())
 
-        assert row['barcode'] == "7891234567890"
+        assert row['codigo_barras'] == "7891234567890"
 
     def test_export_csv_full_flow(self, tenant):
         product = ProductFactory(tenant=tenant, product_type=ProductType.SIMPLE, name="TestProd")
@@ -230,12 +230,12 @@ class TestExportSimpleRow:
         exporter = ProductExporter(tenant)
         csv_content = exporter.export_csv()
 
-        reader = csv.DictReader(io.StringIO(csv_content))
+        reader = csv.DictReader(io.StringIO(csv_content.lstrip('\ufeff')), delimiter=';')
         rows = list(reader)
         assert len(rows) == 1
-        assert rows[0]['name'] == "TestProd"
-        assert float(rows[0]['stock']) == 100.0
-        assert float(rows[0]['cost']) == 25.0
+        assert rows[0]['nome'] == "TestProd"
+        assert rows[0]['estoque'] == '100'
+        assert rows[0]['custo'] == '25'
 
 
 # ═══════════════════════════════════════════════════════════════

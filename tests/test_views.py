@@ -13,7 +13,7 @@ class TestUISmoke:
         url = reverse('reports:dashboard')
         response = client.get(url)
         assert response.status_code == 200
-        assert b"Dashboard" in response.content
+        assert "Visão Geral".encode() in response.content
 
     def test_inventory_reports_view(self, client, tenant, user, member):
         tenant.is_active = True

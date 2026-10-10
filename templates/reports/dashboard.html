@@ -1,334 +1,186 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load humanize metrics_tags %}
+
+{% block title %}Visão Geral{% endblock %}
 
 {% block content %}
-<div class="space-y-8">
+<div class="mx-auto max-w-7xl space-y-6 py-2">
 
-    <!-- Hero Header with Glassmorphism -->
-    <div class="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-8 md:p-12 text-white">
-        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.05\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50"></div>
-        <div class="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <!-- Topo -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <p class="pf-eyebrow">{{ now_local|date:"l, d/m" }}</p>
+            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{{ greeting }}, {{ user.first_name|default:user.username }}</h1>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'inventory:create_movement' %}" class="pf-btn-primary"><i data-lucide="arrow-left-right" class="h-4 w-4"></i>Movimentar</a>
+            <a href="{% url 'labels:index' %}" class="pf-btn-secondary"><i data-lucide="tags" class="h-4 w-4"></i>Etiquetas</a>
+            {% if request.membership.is_admin %}
+            <a href="{% url 'inventory:replenish' %}" class="pf-btn-secondary"><i data-lucide="shopping-cart" class="h-4 w-4"></i>Repor{% if low_count %} <span class="pf-badge-red">{{ low_count }}</span>{% endif %}</a>
+            {% endif %}
+            <a href="{% url 'inventory:nfe_upload' %}" class="pf-btn-secondary"><i data-lucide="file-up" class="h-4 w-4"></i>Importar NF-e</a>
+        </div>
+    </div>
+
+    {% if is_new_company %}
+    <!-- Empresa nova: primeiros passos no lugar dos números zerados -->
+    <section class="pf-card">
+        <div class="pf-card-header">
             <div>
-                <div class="flex items-center gap-3 mb-3">
-                    <span class="px-3 py-1 rounded-full text-[10px] font-black bg-white/20 backdrop-blur-sm uppercase tracking-widest">
-                        Dashboard
-                    </span>
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                </div>
-                <h1 class="text-3xl md:text-4xl font-black tracking-tight">Olá, {{ user.first_name|default:user.username }}!</h1>
-                <p class="mt-2 text-white/70 font-medium">Visão geral do seu estoque em tempo real.</p>
+                <h2 class="pf-card-title">Primeiros passos</h2>
+                <p class="mt-0.5 text-xs text-slate-500">{{ onboarding.done }} de {{ onboarding.total }} feitos. Cada passo é marcado sozinho quando acontece.</p>
             </div>
-            <div class="flex items-center gap-3">
-                <div class="text-right hidden md:block">
-                    <div class="text-sm font-bold text-white/50">Última atualização</div>
-                    <div class="text-lg font-black" id="current-time">--:--</div>
+            <div class="pf-meter max-w-[10rem]"><div class="h-full bg-indigo-600" style="width: {% widthratio onboarding.done onboarding.total 100 %}%"></div></div>
+        </div>
+        <ol class="divide-y divide-slate-100">
+            {% for step in onboarding.steps %}
+            <li class="flex items-center gap-4 px-5 py-4">
+                {% if step.done %}
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><i data-lucide="check" class="h-4 w-4"></i></span>
+                {% else %}
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-300 text-xs font-semibold text-slate-500">{{ forloop.counter }}</span>
+                {% endif %}
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium {% if step.done %}text-slate-500 line-through{% else %}text-slate-900{% endif %}">{{ step.title }}</p>
+                    <p class="text-xs text-slate-500">{{ step.help }}</p>
                 </div>
-                <button hx-get="." hx-target="main" hx-select="main > div" hx-swap="innerHTML" class="p-4 bg-white/10 backdrop-blur-sm rounded-2xl hover:bg-white/20 transition-all active:scale-95 group">
-                    <i data-lucide="refresh-cw" class="w-5 h-5 group-hover:rotate-180 transition-transform duration-500"></i>
-                </button>
-            </div>
+                {% if not step.done %}<a href="{{ step.url }}" class="pf-btn-secondary px-3 py-1.5 text-xs">Fazer agora</a>{% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+    </section>
+    {% else %}
+
+    <!-- Números -->
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="pf-card p-4">
+            <p class="pf-eyebrow">Saídas hoje</p>
+            <p class="pf-kpi mt-1">{{ today.out_units|qtd }} <span class="text-sm font-normal text-slate-500">un</span></p>
+            <p class="mt-1 text-xs text-slate-500">{% if today.out_value %}{{ today.out_value|brl }} pelo preço de venda{% else %}ontem: {{ today.out_yesterday|qtd }} un{% endif %}</p>
+            {% if today.out_value %}<p class="text-xs text-slate-400">ontem: {{ today.out_yesterday|qtd }} un</p>{% endif %}
+        </div>
+        <div class="pf-card p-4">
+            <p class="pf-eyebrow">Entradas hoje</p>
+            <p class="pf-kpi mt-1">{{ today.in_units|qtd }} <span class="text-sm font-normal text-slate-500">un</span></p>
+            <p class="mt-1 text-xs text-slate-500">ontem: {{ today.in_yesterday|qtd }} un</p>
+        </div>
+        <div class="pf-card p-4">
+            <p class="pf-eyebrow">Valor em estoque</p>
+            <p class="pf-kpi mt-1">{{ stock.value|brl:0 }}</p>
+            <p class="mt-1 text-xs text-slate-500">pelo custo{% if stock.shelf_value %} · vale {{ stock.shelf_value|brl:0 }} na prateleira{% endif %}</p>
+        </div>
+        <div class="pf-card p-4">
+            <p class="pf-eyebrow">Itens ativos</p>
+            <p class="pf-kpi mt-1">{{ stock.skus|intcomma }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ stock.with_stock|intcomma }} com saldo · {{ stock.zeroed|intcomma }} zerado{{ stock.zeroed|pluralize }}</p>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Premium Stats Grid -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6">
-
-        <!-- Total Products Card -->
-        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 relative overflow-hidden">
-            <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
-            <div class="relative">
-                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/30">
-                    <i data-lucide="package" class="w-5 h-5 text-white"></i>
-                </div>
-                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Produtos</p>
-                <h3 class="text-2xl font-black text-slate-900 mt-1">{{ total_products }}</h3>
-                <div class="mt-2 flex flex-wrap gap-1 text-[8px]">
-                    <span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold">{{ total_simple }} SIM</span>
-                    <span class="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-lg font-bold">{{ total_variable }} VAR</span>
-                </div>
+    {% if not is_new_company %}
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <!-- Precisa de atenção (primeiro no celular) -->
+        <section class="pf-card order-first lg:order-last lg:col-span-2 self-start">
+            <div class="pf-card-header">
+                <h2 class="pf-card-title">Precisa de atenção</h2>
+                {% if attention %}<span class="pf-badge-amber">{{ attention|length }}</span>{% endif %}
             </div>
-        </div>
-
-        <!-- Stock Value Card -->
-        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 relative overflow-hidden">
-            <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
-            <div class="relative">
-                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/30">
-                    <i data-lucide="banknote" class="w-5 h-5 text-white"></i>
-                </div>
-                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estoque R$</p>
-                <h3 class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ total_stock_value|floatformat:0|intcomma }}</h3>
-                <div class="mt-2 text-[8px] font-medium text-slate-400">
-                    {{ total_units|default:0|intcomma }} un totais
-                </div>
-            </div>
-        </div>
-
-        <!-- Today's Flow Card -->
-        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 transition-all duration-300 relative overflow-hidden">
-            <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
-            <div class="relative">
-                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-4 shadow-lg shadow-amber-500/30">
-                    <i data-lucide="activity" class="w-5 h-5 text-white"></i>
-                </div>
-                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Giro Hoje</p>
-                <h3 class="text-2xl font-black text-slate-900 mt-1">{{ total_movements_today|intcomma }}</h3>
-                <div class="mt-2 flex items-center gap-2 text-[8px]">
-                    <span class="text-emerald-600 font-bold">+{{ entries_today|intcomma }}</span>
-                    <span class="text-rose-600 font-bold">-{{ exits_today|intcomma }}</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Alertas Card -->
-        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/10 transition-all duration-300 relative overflow-hidden">
-            <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-rose-100 to-pink-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
-            <div class="relative">
-                <div class="w-10 h-10 rounded-2xl {% if low_stock_count > 0 %}bg-gradient-to-br from-rose-500 to-pink-600 animate-pulse{% else %}bg-gradient-to-br from-slate-400 to-slate-500{% endif %} flex items-center justify-center mb-4 shadow-lg">
-                    <i data-lucide="alert-triangle" class="w-5 h-5 text-white"></i>
-                </div>
-                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Crítico</p>
-                <h3 class="text-2xl font-black {% if low_stock_count > 0 %}text-rose-600{% else %}text-slate-900{% endif %} mt-1">{{ low_stock_count }}</h3>
-                <div class="mt-2 text-[8px] font-medium {% if low_stock_count > 0 %}text-rose-500{% else %}text-slate-400{% endif %}">
-                    {% if low_stock_count > 0 %}Reposição necessária{% else %}Estoque saudável{% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- NEW: Stock Integrity Card -->
-        <div class="group bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 relative overflow-hidden">
-            <div class="absolute -right-8 -top-8 w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
-            <div class="relative">
-                <div class="w-10 h-10 rounded-2xl {% if divergent_count > 0 %}bg-gradient-to-br from-amber-500 to-orange-500 animate-bounce{% else %}bg-gradient-to-br from-indigo-500 to-blue-600{% endif %} flex items-center justify-center mb-4 shadow-lg">
-                    <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
-                </div>
-                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Integridade</p>
-                <h3 class="text-2xl font-black {% if divergent_count > 0 %}text-amber-600{% else %}text-slate-900{% endif %} mt-1">{% if divergent_count > 0 %}{{ divergent_count }}{% else %}100%{% endif %}</h3>
-                <div class="mt-2 text-[8px] font-medium {% if divergent_count > 0 %}text-amber-600{% else %}text-emerald-600{% endif %}">
-                    {% if divergent_count > 0 %}Divergências detectadas!{% else %}Auditoria em OK{% endif %}
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8 pb-12">
-
-        <!-- Left: Recent Movements (Ledger) -->
-        <div class="xl:col-span-2 space-y-6">
-            <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-                <div class="p-6 flex items-center justify-between border-b border-slate-50 bg-gradient-to-r from-slate-50/50 to-transparent">
-                    <h2 class="text-lg font-black text-slate-900 flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center">
-                            <i data-lucide="scroll-text" class="w-4 h-4 text-indigo-600"></i>
-                        </div>
-                        Últimas Movimentações
-                    </h2>
-                    <a href="{% url 'inventory:movement_list' %}" class="px-4 py-2 bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-600 text-xs font-bold rounded-xl transition-all">
-                        Ver Todas
-                    </a>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">
-                                <th class="px-6 py-4">Hora</th>
-                                <th class="px-6 py-4">Produto</th>
-                                <th class="px-6 py-4">Tipo</th>
-                                <th class="px-6 py-4 text-right">Qtd</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-50">
-                            {% for movement in recent_movements %}
-                            <tr class="group hover:bg-indigo-50/30 transition-colors duration-200">
-                                <td class="px-6 py-4">
-                                    <div class="text-xs font-mono font-bold text-slate-900">{{ movement.created_at|date:"H:i" }}</div>
-                                    <div class="text-[9px] text-slate-400">{{ movement.created_at|date:"d/m" }}</div>
-                                </td>
-                                <td class="px-6 py-4">
-                                    {% if movement.variant %}
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                                            <span class="text-[10px] font-black text-purple-600">V</span>
-                                        </div>
-                                        <div>
-                                            <div class="text-sm font-bold text-slate-900 truncate max-w-[200px]">{{ movement.variant.display_name }}</div>
-                                            <div class="text-[9px] text-slate-400 font-mono">{{ movement.variant.sku|truncatechars:15 }}</div>
-                                        </div>
-                                    </div>
-                                    {% elif movement.product %}
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                            <span class="text-[10px] font-black text-indigo-600">P</span>
-                                        </div>
-                                        <div>
-                                            <div class="text-sm font-bold text-slate-900 truncate max-w-[200px]">{{ movement.product.name }}</div>
-                                            <div class="text-[9px] text-slate-400 font-mono">{{ movement.product.sku|truncatechars:15 }}</div>
-                                        </div>
-                                    </div>
-                                    {% else %}
-                                    <span class="text-slate-400 italic">Removido</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-4">
-                                    <span class="inline-flex items-center px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase
-                                        {% if movement.type == 'IN' %}bg-emerald-100 text-emerald-700
-                                        {% elif movement.type == 'OUT' %}bg-rose-100 text-rose-700
-                                        {% else %}bg-amber-100 text-amber-700{% endif %}">
-                                        {% if movement.type == 'IN' %}<i data-lucide="plus" class="w-3 h-3 mr-1"></i>
-                                        {% elif movement.type == 'OUT' %}<i data-lucide="minus" class="w-3 h-3 mr-1"></i>
-                                        {% else %}<i data-lucide="refresh-cw" class="w-3 h-3 mr-1"></i>{% endif %}
-                                        {{ movement.get_type_display }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-right">
-                                    <span class="text-lg font-black {% if movement.type == 'OUT' %}text-rose-600{% else %}text-emerald-600{% endif %}">
-                                        {% if movement.type == 'OUT' %}-{% else %}+{% endif %}{{ movement.quantity|intcomma }}
-                                    </span>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="px-6 py-20 text-center">
-                                    <div class="flex flex-col items-center">
-                                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                                            <i data-lucide="inbox" class="w-8 h-8 text-slate-200"></i>
-                                        </div>
-                                        <p class="text-slate-400 font-medium">Nenhuma movimentação ainda.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right: Actions & Alerts -->
-        <div class="space-y-6">
-
-            <!-- Quick Actions Card -->
-            <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8 rounded-[2rem] text-white shadow-2xl shadow-slate-900/30">
-                <h3 class="text-lg font-black mb-6 flex items-center gap-2">
-                    <i data-lucide="zap" class="w-5 h-5 text-amber-400 fill-amber-400"></i>
-                    Ações Rápidas
-                </h3>
-                <div class="grid grid-cols-2 gap-3">
-                    <a href="{% url 'inventory:create_movement' %}" class="flex flex-col items-center justify-center p-5 bg-white/5 hover:bg-emerald-600/20 rounded-2xl border border-white/10 hover:border-emerald-400/30 transition-all group">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                            <i data-lucide="package-plus" class="w-5 h-5 text-emerald-400"></i>
-                        </div>
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-white/70">Entrada</span>
-                    </a>
-                    <a href="{% url 'inventory:create_movement' %}" class="flex flex-col items-center justify-center p-5 bg-white/5 hover:bg-rose-600/20 rounded-2xl border border-white/10 hover:border-rose-400/30 transition-all group">
-                        <div class="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                            <i data-lucide="package-minus" class="w-5 h-5 text-rose-400"></i>
-                        </div>
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-white/70">Saída</span>
-                    </a>
-                    <a href="{% url 'products:product_create' %}" class="flex flex-col items-center justify-center p-5 bg-white/5 hover:bg-indigo-600/20 rounded-2xl border border-white/10 hover:border-indigo-400/30 transition-all group">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                            <i data-lucide="plus-square" class="w-5 h-5 text-indigo-400"></i>
-                        </div>
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-white/70">Produto</span>
-                    </a>
-                    <a href="{% url 'inventory:import_create' %}" class="flex flex-col items-center justify-center p-5 bg-white/5 hover:bg-purple-600/20 rounded-2xl border border-white/10 hover:border-purple-400/30 transition-all group">
-                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                            <i data-lucide="file-up" class="w-5 h-5 text-purple-400"></i>
-                        </div>
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-white/70">Importar</span>
-                    </a>
-                </div>
-            </div>
-
-            {% if expired_lots_count or expiring_lots_count %}
-            <!-- Validade -->
-            <div class="bg-white p-6 rounded-[2rem] border shadow-sm {% if expired_lots_count %}border-rose-200{% else %}border-amber-200{% endif %}">
-                <h3 class="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                    <i data-lucide="calendar-clock" class="w-4 h-4 {% if expired_lots_count %}text-rose-600{% else %}text-amber-600{% endif %}"></i>
-                    Validade
-                </h3>
-                {% if expired_lots_count %}
-                <p class="text-[10px] font-black uppercase tracking-widest text-rose-600 mb-2">Vencidos ({{ expired_lots_count }})</p>
-                <ul class="space-y-2 mb-4">
-                    {% for lot in expired_lots %}
-                    <li class="flex justify-between text-xs"><a class="font-bold text-slate-800 hover:text-indigo-600 truncate" href="{% url 'products:product_detail' lot.variant.product_id %}">{{ lot.variant.product.name }}</a><span class="text-rose-600 font-bold whitespace-nowrap ml-2">{{ lot.expiry_date|date:"d/m" }} · {{ lot.quantity|floatformat:"-3" }}</span></li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
-                {% if expiring_lots_count %}
-                <p class="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Vencem em até {{ expiry_window }} dias ({{ expiring_lots_count }})</p>
-                <ul class="space-y-2">
-                    {% for lot in expiring_lots %}
-                    <li class="flex justify-between text-xs"><a class="font-bold text-slate-800 hover:text-indigo-600 truncate" href="{% url 'products:product_detail' lot.variant.product_id %}">{{ lot.variant.product.name }}</a><span class="text-amber-600 font-bold whitespace-nowrap ml-2">{{ lot.expiry_date|date:"d/m" }} · {{ lot.quantity|floatformat:"-3" }}</span></li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
+            {% if attention %}
+            <ul class="divide-y divide-slate-100">
+                {% for row in attention %}
+                <li class="flex items-center gap-3 px-5 py-3.5">
+                    <span class="w-10 shrink-0 text-right text-lg font-semibold tabular-nums {% if row.tone == 'danger' %}text-rose-600{% elif row.tone == 'warning' %}text-amber-600{% else %}text-slate-700{% endif %}">{{ row.count|intcomma }}</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-medium text-slate-900">{{ row.title }}</p>
+                        <p class="truncate text-xs text-slate-500">{{ row.help }}</p>
+                    </div>
+                    <a href="{{ row.url }}" class="pf-btn-secondary shrink-0 px-2.5 py-1 text-xs">{{ row.action }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="px-5 py-8 text-center">
+                <span class="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><i data-lucide="check" class="h-5 w-5"></i></span>
+                <p class="mt-2 text-sm font-medium text-slate-900">Tudo em ordem</p>
+                <p class="text-xs text-slate-500">Conferido às {{ checked_at|date:"H:i" }}.</p>
             </div>
             {% endif %}
-
-            <!-- Low Stock Alerts -->
-            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm {% if low_stock_count > 0 %}border-rose-200{% endif %}">
-                <h3 class="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-lg {% if low_stock_count > 0 %}bg-rose-100{% else %}bg-slate-100{% endif %} flex items-center justify-center">
-                        <i data-lucide="alert-circle" class="w-3.5 h-3.5 {% if low_stock_count > 0 %}text-rose-600{% else %}text-slate-400{% endif %}"></i>
-                    </div>
-                    Estoque Crítico ({{ low_stock_count }})
-                </h3>
-                <div class="space-y-3 max-h-72 overflow-y-auto pr-2">
-                    {% for p in low_stock_products %}
-                    <a href="{% url 'products:product_detail' p.pk %}" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-rose-50 transition-colors group">
-                        <div class="w-10 h-10 rounded-xl bg-white border border-rose-200 flex items-center justify-center">
-                            <i data-lucide="package" class="w-4 h-4 text-rose-500"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-slate-900 truncate group-hover:text-rose-700">{{ p.name }}</p>
-                            <p class="text-[9px] text-slate-400 font-mono">{{ p.current_stock }} / {{ p.minimum_stock }} un</p>
-                        </div>
-                        <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 group-hover:text-rose-500"></i>
-                    </a>
-                    {% endfor %}
-                    {% for v in low_stock_variants %}
-                    <a href="{% url 'products:product_detail' v.product.pk %}" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-purple-50 transition-colors group">
-                        <div class="w-10 h-10 rounded-xl bg-white border border-purple-200 flex items-center justify-center">
-                            <i data-lucide="layers" class="w-4 h-4 text-purple-500"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-slate-900 truncate group-hover:text-purple-700">{{ v.display_name }}</p>
-                            <p class="text-[9px] text-slate-400 font-mono">{{ v.current_stock }} / {{ v.minimum_stock }} un</p>
-                        </div>
-                        <span class="text-[8px] font-bold text-purple-500 uppercase">VAR</span>
-                    </a>
-                    {% endfor %}
-                    {% if not low_stock_products and not low_stock_variants %}
-                    <div class="py-8 text-center">
-                        <div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <i data-lucide="check-circle" class="w-8 h-8 text-emerald-400"></i>
-                        </div>
-                        <p class="text-xs font-bold text-emerald-600">Tudo em ordem!</p>
-                        <p class="text-[10px] text-slate-400 mt-1">Nenhum item em estoque crítico.</p>
-                    </div>
-                    {% endif %}
-                </div>
+            {% if not is_new_company and onboarding.done < onboarding.total %}
+            <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                Primeiros passos: {{ onboarding.done }} de {{ onboarding.total }}.
+                {% for step in onboarding.steps %}{% if not step.done %}<a class="pf-link" href="{{ step.url }}">{{ step.title }}</a>{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}
             </div>
+            {% endif %}
+        </section>
 
-        </div>
-
+        <!-- Últimas movimentações -->
+        <section class="pf-card lg:col-span-3">
+            <div class="pf-card-header">
+                <h2 class="pf-card-title">Últimas movimentações</h2>
+                <a href="{% url 'inventory:movement_list' %}" class="pf-link text-xs">Ver todas</a>
+            </div>
+            {% if recent_movements %}
+            <ul class="divide-y divide-slate-100">
+                {% for m in recent_movements %}
+                <li class="flex items-center gap-3 px-5 py-3">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full {% if m.type == 'IN' %}bg-emerald-50 text-emerald-600{% elif m.type == 'OUT' %}bg-rose-50 text-rose-600{% else %}bg-slate-100 text-slate-500{% endif %}">
+                        <i data-lucide="{% if m.type == 'IN' %}arrow-down-left{% elif m.type == 'OUT' %}arrow-up-right{% else %}scale{% endif %}" class="h-4 w-4"></i>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <p class="flex items-center gap-2 text-sm font-medium text-slate-900">
+                            <span class="truncate">{{ m.variant.display_name }}</span>
+                            {% if not m.variant.product.is_active or not m.variant.is_active %}<span class="pf-badge-gray">arquivado</span>{% endif %}
+                        </p>
+                        <p class="truncate text-xs text-slate-500">{{ m|mov_source }} · {{ m.user.first_name|default:m.user.username|default:"Sistema" }} · {{ m.created_at|naturaltime }}</p>
+                    </div>
+                    <span class="shrink-0 text-sm font-semibold tabular-nums {% if m.type == 'IN' %}text-emerald-600{% elif m.type == 'OUT' %}text-rose-600{% else %}text-slate-600{% endif %}">
+                        {% if m.type == 'IN' %}+{{ m.quantity|qtd }}{% elif m.type == 'OUT' %}−{{ m.quantity|qtd }}{% else %}= {{ m.quantity|qtd }}{% endif %} <span class="text-xs font-normal text-slate-400">{{ m.variant.product.uom|lower }}</span>
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="px-5 py-10 text-center">
+                <i data-lucide="inbox" class="mx-auto h-8 w-8 text-slate-300"></i>
+                <p class="mt-2 text-sm text-slate-500">Nenhuma movimentação ainda.</p>
+            </div>
+            {% endif %}
+        </section>
     </div>
 
-</div>
+    {% endif %}
 
-<script>
-    // Live clock
-    function updateTime() {
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const el = document.getElementById('current-time');
-        if (el) el.textContent = timeStr;
-    }
-    updateTime();
-    setInterval(updateTime, 1000);
-</script>
+    {% if expired_lots_count or expiring_lots_count %}
+    <!-- Validade -->
+    <section id="validade" class="pf-card scroll-mt-6">
+        <div class="pf-card-header">
+            <h2 class="pf-card-title">Validade</h2>
+            <span class="text-xs text-slate-500">{% if expired_lots_count %}<span class="font-medium text-rose-600">Vencidos ({{ expired_lots_count }})</span>{% endif %}{% if expired_lots_count and expiring_lots_count %} · {% endif %}{% if expiring_lots_count %}<span class="font-medium text-amber-700">Vencem em até {{ expiry_window }} dias ({{ expiring_lots_count }})</span>{% endif %}</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="pf-table">
+                <thead><tr><th>Produto</th><th>Lote</th><th>Validade</th><th class="!text-right">Saldo</th></tr></thead>
+                <tbody>
+                    {% for lot in expired_lots %}
+                    <tr>
+                        <td><a class="font-medium text-slate-900 hover:text-indigo-600" href="{% url 'products:product_detail' lot.variant.product_id %}">{{ lot.variant.display_name }}</a></td>
+                        <td class="text-slate-500">{{ lot.lot_number|default:"—" }}</td>
+                        <td><span class="pf-badge-red">{{ lot.expiry_date|date:"d/m/Y" }}</span></td>
+                        <td class="text-right tabular-nums">{{ lot.quantity|qtd }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% for lot in expiring_lots %}
+                    <tr>
+                        <td><a class="font-medium text-slate-900 hover:text-indigo-600" href="{% url 'products:product_detail' lot.variant.product_id %}">{{ lot.variant.display_name }}</a></td>
+                        <td class="text-slate-500">{{ lot.lot_number|default:"—" }}</td>
+                        <td><span class="pf-badge-amber">{{ lot.expiry_date|date:"d/m/Y" }}</span></td>
+                        <td class="text-right tabular-nums">{{ lot.quantity|qtd }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+</div>
 {% endblock %}
