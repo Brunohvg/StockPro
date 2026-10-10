@@ -10,6 +10,7 @@
      data-nfe-url="{% url 'labels:nfe_items' '00000000-0000-0000-0000-000000000000' %}"
      data-preview-url="{% url 'labels:preview' %}"
      data-generate-url="{% url 'labels:generate' %}"
+     data-text-url="{% url 'labels:save_text' 0 %}"
      data-columns="{{ cfg.columns|unlocalize }}" data-max="{{ max_labels|unlocalize }}">
     {% csrf_token %}
     {{ initial_json|json_script:"labels-initial" }}

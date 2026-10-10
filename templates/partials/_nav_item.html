@@ -1,0 +1,5 @@
+<a href="{{ href }}" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors {% if key == nav_section %}bg-indigo-600 text-white shadow-sm shadow-indigo-900/30{% else %}text-slate-400 hover:bg-slate-800 hover:text-white{% endif %}"{% if key == nav_section %} aria-current="page"{% endif %}>
+    <i data-lucide="{{ icon }}" class="h-[18px] w-[18px] shrink-0"></i>
+    <span class="truncate">{{ label }}</span>
+    {% if badge %}<span class="ml-auto rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-rose-300">{{ badge }}</span>{% elif tag %}<span class="ml-auto rounded bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-black uppercase text-amber-300">{{ tag }}</span>{% endif %}
+</a>

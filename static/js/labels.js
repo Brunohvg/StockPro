@@ -157,8 +157,10 @@
   function initQueue(root) {
     var urls = {
       search: root.dataset.searchUrl, nfe: root.dataset.nfeUrl,
-      preview: root.dataset.previewUrl, generate: root.dataset.generateUrl
+      preview: root.dataset.previewUrl, generate: root.dataset.generateUrl,
+      text: root.dataset.textUrl
     };
+    var editing = null;
     var columns = parseInt(root.dataset.columns, 10) || 1;
     var max = parseInt(root.dataset.max, 10) || 2000;
     var STORE = 'stockpro.labels.queue.' + String(root.dataset.tenantId || 'unknown') + '.' + String(root.dataset.userId || 'unknown');
@@ -209,11 +211,11 @@
           if (ev.target.closest('input,button')) return;
           selected = it.id; render(); refreshPreview();
         });
-        var td1 = el('td');
-        var name = el('div', 'font-medium text-slate-900', it.name);
-        td1.appendChild(name);
-        var sub = el('div', 'text-xs text-slate-500');
-        sub.textContent = [it.variant, it.sku].filter(Boolean).join(' · ');
+        var td1 = el('td', 'min-w-[14rem]');
+        td1.appendChild(el('div', 'font-medium text-slate-900', it.label_name || it.name));
+        var sub = el('div', 'flex flex-wrap items-center gap-x-2 text-xs text-slate-500');
+        sub.appendChild(el('span', '', [it.variant, it.sku, it.label_code ? 'código ' + it.label_code : ''].filter(Boolean).join(' · ')));
+        if (it.label_name || it.label_code) sub.appendChild(el('span', 'font-medium text-indigo-600', 'texto editado'));
         td1.appendChild(sub);
         var td2 = el('td', 'hidden sm:table-cell'); td2.appendChild(codeBadge(it));
         var td3 = el('td', 'hidden md:table-cell whitespace-nowrap text-right tabular-nums text-slate-700', money(it.price));
@@ -241,9 +243,22 @@
           if (selected === it.id) selected = null;
           changed(true);
         });
-        td5.appendChild(rm);
+        var pen = el('button', 'rounded p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600');
+        pen.type = 'button'; pen.setAttribute('aria-label', 'Editar nome e código da etiqueta');
+        pen.title = 'Editar nome e código impressos';
+        pen.appendChild(el('i')).setAttribute('data-lucide', 'pencil');
+        pen.querySelector('i').className = 'h-4 w-4';
+        pen.addEventListener('click', function () {
+          editing = editing === it.id ? null : it.id;
+          selected = it.id; render(); refreshPreview();
+        });
+        var actions = el('div', 'inline-flex');
+        if (urls.text) actions.appendChild(pen);
+        actions.appendChild(rm);
+        td5.appendChild(actions);
         [td1, td2, td3, td4, td5].forEach(function (td) { tr.appendChild(td); });
         tbody.appendChild(tr);
+        if (editing === it.id) tbody.appendChild(editorRow(it));
       });
       var n = totalCount();
       total.textContent = n.toLocaleString('pt-BR');
@@ -252,6 +267,69 @@
       buttons.forEach(function (b) { b.disabled = n === 0 || n > max; });
       if (n > max) toast(msg, 'warn', 'Máximo de ' + max + ' etiquetas por impressão. Divida em partes.');
       icons();
+    }
+
+    function editorRow(it) {
+      var tr = el('tr', 'bg-indigo-50/40');
+      var td = el('td'); td.colSpan = 5;
+      var box = el('div', 'grid grid-cols-1 gap-3 py-1 sm:grid-cols-5 sm:items-end');
+      function field(label, value, placeholder, maxLen, span) {
+        var wrap = el('label', 'block ' + span);
+        wrap.appendChild(el('span', 'pf-label', label));
+        var input = el('input', 'pf-input');
+        input.type = 'text'; input.value = value || ''; input.placeholder = placeholder || '';
+        input.maxLength = maxLen;
+        wrap.appendChild(input);
+        box.appendChild(wrap);
+        return input;
+      }
+      var nameIn = field('Nome na etiqueta', it.label_name, it.default_name, 80, 'sm:col-span-3');
+      var codeIn = field('Código impresso', it.label_code, it.default_code, 30, 'sm:col-span-2');
+      var bar = el('div', 'flex flex-wrap items-center gap-2 sm:col-span-5');
+      var saveBtn = el('button', 'pf-btn-primary px-3 py-1.5 text-xs', 'Salvar para este produto');
+      saveBtn.type = 'button';
+      var resetBtn = el('button', 'pf-btn-ghost px-3 py-1.5 text-xs', 'Voltar ao cadastro');
+      resetBtn.type = 'button';
+      var cancel = el('button', 'pf-btn-ghost px-3 py-1.5 text-xs', 'Fechar');
+      cancel.type = 'button';
+      bar.appendChild(saveBtn); bar.appendChild(resetBtn); bar.appendChild(cancel);
+      bar.appendChild(el('span', 'text-xs text-slate-500', 'Vazio usa o nome e o SKU do cadastro. Fica gravado para as próximas impressões.'));
+      box.appendChild(bar);
+      td.appendChild(box); tr.appendChild(td);
+
+      function send(name, code) {
+        var body = new URLSearchParams();
+        body.append('name', name); body.append('code', code);
+        saveBtn.disabled = true;
+        fetch(urls.text.replace('/0/', '/' + it.id + '/'), {
+          method: 'POST', body: body, credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) {
+          return r.ok ? r.json() : r.text().then(function (t) { throw new Error('server:' + t); });
+        }).then(function (data) {
+          var fresh = data.item;
+          fresh.qty = it.qty;
+          var i = items.indexOf(it);
+          if (i >= 0) items[i] = fresh;
+          editing = null;
+          toast(msg, 'ok', 'Texto da etiqueta gravado.');
+          changed(true);
+        }).catch(function (err) {
+          saveBtn.disabled = false;
+          toast(msg, 'err', serverError(err) || 'Não foi possível gravar o texto.');
+        });
+      }
+      saveBtn.addEventListener('click', function () { send(nameIn.value, codeIn.value); });
+      resetBtn.addEventListener('click', function () { send('', ''); });
+      cancel.addEventListener('click', function () { editing = null; render(); });
+      [nameIn, codeIn].forEach(function (inp) {
+        inp.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { ev.preventDefault(); send(nameIn.value, codeIn.value); }
+          if (ev.key === 'Escape') { editing = null; render(); }
+        });
+      });
+      setTimeout(function () { nameIn.focus(); }, 0);
+      return tr;
     }
 
     var pvTimer = null;
@@ -432,6 +510,11 @@
         form.querySelector('[name=height_mm]').value = b.dataset.h;
         form.querySelector('[name=columns]').value = b.dataset.cols;
         form.querySelector('[name=column_gap_mm]').value = b.dataset.gap;
+        if (b.dataset.layout) {
+          var radio = form.querySelector('[name=layout][value="' + b.dataset.layout + '"]');
+          if (radio) radio.checked = true;
+        }
+        dirty = true;
         refresh();
       });
     });

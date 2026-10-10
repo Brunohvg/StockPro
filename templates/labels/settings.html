@@ -21,6 +21,35 @@
         <form method="post" data-label-form class="space-y-6 lg:col-span-3" novalidate>
             {% csrf_token %}
             <section class="pf-card">
+                <div class="pf-card-header"><h2 class="pf-card-title">Estilo</h2></div>
+                <div class="pf-card-body space-y-4">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {% for radio in form.layout %}
+                        <label class="flex cursor-pointer gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/60">
+                            {{ radio.tag }}
+                            <span class="text-sm">
+                                {% if radio.data.value == 'code_name' %}
+                                <span class="block font-medium text-slate-900">Código + nome + barras</span>
+                                <span class="block text-xs text-slate-500">"CÓDIGO: 139557", o nome em maiúsculas em até 2 linhas e o EAN. Para etiqueta pequena, como a de 3 colunas 33 × 22 mm.</span>
+                                {% else %}
+                                <span class="block font-medium text-slate-900">Completa</span>
+                                <span class="block text-xs text-slate-500">Loja, nome, variação, preço, SKU e código de barras. Para etiqueta de 40 mm ou mais.</span>
+                                {% endif %}
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {% include 'labels/_field.html' with field=form.code_label %}
+                        <div class="flex items-end">
+                            <button type="button" class="pf-btn-secondary w-full text-xs" data-preset data-w="33" data-h="22" data-cols="3" data-gap="2" data-layout="code_name">Usar rolo de 3 colunas 33 × 22 mm neste estilo</button>
+                        </div>
+                    </div>
+                    <p class="pf-help">O nome e o código impressos podem ser trocados produto a produto na tela de impressão (lápis ao lado do item). A troca fica gravada para as próximas vezes.</p>
+                </div>
+            </section>
+
+            <section class="pf-card">
                 <div class="pf-card-header"><h2 class="pf-card-title">Tamanho do rolo</h2></div>
                 <div class="pf-card-body space-y-5">
                     <div>
@@ -56,7 +85,7 @@
                         {% include 'labels/_field.html' with field=form.store_text %}
                         {% include 'labels/_field.html' with field=form.code_source %}
                     </div>
-                    <p class="pf-help">Quando falta espaço, a etiqueta tira primeiro o nome da loja, depois a variação e a segunda linha do nome. O código de barras nunca fica menor que 4 mm de altura.</p>
+                    <p class="pf-help">Quando falta espaço, a etiqueta tira primeiro o nome da loja, depois a variação e a segunda linha do nome. O código de barras nunca fica menor que 4 mm de altura. No estilo "código + nome" valem só o código de barras e o que vai nele.</p>
                 </div>
             </section>
 

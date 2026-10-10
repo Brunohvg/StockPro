@@ -1,0 +1,49 @@
+{% comment %}
+Menu lateral (desktop e celular). Itens agrupados: as telas irmãs viram abas
+dentro da tela (CMV dentro de Análises; Histórico e Celular dentro de
+Movimentar; Curadoria dentro de Importações). Administração fica recolhida.
+{% endcomment %}
+{% with s=nav_section admin=request.membership.is_admin %}
+<nav class="flex-1 space-y-0.5 px-3" aria-label="Menu principal">
+    <p class="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Painel</p>
+    {% url 'reports:dashboard' as u %}{% include 'partials/_nav_item.html' with href=u icon='layout-grid' label='Visão Geral' key='dashboard' %}
+    {% url 'reports:inventory_reports' as u %}{% include 'partials/_nav_item.html' with href=u icon='bar-chart-3' label='Análises' key='bi' %}
+
+    <p class="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Estoque</p>
+    {% url 'products:product_list' as u %}{% include 'partials/_nav_item.html' with href=u icon='package' label='Catálogo' key='catalog' %}
+    {% url 'inventory:create_movement' as u %}{% include 'partials/_nav_item.html' with href=u icon='arrow-left-right' label='Movimentar' key='move' %}
+    {% url 'labels:index' as u %}{% include 'partials/_nav_item.html' with href=u icon='tags' label='Etiquetas' key='labels' %}
+    {% if admin %}
+    {% url 'inventory:replenish' as u %}{% include 'partials/_nav_item.html' with href=u icon='shopping-cart' label='Repor' key='replenish' badge=low_stock_count %}
+    {% endif %}
+
+    <p class="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Entradas</p>
+    {% if admin %}
+    {% url 'inventory:nfe_list' as u %}{% include 'partials/_nav_item.html' with href=u icon='receipt-text' label='Notas fiscais' key='nfe' tag='Beta' %}
+    {% url 'inventory:import_list' as u %}{% include 'partials/_nav_item.html' with href=u icon='upload-cloud' label='Importações' key='imports' %}
+    {% endif %}
+    {% url 'partners:supplier_list' as u %}{% include 'partials/_nav_item.html' with href=u icon='truck' label='Fornecedores' key='suppliers' %}
+
+    <details class="group pt-3" {% if s == 'team' or s == 'taxonomy' or s == 'locations' or s == 'export' or s == 'billing' or s == 'settings' or s == 'platform' %}open{% endif %}>
+        <summary class="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-300 [&::-webkit-details-marker]:hidden">
+            Administração
+            <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform group-open:rotate-180"></i>
+        </summary>
+        <div class="space-y-0.5">
+            {% if admin %}
+            {% url 'reports:employee_list' as u %}{% include 'partials/_nav_item.html' with href=u icon='users' label='Equipe' key='team' %}
+            {% url 'products:category_brand_list' as u %}{% include 'partials/_nav_item.html' with href=u icon='layers' label='Categorias e marcas' key='taxonomy' %}
+            {% url 'reports:export_page' as u %}{% include 'partials/_nav_item.html' with href=u icon='download' label='Exportar dados' key='export' %}
+            {% endif %}
+            {% url 'inventory:location_list' as u %}{% include 'partials/_nav_item.html' with href=u icon='map-pin' label='Locais de estoque' key='locations' %}
+            {% if request.membership.role == 'OWNER' %}
+            {% url 'tenants:billing' as u %}{% include 'partials/_nav_item.html' with href=u icon='credit-card' label='Plano' key='billing' %}
+            {% endif %}
+            {% url 'core:system_settings' as u %}{% include 'partials/_nav_item.html' with href=u icon='settings' label='Configurações' key='settings' %}
+            {% if request.user.is_superuser %}
+            {% url 'tenants:admin_panel' as u %}{% include 'partials/_nav_item.html' with href=u icon='shield' label='Painel da plataforma' key='platform' %}
+            {% endif %}
+        </div>
+    </details>
+</nav>
+{% endwith %}
