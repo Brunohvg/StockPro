@@ -229,6 +229,7 @@ def admin_backups_view(request):
         run.is_verify = run.trigger == backup_status.VERIFY
         run.is_stale = backup_status.is_stale_running(run)
     return render(request, 'tenants/admin_backups.html', {
+        'section': 'backups',
         'health': backup_status.health(),
         'dashboard': dashboard,
         'worker_health': _backup_worker_signal(),

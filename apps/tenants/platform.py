@@ -366,3 +366,41 @@ def tenant_usage(tenant):
         'ai_used_today': ai_used,
         'ai_allowed': AIService.tenant_has_ai(tenant),
     }
+
+
+def config_checks():
+    """Conferência rápida da configuração de produção (sem mostrar valores secretos)."""
+    from django.conf import settings
+
+    cache_backend = settings.CACHES['default']['BACKEND']
+    email_backend = getattr(settings, 'EMAIL_BACKEND', '')
+
+    def item(ok, label, detail, level='danger'):
+        return {'ok': bool(ok), 'label': label, 'detail': detail, 'level': 'ok' if ok else level}
+
+    return [
+        item(not settings.DEBUG, "Modo de depuração desligado",
+             "DEBUG=False em produção." if not settings.DEBUG else "DEBUG está ligado: mostra detalhes internos em erros."),
+        item(getattr(settings, 'CELERY_BROKER_URL', ''), "Fila de tarefas (Celery)",
+             "CELERY_BROKER_URL configurado." if getattr(settings, 'CELERY_BROKER_URL', '') else
+             "Sem CELERY_BROKER_URL: backup, alertas e limpeza não rodam."),
+        item('redis' in cache_backend.lower(), "Cache compartilhado (Redis)",
+             "Cache no Redis." if 'redis' in cache_backend.lower() else
+             "Cache só na memória do processo: limites de login e cota de IA não valem entre containers.",
+             level='warning'),
+        item(getattr(settings, 'BACKUP_S3_BUCKET', ''), "Cópia externa do backup",
+             "Bucket configurado." if getattr(settings, 'BACKUP_S3_BUCKET', '') else
+             "Sem BACKUP_S3_BUCKET: se o servidor se perder, o backup vai junto."),
+        item(getattr(settings, 'BACKUP_ENCRYPTION_PASSPHRASE', ''), "Backup criptografado",
+             "Senha de criptografia configurada." if getattr(settings, 'BACKUP_ENCRYPTION_PASSPHRASE', '') else
+             "Sem BACKUP_ENCRYPTION_PASSPHRASE."),
+        item('smtp' in email_backend.lower(), "Envio de e-mail",
+             "SMTP configurado." if 'smtp' in email_backend.lower() else
+             "Sem EMAIL_HOST: recuperação de senha e alertas não saem.", level='warning'),
+        item(getattr(settings, 'BACKUP_ALERT_EMAIL', ''), "Alerta de falha no backup",
+             "E-mail de alerta configurado." if getattr(settings, 'BACKUP_ALERT_EMAIL', '') else
+             "Sem BACKUP_ALERT_EMAIL: falha de backup não avisa ninguém.", level='warning'),
+        item(getattr(settings, 'AXES_ENABLED', False), "Limite de tentativas de login",
+             "Ligado (django-axes)." if getattr(settings, 'AXES_ENABLED', False) else "Desligado (AXES_ENABLED=False).",
+             level='warning'),
+    ]

@@ -1,39 +1,66 @@
 {% extends 'tenants/platform/base_platform.html' %}
 
-{% block title %}{% if plan %}Editar {{ plan.display_name }}{% else %}Novo plano{% endif %} | Central da plataforma | StockPro{% endblock %}
+{% block title %}{% if plan %}Editar {{ plan.display_name }}{% else %}Novo plano{% endif %}{% endblock %}
+{% block breadcrumb %}
+<span class="hidden sm:inline text-slate-300">/</span><a href="{% url 'tenants:platform_plans' %}" class="text-slate-500 hover:text-slate-700">Planos</a>
+<span class="text-slate-300">/</span><span class="truncate font-medium text-slate-900">{% if plan %}{{ plan.display_name }}{% else %}Novo{% endif %}</span>
+{% endblock %}
 
 {% block content %}
-<div class="space-y-6 max-w-3xl mx-auto">
-    <header>
-        <a href="{% url 'tenants:platform_plans' %}" class="text-sm text-indigo-600 hover:underline">← Planos</a>
-        <h1 class="text-3xl font-black text-slate-900 mt-2">{% if plan %}Editar {{ plan.display_name }}{% else %}Novo plano{% endif %}</h1>
-        {% if plan and n_tenants %}
-        <p class="text-sm text-amber-700 mt-1">{{ n_tenants }} empresa{{ n_tenants|pluralize }} usa{{ n_tenants|pluralize:"m" }} este plano. Preço e limites mudam para elas na hora, e a mudança fica no histórico de cada uma.</p>
-        {% endif %}
-    </header>
-
-    <form method="post" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-        <div class="rounded-xl bg-rose-50 border border-rose-200 p-3 text-sm text-rose-700">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
-        {% endif %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {% for field in form %}
-            <div class="{% if field.name == 'features' %}sm:col-span-2{% endif %}">
-                {% if field.field.widget.input_type == 'checkbox' %}
-                <label class="flex items-center gap-2 text-sm font-semibold text-slate-800">{{ field }} {{ field.label }}</label>
-                {% else %}
-                <label for="{{ field.id_for_label }}" class="block text-sm font-semibold text-slate-800 mb-1">{{ field.label }}</label>
-                {{ field }}
-                {% endif %}
-                {% for e in field.errors %}<p class="text-xs text-rose-600 mt-1">{{ e }}</p>{% endfor %}
-            </div>
-            {% endfor %}
-        </div>
-        <div class="flex gap-3">
-            <button class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">Salvar</button>
-            <a href="{% url 'tenants:platform_plans' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancelar</a>
-        </div>
-    </form>
+<div class="max-w-3xl">
+    <h1 class="text-2xl font-semibold tracking-tight text-slate-900">{% if plan %}Editar plano{% else %}Novo plano{% endif %}</h1>
+    {% if plan and n_tenants %}
+    <div class="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <i data-lucide="alert-triangle" class="mt-0.5 h-4 w-4 shrink-0"></i>
+        <span>{{ n_tenants }} empresa{{ n_tenants|pluralize }} usa{{ n_tenants|pluralize:"m" }} este plano. Preço e limites mudam para elas na hora, e a mudança fica no histórico de cada uma.</span>
+    </div>
+    {% endif %}
 </div>
+
+<form method="post" class="pf-card max-w-3xl">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="border-b border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+    {% endif %}
+
+    <fieldset class="grid grid-cols-1 gap-5 px-5 py-5 sm:grid-cols-2">
+        <legend class="sr-only">Identificação</legend>
+        {% for field in form %}{% if field.name == 'display_name' or field.name == 'name' %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="pf-label">{{ field.label }}</label>
+            {{ field }}
+            {% for e in field.errors %}<p class="mt-1.5 text-xs text-rose-600">{{ e }}</p>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+    </fieldset>
+
+    <fieldset class="grid grid-cols-1 gap-5 border-t border-slate-100 px-5 py-5 sm:grid-cols-3">
+        <legend class="sr-only">Preço e limites</legend>
+        {% for field in form %}{% if field.name == 'price' or field.name == 'max_products' or field.name == 'max_users' %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="pf-label">{{ field.label }}</label>
+            {{ field }}
+            {% for e in field.errors %}<p class="mt-1.5 text-xs text-rose-600">{{ e }}</p>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+    </fieldset>
+
+    <fieldset class="border-t border-slate-100 px-5 py-5 space-y-3">
+        <legend class="pf-label">Inteligência artificial</legend>
+        {% for field in form %}{% if field.name == 'has_ai_matching' or field.name == 'has_ai_reconciliation' %}
+        <label class="flex items-center gap-3 text-sm text-slate-700">{{ field }} {{ field.label }}</label>
+        {% endif %}{% endfor %}
+    </fieldset>
+
+    <div class="border-t border-slate-100 px-5 py-5">
+        <label for="{{ form.features.id_for_label }}" class="pf-label">{{ form.features.label }}</label>
+        {{ form.features }}
+        {% for e in form.features.errors %}<p class="mt-1.5 text-xs text-rose-600">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div class="flex justify-end gap-2 rounded-b-lg border-t border-slate-200 bg-slate-50 px-5 py-4">
+        <a href="{% url 'tenants:platform_plans' %}" class="pf-btn-ghost">Cancelar</a>
+        <button class="pf-btn-primary">Salvar plano</button>
+    </div>
+</form>
 {% endblock %}

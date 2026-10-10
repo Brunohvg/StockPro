@@ -1,0 +1,6 @@
+{# Selo de status da empresa. Uso: {% include 'tenants/platform/_status_badge.html' with t=empresa %} #}
+{% if not t.is_active %}<span class="pf-badge-gray"><span class="pf-dot"></span>Acesso bloqueado</span>
+{% elif t.subscription_status == 'ACTIVE' %}<span class="pf-badge-green"><span class="pf-dot"></span>Ativa</span>
+{% elif t.subscription_status == 'TRIAL' %}{% if t.is_trial_expired %}<span class="pf-badge-red"><span class="pf-dot"></span>Teste vencido</span>{% else %}<span class="pf-badge-amber"><span class="pf-dot"></span>Em teste</span>{% endif %}
+{% elif t.subscription_status == 'SUSPENDED' %}<span class="pf-badge-red"><span class="pf-dot"></span>Suspensa</span>
+{% else %}<span class="pf-badge-gray"><span class="pf-dot"></span>Cancelada</span>{% endif %}
