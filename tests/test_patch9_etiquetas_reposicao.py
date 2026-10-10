@@ -306,7 +306,7 @@ class TestReposicao:
 
     def test_pedido_rejeita_fornecedor_incorreto(self):
         u, t, sup, v = self._setup()
-        other = Supplier.objects.create(tenant=t, cnpj='99888777000166', company_name='Outro Fornecedor')
+        other = Supplier.objects.create(tenant=t, cnpj='99888777000100', company_name='Outro Fornecedor')
         r = _client(u).get(f'/inventory/repor/pedido/?fornecedor={other.pk}&qty_{v.pk}=5')
         assert r.status_code == 400
 
