@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block extra_css %}
+<style>
+  @media print {
+    body * { visibility: hidden; }
+    #order-sheet, #order-sheet * { visibility: visible; }
+    #order-sheet { position: absolute; left: 0; top: 0; width: 100%; border: 0; box-shadow: none; }
+    .no-print { display: none !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-6 py-2">
+    <div class="no-print flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <a href="{% url 'inventory:replenish' %}" class="text-xs font-medium text-slate-500 hover:text-indigo-600">← Repor estoque</a>
+            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Pedido de compra</h1>
+            <p class="pf-muted mt-1">Confira e mande para o fornecedor. Nada muda no estoque: a entrada acontece quando a NF-e chegar.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ whatsapp }}" target="_blank" rel="noopener" class="pf-btn-success"><i data-lucide="message-circle" class="h-4 w-4"></i>WhatsApp</a>
+            <button type="button" data-print class="pf-btn-secondary"><i data-lucide="printer" class="h-4 w-4"></i>Imprimir ou PDF</button>
+            <a href="?{{ csv_query }}" class="pf-btn-secondary"><i data-lucide="file-spreadsheet" class="h-4 w-4"></i>Planilha</a>
+        </div>
+    </div>
+
+    {% if below_minimum %}
+    <div class="no-print rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        O pedido mínimo deste fornecedor é <strong>R$ {{ minimum|floatformat:2|intcomma }}</strong>; faltam <strong>R$ {{ missing|floatformat:2|intcomma }}</strong>. Volte e aumente as quantidades ou junte com a próxima compra.
+    </div>
+    {% endif %}
+
+    <article id="order-sheet" class="pf-card">
+        <header class="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 sm:flex-row sm:justify-between">
+            <div>
+                <p class="pf-eyebrow">Pedido de compra · {{ today|date:"d/m/Y" }}</p>
+                <h2 class="mt-1 text-lg font-semibold text-slate-900">{{ store_name }}</h2>
+            </div>
+            <div class="text-sm sm:text-right">
+                {% if supplier %}
+                <p class="font-medium text-slate-900">{{ supplier.trade_name|default:supplier.company_name }}</p>
+                {% if supplier.cnpj %}<p class="text-slate-500">CNPJ {{ supplier.cnpj }}</p>{% endif %}
+                <p class="text-slate-500">{% if supplier.contact_name %}{{ supplier.contact_name }}{% endif %}{% if supplier.phone %} · {{ supplier.phone }}{% endif %}{% if supplier.email %} · {{ supplier.email }}{% endif %}</p>
+                {% else %}
+                <p class="text-slate-500">Fornecedor a definir</p>
+                {% endif %}
+            </div>
+        </header>
+        <div class="overflow-x-auto">
+            <table class="pf-table">
+                <thead><tr>
+                    <th>Cód. fornecedor</th>
+                    <th>Produto</th>
+                    <th class="!text-right">Qtd.</th>
+                    <th class="!text-right">Custo un.</th>
+                    <th class="!text-right">Total</th>
+                </tr></thead>
+                <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td class="font-mono text-xs text-slate-600">{{ r.supplier_sku|default:"—" }}</td>
+                    <td>
+                        <span class="font-medium text-slate-900">{{ r.variant.display_name }}</span>
+                        <div class="text-xs text-slate-500">SKU {{ r.variant.sku }}{% if r.variant.barcode %} · EAN {{ r.variant.barcode }}{% endif %}{% if r.pack > 1 %} · caixa com {{ r.pack|floatformat:"-2" }}{% endif %}</div>
+                    </td>
+                    <td class="whitespace-nowrap text-right tabular-nums">{{ r.qty|floatformat:"-2" }} {{ r.uom|lower }}</td>
+                    <td class="whitespace-nowrap text-right tabular-nums">R$ {{ r.unit_cost|floatformat:2|intcomma }}</td>
+                    <td class="whitespace-nowrap text-right tabular-nums font-medium">R$ {{ r.total|floatformat:2|intcomma }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="py-10 text-center text-slate-500">Nenhum item com quantidade. Volte e preencha a coluna "Comprar".</td></tr>
+                {% endfor %}
+                </tbody>
+                {% if rows %}
+                <tfoot><tr>
+                    <td colspan="4" class="px-4 py-3 text-right text-sm font-medium text-slate-600">Total estimado</td>
+                    <td class="px-4 py-3 text-right text-base font-semibold tabular-nums text-slate-900">R$ {{ total|floatformat:2|intcomma }}</td>
+                </tr></tfoot>
+                {% endif %}
+            </table>
+        </div>
+        <footer class="border-t border-slate-100 px-6 py-4 text-xs text-slate-500">Valores pelo último custo de compra; confirmar preço e prazo com o fornecedor.</footer>
+    </article>
+
+    <section class="no-print pf-card">
+        <div class="pf-card-header">
+            <h2 class="pf-card-title">Mensagem para o fornecedor</h2>
+            <button type="button" data-copy="order-text" class="pf-btn-secondary text-xs">Copiar texto</button>
+        </div>
+        <div class="pf-card-body space-y-2">
+            <textarea id="order-text" rows="{{ rows|length|add:6 }}" class="pf-input font-mono text-xs" readonly>{{ message }}</textarea>
+            {% if not has_phone %}<p class="pf-help">O fornecedor não tem celular cadastrado: o WhatsApp abre para você escolher o contato.</p>{% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/replenish.js' %}"></script>{% endblock %}
