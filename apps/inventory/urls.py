@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import api_views, nfe_views, views
+from . import api_views, nfe_views, replenish_views, views
 
 app_name = 'inventory'
 
@@ -24,6 +24,9 @@ urlpatterns = [
     path('nfe/<uuid:pk>/', nfe_views.nfe_detail, name='nfe_detail'),
     path('nfe/<uuid:pk>/revert/', nfe_views.nfe_revert, name='nfe_revert'),
     path('nfe/<uuid:pk>/xml/', nfe_views.nfe_xml, name='nfe_xml'),
+    # Reposição (patch 9)
+    path('repor/', replenish_views.replenish, name='replenish'),
+    path('repor/pedido/', replenish_views.purchase_order, name='purchase_order'),
     path('pending/', views.pending_product_list, name='pending_product_list'),
     path('pending/<int:pk>/approve/', views.pending_product_approve, name='pending_product_approve'),
 
