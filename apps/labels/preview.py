@@ -22,16 +22,7 @@ def _element(el, dx):
         return (f'<text transform="translate({tx} {el.y + round(el.size * 0.82)}) scale({CONDENSE} 1)" '
                 f'font-size="{size}" text-anchor="{anchor}"{fit}>{escape(el.text)}</text>')
     if isinstance(el, Barcode):
-        rects, i, mods = [], 0, el.modules
-        while i < len(mods):
-            if mods[i] == '1':
-                j = i
-                while j < len(mods) and mods[j] == '1':
-                    j += 1
-                rects.append(f'M{x + i * el.module} {el.y}h{(j - i) * el.module}v{el.height}h-{(j - i) * el.module}z')
-                i = j
-            else:
-                i += 1
+        rects = [f'M{bx + dx} {el.y}h{w}v{h}h-{w}z' for bx, w, h in el.bars()]
         return f'<path d="{"".join(rects)}" fill="#000"/>'
     if isinstance(el, Box):
         t = el.thickness

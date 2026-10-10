@@ -30,6 +30,24 @@ class Barcode:
     kind: str  # EAN13, EAN8, CODE128
     value: str
     modules: str
+    guards: tuple = ()   # faixas de módulos (início, fim) das barras de guarda do EAN
+    guard_ext: int = 0   # quanto as barras de guarda descem a mais (padrão EAN)
+
+    def bars(self):
+        """[(x, largura, altura)] de cada barra preta, já com as guardas mais longas."""
+        out, i, mods = [], 0, self.modules
+        while i < len(mods):
+            if mods[i] == '1':
+                j = i
+                while j < len(mods) and mods[j] == '1':
+                    j += 1
+                long = any(a <= i < b for a, b in self.guards)
+                out.append((self.x + i * self.module, (j - i) * self.module,
+                            self.height + (self.guard_ext if long else 0)))
+                i = j
+            else:
+                i += 1
+        return out
 
 
 @dataclass
@@ -58,6 +76,8 @@ class LabelItem:
     sku: str = ''
     barcode: str = ''
     store: str = ''
+    code: str = ''     # código impresso no texto ("CÓDIGO: 139557"); vazio = SKU
+    title: str = ''    # nome completo com a variação, usado no estilo "código + nome"
 
 
 def dpmm(dpi):
@@ -80,7 +100,7 @@ def format_price(value):
 # Largura média dos caracteres da fonte 0 da Zebra (CG Triumvirate Bold
 # Condensed), em fração da altura. Valores conservadores: melhor cortar uma
 # letra antes do que deixar o texto passar da borda.
-_NARROW = set("iIl1.,:;'|!()[]{} fjrt-")
+_NARROW = set("iIl.,:;'|!()[]{} fjrt")
 _WIDE = set('MWmw@%')
 
 
@@ -89,9 +109,13 @@ def text_width(text, size):
     for ch in text:
         if ch in _NARROW:
             total += 0.30
+        elif ch == '-':
+            total += 0.62  # algumas Zebra desenham o hífen largo; melhor sobrar
         elif ch in _WIDE:
-            total += 0.78
-        elif ch.isupper() or ch.isdigit():
+            total += 0.80
+        elif ch.isupper():
+            total += 0.60
+        elif ch.isdigit():
             total += 0.56
         else:
             total += 0.50
@@ -141,6 +165,8 @@ def build_label(item, cfg):
     Desenha uma etiqueta (sem deslocamento de coluna).
     cfg: LabelSettings (ou objeto com os mesmos atributos).
     """
+    if getattr(cfg, 'layout', 'complete') == 'code_name':
+        return build_code_name_label(item, cfg)
     dpi = int(cfg.dpi)
     W, H = mm(cfg.width_mm, dpi), mm(cfg.height_mm, dpi)
     label = Label(W, H)
@@ -233,27 +259,143 @@ def build_label(item, cfg):
         y += h + gap
 
     if code:
-        modules = code['modules']
-        n = len(modules)
-        avail = W - 2 * mm(1, dpi)
-        cap = 6 if dpi >= 300 else 4
-        module = min(cap, avail // (n + 2 * code['quiet']))
-        if module < 1:
-            module = min(cap, inner // n)
-        if module < 1:
-            label.warnings.append(f'Código "{code["value"]}" longo demais para {cfg.width_mm} mm de largura.')
-        else:
-            if module / dpmm(dpi) < 0.19:
-                label.warnings.append('Barras muito finas para esta largura: teste a leitura do leitor antes de imprimir tudo.')
-            bar_w = module * n
-            x = (W - bar_w) // 2
-            label.elements.append(Barcode(x, y, module, bar_h, code['kind'], code['value'], modules))
-            hr = code['value']
-            if sku_below and item.sku != code['value']:
-                hr = f"{hr}  {item.sku}"
-            label.elements.append(Text(pad_x, y + bar_h + gap // 2, inner, small, _single(hr, small, inner)))
+        extra = item.sku if sku_below and item.sku != code['value'] else ''
+        _barcode_block(label, code, cfg, y, bar_h, small, gap, pad_x, inner, extra)
     elif sku_below:
         label.elements.append(Text(pad_x, y, inner, small, _single(item.sku, small, inner)))
+    return label
+
+
+# Posição dos números e das guardas no padrão EAN (módulos).
+_EAN_PARTS = {
+    'EAN13': {'guards': ((0, 3), (45, 50), (92, 95)), 'groups': ((3, 45, 1, 7), (50, 92, 7, 13)), 'lead': True},
+    'EAN8': {'guards': ((0, 3), (31, 36), (64, 67)), 'groups': ((3, 31, 0, 4), (36, 64, 4, 8)), 'lead': False},
+}
+
+
+def _barcode_block(label, code, cfg, y, bar_h, small, gap, pad_x, inner, extra=''):
+    """
+    Barras + números. EAN sai no padrão do varejo: primeiro dígito do lado de
+    fora, dois grupos de números e as barras de guarda mais compridas.
+    """
+    dpi = int(cfg.dpi)
+    W = mm(cfg.width_mm, dpi)
+    modules = code['modules']
+    n = len(modules)
+    avail = W - 2 * mm(1, dpi)
+    cap = 6 if dpi >= 300 else 4
+    module = min(cap, avail // (n + 2 * code['quiet']))
+    if module < 1:
+        module = min(cap, inner // n)
+    if module < 1:
+        label.warnings.append(f'Código "{code["value"]}" longo demais para {cfg.width_mm} mm de largura.')
+        return False
+    if module / dpmm(dpi) < 0.19:
+        label.warnings.append('Barras muito finas para esta largura: teste a leitura do leitor antes de imprimir tudo.')
+    bar_w = module * n
+    x = (W - bar_w) // 2
+    parts = _EAN_PARTS.get(code['kind'])
+    if parts and not extra:
+        group_w = (parts['groups'][0][1] - parts['groups'][0][0]) * module
+        digits = parts['groups'][0][3] - parts['groups'][0][2]
+        size = int(min(small, group_w * 0.92 / (digits * 0.56)))
+        size = max(size, mm(1.5, dpi))
+        if parts['lead']:
+            lead_w = int(text_width('0', size)) + module * 2
+            x = max(x, pad_x // 2 + lead_w)  # o 1º dígito precisa caber à esquerda
+            x = min(x, W - bar_w - mm(0.5, dpi))
+        ext = int(size * 0.55)
+        label.elements.append(Barcode(x, y, module, bar_h, code['kind'], code['value'], modules,
+                                      parts['guards'], ext))
+        ty = y + bar_h + max(1, module // 2)
+        value = code['value']
+        if parts['lead']:
+            lw = int(text_width('0', size)) + module
+            label.elements.append(Text(x - lw - module, ty, lw, size, value[0], 'R'))
+        for a, b, i, j in parts['groups']:
+            label.elements.append(Text(x + a * module, ty, (b - a) * module, size, value[i:j]))
+        return True
+    label.elements.append(Barcode(x, y, module, bar_h, code['kind'], code['value'], modules))
+    hr = code['value'] + (f'  {extra}' if extra else '')
+    label.elements.append(Text(pad_x, y + bar_h + gap // 2, inner, small, _single(hr, small, inner)))
+    return True
+
+
+def build_code_name_label(item, cfg):
+    """
+    Estilo "código + nome + EAN" (etiqueta pequena de prateleira/atacado):
+
+        CÓDIGO: 139557
+        APLIQUE FLOR
+        PRENSADA - PCT 50 UN
+        |||||||||||||||||||||
+        7 890000 139557
+    """
+    dpi = int(cfg.dpi)
+    W, H = mm(cfg.width_mm, dpi), mm(cfg.height_mm, dpi)
+    label = Label(W, H)
+    pad_x, pad_y = mm(1.2, dpi), mm(1.0, dpi)
+    inner = W - 2 * pad_x
+    gap = max(2, mm(0.35, dpi))
+
+    code = choose_code(item.barcode, item.sku, cfg.code_source) if cfg.show_barcode else None
+    if cfg.show_barcode and code is None:
+        label.warnings.append('Sem código: cadastre o código de barras ou um SKU sem acentos.')
+    printed_code = (item.code or item.sku or '').strip()
+    prefix = (getattr(cfg, 'code_label', '') or '').strip()
+    code_line = f'{prefix} {printed_code}'.strip() if printed_code else ''
+    name = ' '.join((item.title or item.name or '').upper().split())
+
+    base = min(H * 0.135, mm(3.2, dpi), inner / 8)
+    min_bar = mm(4, dpi)
+    max_bar = mm(12, dpi)
+
+    def plan(scale, lines_max, truncate):
+        f = max(int(round(base * scale)), mm(1.6, dpi))
+        lines = fit_lines(name, f, inner, lines_max if truncate else 99)
+        if not truncate and len(lines) > lines_max:
+            return None
+        digits = max(int(round(f * 0.86)), mm(1.5, dpi))
+        used = (f + gap if code_line else 0) + len(lines) * f + max(len(lines) - 1, 0) * gap
+        bar = 0
+        if code:
+            used += gap * 2 + digits
+            bar = H - 2 * pad_y - used
+        return {'f': f, 'lines': lines, 'digits': digits, 'used': used, 'bar': bar}
+
+    chosen = None
+    for truncate in (False, True):
+        for scale in (1.0, 0.92, 0.85, 0.78, 0.72):
+            p = plan(scale, 2, truncate)
+            if p and (not code or p['bar'] >= min_bar):
+                chosen = p
+                break
+        if chosen:
+            break
+    if chosen is None:
+        chosen = plan(0.72, 1, True)
+        if code and chosen['bar'] < min_bar:
+            label.warnings.append('Etiqueta baixa demais: o código de barras ficou pequeno.')
+    if len(fit_lines(name, chosen['f'], inner, 99)) > len(chosen['lines']):
+        label.warnings.append('Nome longo demais: foi cortado com "...". Edite o nome da etiqueta.')
+
+    f = chosen['f']
+    bar_h = max(0, min(chosen['bar'], max_bar)) if code else 0
+    total = chosen['used'] + bar_h
+    y = pad_y + max(0, (H - 2 * pad_y - total) // 2)
+    if code_line:
+        # Código comprido (SKU de variação) diminui só esta linha antes de cortar
+        size = f
+        while size > mm(1.6, dpi) and text_width(code_line, size) > inner:
+            size -= 1
+        label.elements.append(Text(pad_x, y + (f - size), inner, size, _single(code_line, size, inner)))
+        y += f + gap
+    for line in chosen['lines']:
+        label.elements.append(Text(pad_x, y, inner, f, line))
+        y += f + gap
+    if code and bar_h > 0:
+        y += gap
+        _barcode_block(label, code, cfg, y, bar_h, chosen['digits'], gap, pad_x, inner)
     return label
 
 

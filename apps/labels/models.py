@@ -1,3 +1,4 @@
+from django.conf import settings
 from decimal import Decimal
 
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -15,6 +16,11 @@ PRESETS = [
     ('3x33x22', '3 colunas 33 × 22 mm', 33, 22, 3, Decimal('2')),
 ]
 
+LAYOUT_CHOICES = [
+    ('complete', 'Completa: loja, nome, variação, preço e código'),
+    ('code_name', 'Código + nome + código de barras (etiqueta pequena)'),
+]
+
 
 class LabelSettings(TenantMixin):
     """Modelo de etiqueta da empresa: tamanho do rolo, impressora e o que aparece."""
@@ -23,6 +29,7 @@ class LabelSettings(TenantMixin):
                    (300, '300 dpi (12 pontos/mm), ex.: ZD421 300, ZT230 300')]
     SPEED_CHOICES = [(0, 'Padrão da impressora'), (2, '2 pol/s (mais nítido)'), (3, '3 pol/s'),
                      (4, '4 pol/s'), (5, '5 pol/s'), (6, '6 pol/s (mais rápido)')]
+    LAYOUT_CHOICES = LAYOUT_CHOICES
     CODE_CHOICES = [('auto', 'EAN do cadastro; sem EAN, o SKU'),
                     ('sku', 'Sempre o SKU')]
 
@@ -48,6 +55,11 @@ class LabelSettings(TenantMixin):
         'Ajuste vertical (mm)', max_digits=3, decimal_places=1, default=Decimal('0'),
         validators=[MinValueValidator(-10), MaxValueValidator(10)],
         help_text='Positivo empurra para baixo (até 10 mm a 300 dpi, 15 mm a 203 dpi).')
+
+    layout = models.CharField('Estilo da etiqueta', max_length=12, choices=LAYOUT_CHOICES, default='complete')
+    code_label = models.CharField(
+        'Texto antes do código', max_length=20, blank=True, default='CÓDIGO:',
+        help_text='No estilo "código + nome". Ex.: CÓDIGO: 139557. Vazio imprime só o código.')
 
     show_store = models.BooleanField('Nome da loja', default=True)
     store_text = models.CharField(
@@ -80,3 +92,24 @@ class LabelSettings(TenantMixin):
     def size_label(self):
         cols = f'{self.columns} colunas de ' if self.columns > 1 else ''
         return f'{cols}{self.width_mm} × {self.height_mm} mm · {self.dpi} dpi'
+
+
+class VariantLabel(TenantMixin):
+    """
+    Texto da etiqueta de um produto/variação, quando diferente do cadastro.
+    Vazio = usa o padrão (nome do produto com a variação; código = SKU).
+    """
+    variant = models.OneToOneField('products.ProductVariant', on_delete=models.CASCADE,
+                                   related_name='label_text')
+    name = models.CharField('Nome na etiqueta', max_length=80, blank=True)
+    code = models.CharField('Código impresso', max_length=30, blank=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Texto de etiqueta'
+        verbose_name_plural = 'Textos de etiqueta'
+
+    def __str__(self):
+        return f'{self.variant.sku}: {self.name or "(nome do cadastro)"}'

@@ -64,49 +64,35 @@ def send_low_stock_alerts():
 
 
 def weekly_summary(tenant, now=None):
-    """Números da semana que terminou (7 dias até agora)."""
-    from apps.inventory.models import StockMovement
+    """
+    Números da semana que terminou (7 dias até agora). Vêm do mesmo serviço da
+    Visão Geral e da Inteligência (apps/reports/metrics.py), para os três baterem.
+    """
     from apps.inventory.services.expiry import expiring_lots
-    from apps.products.models import ProductVariant
+    from apps.reports import metrics
 
     now = now or timezone.now()
     start = now - timedelta(days=7)
-    moves = StockMovement.objects.filter(tenant=tenant, created_at__gte=start, created_at__lte=now)
-    outs = moves.filter(type='OUT').exclude(source__in=rep.NOT_SALES)
-    ins = moves.filter(type='IN').exclude(source__in=rep.NOT_SALES)
-    out_qty = outs.aggregate(t=Sum('quantity'))['t'] or Decimal('0')
-    in_qty = ins.aggregate(t=Sum('quantity'))['t'] or Decimal('0')
+    sales = metrics.sales_summary(tenant, start, now)
+    ins = metrics.entries_qs(tenant, start, now)
     in_value = sum((m.quantity * (m.unit_cost or 0) for m in ins.only('quantity', 'unit_cost')), Decimal('0'))
+    top = [{'variant': r['variant'], 'qty': r['qty']}
+           for r in sorted(sales['by_variant'], key=lambda r: r['qty'], reverse=True)[:5]]
 
-    top_rows = list(outs.values('variant_id').annotate(qty=Sum('quantity')).order_by('-qty')[:5])
-    names = {v.pk: v for v in ProductVariant.objects.filter(pk__in=[r['variant_id'] for r in top_rows])
-             .select_related('product').prefetch_related('attribute_values')}
-    top = [{'variant': names[r['variant_id']], 'qty': r['qty']} for r in top_rows if r['variant_id'] in names]
-
-    low = list(rep.low_stock_qs(tenant).select_related('product').prefetch_related('attribute_values')
+    low_qs = metrics.low_stock_qs(tenant)
+    low = list(low_qs.select_related('product').prefetch_related('attribute_values')
                .order_by('current_stock', 'product__name')[:10])
-    low_count = rep.low_stock_qs(tenant).count()
-
-    sold_60 = set(StockMovement.objects.filter(tenant=tenant, type='OUT', created_at__gte=now - timedelta(days=60))
-                  .exclude(source__in=rep.NOT_SALES).values_list('variant_id', flat=True))
-    stalled_qs = (ProductVariant.objects.filter(tenant=tenant, is_active=True, product__is_active=True,
-                                                current_stock__gt=0)
-                  .exclude(pk__in=sold_60)
-                  .annotate(value=F('current_stock') * F('avg_unit_cost')))
-    stalled_value = sum((v.value or Decimal('0') for v in stalled_qs), Decimal('0'))
-    stalled = sorted(stalled_qs.select_related('product'), key=lambda v: v.value or 0, reverse=True)[:5]
-
+    stall = metrics.stalled(tenant, now=now, limit=5)
+    snap = metrics.stock_snapshot(tenant)
     expired, soon = expiring_lots(tenant, 30)
-    active = ProductVariant.objects.filter(tenant=tenant, is_active=True, product__is_active=True)
-    stock_value = sum(((v.current_stock or 0) * (v.avg_unit_cost or 0)
-                       for v in active.only('current_stock', 'avg_unit_cost')), Decimal('0'))
     return {
         'start': timezone.localtime(start).date(), 'end': timezone.localtime(now).date(),
-        'out_qty': out_qty, 'in_qty': in_qty, 'in_value': in_value, 'top': top,
-        'low': low, 'low_count': low_count,
-        'stalled': stalled, 'stalled_count': stalled_qs.count(), 'stalled_value': stalled_value,
+        'out_qty': sales['units'], 'in_qty': metrics.units_in(tenant, start, now), 'in_value': in_value,
+        'revenue': sales['revenue'], 'top': top,
+        'low': low, 'low_count': low_qs.count(),
+        'stalled': stall['items'], 'stalled_count': stall['count'], 'stalled_value': stall['value'],
         'expired': len(expired), 'expiring': soon[:5], 'expiring_count': len(soon),
-        'stock_value': stock_value, 'skus': active.count(),
+        'stock_value': snap['value'], 'skus': snap['skus'],
     }
 
 

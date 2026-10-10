@@ -9,20 +9,26 @@ CHECK = 'h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500'
 class LabelSettingsForm(forms.ModelForm):
     class Meta:
         model = LabelSettings
-        fields = ['width_mm', 'height_mm', 'columns', 'column_gap_mm', 'dpi', 'darkness', 'print_speed',
+        fields = ['layout', 'code_label', 'width_mm', 'height_mm', 'columns', 'column_gap_mm', 'dpi', 'darkness', 'print_speed',
                   'offset_x_mm', 'offset_y_mm', 'show_store', 'store_text', 'show_name', 'show_variant',
                   'show_price', 'show_sku', 'show_barcode', 'code_source']
+
+        widgets = {'layout': forms.RadioSelect}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
-            if isinstance(field.widget, forms.CheckboxInput):
+            if isinstance(field.widget, (forms.CheckboxInput, forms.RadioSelect)):
                 field.widget.attrs['class'] = CHECK
             else:
                 field.widget.attrs['class'] = INPUT
         for name in ('column_gap_mm', 'offset_x_mm', 'offset_y_mm'):
             self.fields[name].widget.attrs['step'] = '0.5'
         self.fields['show_name'].disabled = True  # o nome sempre vai
+        self.fields['layout'].required = False
+
+    def clean_layout(self):
+        return self.cleaned_data.get('layout') or self.instance.layout or 'complete'
 
     def clean(self):
         data = super().clean()

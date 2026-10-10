@@ -167,6 +167,24 @@ STOCK_COLUMNS = {
     'manufacture': CATALOG_COLUMNS['manufacture'],
 }
 
+def _parent_name(name, attrs_raw):
+    """
+    Nome do produto pai a partir da linha da variação.
+    "Tinta Chalk - 100 ml - Rosa / G" com atributos "Cor:Rosa; Tamanho:G" vira
+    "Tinta Chalk - 100 ml" (tira só o sufixo dos atributos, não o primeiro " - ").
+    """
+    name = (name or '').strip()
+    values = [p.split(':', 1)[1].strip() for p in (attrs_raw or '').split(';') if ':' in p]
+    values = [v for v in values if v]
+    for sep in (' / ', ', ', ' '):
+        suffix = ' - ' + sep.join(values)
+        if values and name.lower().endswith(suffix.lower()) and len(name) > len(suffix):
+            return name[:-len(suffix)].strip()[:255]
+    if ' - ' in name:
+        return name.rsplit(' - ', 1)[0].strip()[:255]
+    return name[:255]
+
+
 TRUE_WORDS = {'sim', 's', 'yes', 'y', 'true', '1', 'x'}
 
 
@@ -434,7 +452,7 @@ def process_csv_catalog_direct(batch, dry_run=False):
                         if sku_pai:
                             product, _ = Product.objects.get_or_create(
                                 tenant=tenant, sku=sku_pai[:50],
-                                defaults={'name': name[:255].split(' - ')[0].strip(),
+                                defaults={'name': _parent_name(name, get_val(row, 'attributes')),
                                           'product_type': ProductType.VARIABLE},
                             )
                             if product.product_type != ProductType.VARIABLE:
