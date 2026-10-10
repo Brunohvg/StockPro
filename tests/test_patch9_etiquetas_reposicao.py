@@ -311,6 +311,8 @@ class TestEmails:
     def _cfg(self, t):
         cfg = SystemSetting.get_settings(t)
         cfg.alert_email = 'dono@bibelo.com.br'
+        cfg.low_stock_alerts_enabled = True
+        cfg.weekly_summary_enabled = True
         cfg.save()
         return cfg
 
