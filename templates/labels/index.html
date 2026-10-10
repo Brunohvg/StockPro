@@ -5,6 +5,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-7xl space-y-6 py-2" data-labels-queue
+     data-tenant-id="{{ request.tenant.pk }}" data-user-id="{{ request.user.pk }}"
      data-search-url="{% url 'labels:search' %}"
      data-nfe-url="{% url 'labels:nfe_items' '00000000-0000-0000-0000-000000000000' %}"
      data-preview-url="{% url 'labels:preview' %}"
