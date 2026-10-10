@@ -161,7 +161,7 @@
     };
     var columns = parseInt(root.dataset.columns, 10) || 1;
     var max = parseInt(root.dataset.max, 10) || 2000;
-    var STORE = 'stockpro.labels.queue';
+    var STORE = 'stockpro.labels.queue.' + String(root.dataset.tenantId || 'unknown') + '.' + String(root.dataset.userId || 'unknown');
     var items = [];
     var selected = null;
 
