@@ -15,6 +15,7 @@ from tests.factories import (PlanFactory, ProductFactory, StockMovementFactory, 
                              TenantMembershipFactory, UserFactory)
 
 HOME = '/admin-panel/'
+LIST = '/admin-panel/empresas/'
 
 
 @pytest.fixture
@@ -45,7 +46,8 @@ def _action(client, tenant, **data):
 
 @pytest.mark.django_db
 class TestAcesso:
-    @pytest.mark.parametrize('url', [HOME, '/admin-panel/empresas.csv', '/admin-panel/planos/',
+    @pytest.mark.parametrize('url', [HOME, LIST, '/admin-panel/empresas.csv', '/admin-panel/planos/',
+                                     '/admin-panel/saude/', '/admin-panel/atividade/',
                                      '/admin-panel/planos/novo/'])
     def test_usuario_comum_nao_entra(self, url, member):
         c = Client()
@@ -74,7 +76,8 @@ class TestXSS:
     def test_nome_malicioso_nao_vira_script(self, admin_client):
         evil = "Loja');alert(document.domain);//<script>x()</script>"
         t = TenantFactory(name=evil)
-        for url in (HOME, f'/admin-panel/empresas/{t.pk}/'):
+        platform.add_note(t, "nota", None)
+        for url in (HOME, LIST, f'/admin-panel/empresas/{t.pk}/', '/admin-panel/atividade/'):
             html = admin_client.get(url).content.decode()
             assert '<script>x()</script>' not in html
             assert "openModal(" not in html
@@ -87,9 +90,9 @@ class TestVisaoGeral:
         TenantFactory(subscription_status='ACTIVE', plan=PlanFactory(price=Decimal('99.90')))
         r = admin_client.get(HOME)
         assert r.status_code == 200
-        html = r.content.decode()
-        assert 'Loja Bibelô' in html and 'dono@bibelo.com' in html
+        assert 'Loja Bibelô' in r.content.decode()  # cadastros recentes
         assert r.context['ov'].mrr >= Decimal('99.90')
+        assert 'dono@bibelo.com' in admin_client.get(LIST).content.decode()
 
     def test_mrr_ignora_suspensa_e_teste(self, loja):
         TenantFactory(subscription_status='SUSPENDED', plan=PlanFactory(price=50))
@@ -101,7 +104,7 @@ class TestVisaoGeral:
 
     def test_busca_por_email_do_dono(self, admin_client, loja):
         TenantFactory(name='Outra')
-        r = admin_client.get(HOME, {'q': 'dono@bibelo'})
+        r = admin_client.get(LIST, {'q': 'dono@bibelo'})
         names = [t.name for t in r.context['page']]
         assert names == ['Loja Bibelô']
 
@@ -109,16 +112,16 @@ class TestVisaoGeral:
         Tenant.objects.filter(pk=loja.pk).update(trial_ends_at=timezone.now() + timedelta(days=3))
         vencida = TenantFactory(subscription_status='TRIAL')
         Tenant.objects.filter(pk=vencida.pk).update(trial_ends_at=timezone.now() - timedelta(days=1))
-        ending = [t.pk for t in admin_client.get(HOME, {'f': 'trial_ending'}).context['page']]
-        expired = [t.pk for t in admin_client.get(HOME, {'f': 'trial_expired'}).context['page']]
+        ending = [t.pk for t in admin_client.get(LIST, {'f': 'trial_ending'}).context['page']]
+        expired = [t.pk for t in admin_client.get(LIST, {'f': 'trial_expired'}).context['page']]
         assert ending == [loja.pk] and expired == [vencida.pk]
 
     def test_sem_uso_e_perto_do_limite(self, admin_client, loja):
         Tenant.objects.filter(pk=loja.pk).update(created_at=timezone.now() - timedelta(days=30))
         for _ in range(8):
             ProductFactory(tenant=loja)
-        idle = [t.pk for t in admin_client.get(HOME, {'f': 'idle'}).context['page']]
-        near = [t.pk for t in admin_client.get(HOME, {'f': 'near_limit'}).context['page']]
+        idle = [t.pk for t in admin_client.get(LIST, {'f': 'idle'}).context['page']]
+        near = [t.pk for t in admin_client.get(LIST, {'f': 'near_limit'}).context['page']]
         assert loja.pk in idle and loja.pk in near
 
     def test_movimentacao_tira_de_sem_uso(self, loja):
@@ -145,8 +148,9 @@ class TestVisaoGeral:
     def test_sem_n_mais_1(self, admin_client, django_assert_max_num_queries):
         for _ in range(15):
             TenantMembershipFactory(tenant=TenantFactory())
-        with django_assert_max_num_queries(30):
-            admin_client.get(HOME)
+        for url in (HOME, LIST):
+            with django_assert_max_num_queries(30):
+                admin_client.get(url)
 
 
 @pytest.mark.django_db
@@ -227,7 +231,7 @@ class TestAcoes:
 
     def test_vencido_aparece_no_filtro(self, admin_client):
         t = TenantFactory(subscription_status='ACTIVE', next_due_date=timezone.localdate() - timedelta(days=1))
-        assert [x.pk for x in admin_client.get(HOME, {'f': 'overdue'}).context['page']] == [t.pk]
+        assert [x.pk for x in admin_client.get(LIST, {'f': 'overdue'}).context['page']] == [t.pk]
 
     def test_nota(self, admin_client, loja):
         _action(admin_client, loja, action='note', note='Primeira linha\nresto')
@@ -310,7 +314,7 @@ class TestSaudeESeguranca:
                                          failures_since_start=9, get_data='', post_data='',
                                          http_accept='', path_info='/')
         r = admin_client.post(f'/admin-panel/seguranca/desbloquear/{a.pk}/', {'next': 'https://evil.example/'})
-        assert r['Location'] == HOME
+        assert r['Location'] == '/admin-panel/saude/'
 
 
 @pytest.mark.django_db
@@ -330,4 +334,77 @@ class TestEventosAutomaticos:
         t.refresh_from_db()
         assert t.subscription_status == 'SUSPENDED'
         assert TenantEvent.objects.get(tenant=t, kind='STATUS').actor is None
-        assert TenantEvent.objects.get(tenant=t, kind='STATUS').actor is None
+
+
+@pytest.mark.django_db
+class TestPatch8Navegacao:
+    """Patch 8: cada área da Central tem rota própria e o menu marca onde você está."""
+
+    @pytest.mark.parametrize('url,section', [
+        (HOME, 'home'), (LIST, 'tenants'), ('/admin-panel/planos/', 'plans'),
+        ('/admin-panel/planos/novo/', 'plans'), ('/admin-panel/saude/', 'health'),
+        ('/admin-panel/atividade/', 'activity'), ('/admin-panel/backups/', 'backups'),
+    ])
+    def test_menu_marca_a_secao(self, admin_client, url, section):
+        r = admin_client.get(url)
+        assert r.status_code == 200 and r.context['section'] == section
+        html = r.content.decode()
+        assert html.count('pf-nav-item-active') == 1
+        assert 'tenants/platform/base_platform.html' in [t.name for t in r.templates]
+
+    def test_ficha_marca_empresas(self, admin_client, loja):
+        assert admin_client.get(f'/admin-panel/empresas/{loja.pk}/').context['section'] == 'tenants'
+
+    def test_menu_sem_ancoras_nem_links_duplicados(self, admin_client):
+        html = admin_client.get(HOME).content.decode()
+        assert "admin-panel/#" not in html
+        assert html.count('href="/admin/"') == 1
+        assert 'css/platform.css' not in html
+
+    def test_voltar_ao_sistema(self, admin_client):
+        assert 'href="/app/"' in admin_client.get(HOME).content.decode()
+
+    def test_mensagens_com_cor_por_tipo(self, admin_client, loja):
+        r = _action(admin_client, loja, action='suspend', reason='')
+        assert 'border-rose-200' in r.content.decode()
+
+
+@pytest.mark.django_db
+class TestPatch8SaudeEAtividade:
+    def test_configuracao_de_producao(self, admin_client, settings):
+        settings.BACKUP_S3_BUCKET = ''
+        r = admin_client.get('/admin-panel/saude/')
+        checks = {c['label']: c for c in r.context['checks']}
+        assert checks['Cópia externa do backup']['ok'] is False
+        settings.BACKUP_S3_BUCKET = 'bucket-x'
+        checks = {c['label']: c for c in admin_client.get('/admin-panel/saude/').context['checks']}
+        assert checks['Cópia externa do backup']['ok'] is True
+
+    def test_configuracao_nao_mostra_segredo(self, admin_client, settings):
+        settings.BACKUP_ENCRYPTION_PASSPHRASE = 'segredo-super-secreto-123'
+        assert 'segredo-super-secreto-123' not in admin_client.get('/admin-panel/saude/').content.decode()
+
+    def test_atividade_filtra_por_tipo_e_busca(self, admin_client, loja):
+        outra = TenantFactory(name='Outra Loja')
+        platform.add_note(loja, "ligar amanhã", None)
+        platform.record(outra, 'PLAN', "Plano: A → B")
+        r = admin_client.get('/admin-panel/atividade/', {'kind': 'NOTE'})
+        assert [e.tenant_id for e in r.context['page']] == [loja.pk]
+        r = admin_client.get('/admin-panel/atividade/', {'q': 'Outra'})
+        assert [e.tenant_id for e in r.context['page']] == [outra.pk]
+
+    def test_atividade_pagina(self, admin_client, loja):
+        for i in range(55):
+            platform.record(loja, 'NOTE', f"nota {i}")
+        r = admin_client.get('/admin-panel/atividade/', {'page': 2})
+        assert len(r.context['page']) == 5
+
+    def test_home_mostra_atividade_recente_sem_notas(self, admin_client, loja):
+        platform.add_note(loja, "nota interna", None)
+        platform.record(loja, 'PLAN', "Plano: X → Y")
+        kinds = [e.kind for e in admin_client.get(HOME).context['recent_events']]
+        assert kinds == ['PLAN']
+
+    def test_lista_mantem_filtros_ao_trocar_atalho(self, admin_client, loja):
+        r = admin_client.get(LIST, {'q': 'Bibelô', 'f': 'idle'})
+        assert r.context['chips_qs'] == 'q=Bibel%C3%B4'
