@@ -297,6 +297,19 @@ class TestReposicao:
         assert r['Content-Disposition'].startswith('attachment; filename="pedido-papel-sul-')
         assert 'PS-778;CAN-1' in body and ';48;' in body
 
+    def test_pedido_rejeita_quantidades_invalidas(self):
+        u, t, sup, v = self._setup()
+        c = _client(u)
+        for qty in ['NaN', 'Infinity', '-2', '100001', '1.1234']:
+            r = c.get(f'/inventory/repor/pedido/?fornecedor={sup.pk}&qty_{v.pk}={qty}')
+            assert r.status_code == 400
+
+    def test_pedido_rejeita_fornecedor_incorreto(self):
+        u, t, sup, v = self._setup()
+        other = Supplier.objects.create(tenant=t, cnpj='99888777000166', company_name='Outro Fornecedor')
+        r = _client(u).get(f'/inventory/repor/pedido/?fornecedor={other.pk}&qty_{v.pk}=5')
+        assert r.status_code == 400
+
     def test_repor_so_admin_e_isolado(self):
         u, t, sup, v = self._setup()
         op, _ = _member('OPERATOR', tenant=t)
