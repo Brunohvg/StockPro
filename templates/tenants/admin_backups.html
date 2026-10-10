@@ -1,92 +1,149 @@
 {% extends 'tenants/platform/base_platform.html' %}
-{% block title %}Central de Backups | StockPro{% endblock %}
+
+{% block title %}Central de backups{% endblock %}
+{% block breadcrumb %}<span class="hidden sm:inline text-slate-300">/</span><span class="font-medium text-slate-900">Backups</span>{% endblock %}
+{% block topbar_actions %}
+<form method="post" action="{% url 'tenants:admin_backup_verify' %}">
+    {% csrf_token %}
+    <button type="submit" class="pf-btn-secondary" {% if not health.external_enabled %}disabled title="Configure o bucket (BACKUP_S3_*) para conferir"{% endif %}><i data-lucide="shield-check" class="h-4 w-4"></i><span class="hidden sm:inline">Conferir último backup</span></button>
+</form>
+<form method="post" action="{% url 'tenants:admin_backup_run' %}" data-confirm="Fazer agora um backup completo, com os dados de todas as empresas?">
+    {% csrf_token %}
+    <button type="submit" class="pf-btn-primary" {% if health.running %}disabled title="Já existe um backup em andamento"{% endif %}><i data-lucide="database-backup" class="h-4 w-4"></i><span class="sm:hidden">Backup</span><span class="hidden sm:inline">Fazer backup agora</span></button>
+</form>
+{% endblock %}
+
 {% block content %}
-<div class="space-y-6 max-w-7xl mx-auto">
-  <header class="flex flex-wrap items-center justify-between gap-4">
-    <div>
-      <a href="{% url 'tenants:admin_panel' %}" class="text-sm text-indigo-600 hover:underline">← Central da plataforma</a>
-      <h1 class="text-3xl font-black text-slate-900 mt-2">Central de backups</h1>
-      <p class="text-sm text-slate-500 mt-1">Infraestrutura global · banco de dados de todas as empresas e arquivos de mídia.</p>
-    </div>
-    <div class="flex flex-wrap gap-2">
-      <form method="post" action="{% url 'tenants:admin_backup_verify' %}">
-        {% csrf_token %}
-        <button type="submit" {% if not health.external_enabled %}disabled{% endif %} class="rounded-xl px-4 py-3 text-sm font-semibold border border-slate-200 bg-white disabled:opacity-40 hover:bg-slate-50">Verificar cópia externa</button>
-      </form>
-      <form method="post" action="{% url 'tenants:admin_backup_run' %}" onsubmit="return confirm('Criar backup GLOBAL de todas as empresas agora?');">
-        {% csrf_token %}
-        <button type="submit" {% if health.running %}disabled{% endif %} class="rounded-xl px-4 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40">Fazer backup global agora</button>
-      </form>
-    </div>
-  </header>
+<div>
+    <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Central de backups</h1>
+    <p class="pf-muted mt-1">Cópia diária do banco de todas as empresas e dos arquivos (fotos e XMLs). Automático às {{ dashboard.schedule }}.</p>
+</div>
 
-  {% include 'tenants/platform/_nav.html' with tab='backups' %}
-
-  <div class="rounded-2xl border px-5 py-4 flex flex-wrap gap-3 justify-between items-center {% if worker_health.ok %}bg-emerald-50 border-emerald-200 text-emerald-900{% else %}bg-amber-50 border-amber-200 text-amber-950{% endif %}">
-    <div><p class="font-bold text-sm">Processamento de tarefas: {% if worker_health.ok %}sinal recente detectado{% else %}sem sinal recente{% endif %}</p>
-    <p class="text-xs mt-1">{% if worker_health.ok %}Último heartbeat: {{ worker_health.last|date:"d/m/Y H:i:s" }}. Isso indica atividade da rotina de monitoramento, mas não comprova a execução do backup.{% else %}Solicitações podem permanecer na fila. Verifique o Celery Worker e o Celery Beat no Coolify antes de considerar o backup protegido.{% endif %}</p></div>
-    <a href="{% url 'tenants:admin_panel' %}#saude" class="text-sm font-semibold underline">Ver saúde da plataforma</a>
-  </div>
-  <section class="rounded-2xl border border-slate-800 bg-slate-950 text-slate-100 p-5 md:p-6 space-y-5">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <div><h2 class="text-lg font-bold">Visão geral da plataforma</h2><p class="text-xs text-slate-400 mt-1">Indicadores reais dos registros de backup · últimos 14 dias</p></div>
-      <span class="text-xs rounded-full border border-slate-700 px-3 py-1">Backup automático diário · {{ dashboard.schedule }}</span>
-    </div>
-    <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4"><p class="text-xs text-slate-400">Empresas no banco</p><p class="text-2xl font-black mt-2">{{ dashboard.companies }}</p><p class="text-xs text-slate-400">Mesmo banco de dados</p></div>
-      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4"><p class="text-xs text-slate-400">Usuários</p><p class="text-2xl font-black mt-2">{{ dashboard.users }}</p><p class="text-xs text-slate-400">Contas vinculadas</p></div>
-      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4"><p class="text-xs text-slate-400">Backups registrados</p><p class="text-2xl font-black mt-2">{{ dashboard.total_jobs }}</p><p class="text-xs text-slate-400">Desde o início</p></div>
-      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4"><p class="text-xs text-slate-400">Concluídos (14 dias)</p><p class="text-2xl font-black text-emerald-400 mt-2">{{ dashboard.success_14d }}</p><p class="text-xs text-slate-400">Inclui cópias locais</p></div>
-      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4"><p class="text-xs text-slate-400">Taxa de sucesso</p><p class="text-2xl font-black mt-2">{% if dashboard.success_rate is not None %}{{ dashboard.success_rate }}%{% else %}—{% endif %}</p><p class="text-xs text-slate-400">Execuções finalizadas</p></div>
-      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4"><p class="text-xs text-slate-400">Falhas (14 dias)</p><p class="text-2xl font-black text-rose-400 mt-2">{{ dashboard.failed_14d }}</p><p class="text-xs text-slate-400">{{ dashboard.last_24h }} execução(ões) em 24h</p></div>
-    </div>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div class="lg:col-span-2 rounded-xl bg-slate-900 border border-slate-800 p-4">
-        <h3 class="text-sm font-semibold">Atividade dos backups</h3>
-        <p class="text-xs text-slate-400 mt-1">Verde: concluído · Vermelho: falhou</p>
-        <div class="flex items-end justify-between gap-2 h-40 mt-5 border-b border-slate-700 pb-1">
-          {% for day in dashboard.daily_activity %}
-          <div class="flex-1 h-full flex flex-col justify-end items-center gap-1" title="{{ day.date|date:'d/m' }}: {{ day.success }} concluído(s), {{ day.failed }} falha(s)">
-            <div class="w-full max-w-8 bg-rose-500 rounded-t-sm" style="height:{{ day.failed_height }}%"></div>
-            <div class="w-full max-w-8 bg-emerald-500 rounded-t-sm" style="height:{{ day.success_height }}%"></div>
-          </div>
-          {% endfor %}
+<!-- Situação -->
+<section class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div class="lg:col-span-2 flex items-start gap-4 rounded-lg border p-5
+        {% if health.level == 'ok' %}border-emerald-200 bg-emerald-50{% elif health.level == 'warning' %}border-amber-200 bg-amber-50{% else %}border-rose-200 bg-rose-50{% endif %}">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full
+            {% if health.level == 'ok' %}bg-emerald-100 text-emerald-700{% elif health.level == 'warning' %}bg-amber-100 text-amber-700{% else %}bg-rose-100 text-rose-700{% endif %}">
+            <i data-lucide="{% if health.level == 'ok' %}shield-check{% elif health.level == 'warning' %}alert-triangle{% else %}shield-alert{% endif %}" class="h-5 w-5"></i>
+        </span>
+        <div class="min-w-0">
+            <p class="font-semibold {% if health.level == 'ok' %}text-emerald-900{% elif health.level == 'warning' %}text-amber-900{% else %}text-rose-900{% endif %}">{{ health.headline }}</p>
+            <p class="mt-1 text-sm text-slate-700">{{ health.detail }}</p>
+            {% if health.running %}<p class="mt-2 text-sm font-medium text-indigo-700">Backup em andamento desde {{ health.running.started_at|date:"d/m H:i" }}.</p>{% endif %}
+            <p class="mt-2 text-xs text-slate-600">
+                Última conferência:
+                {% if health.last_verify %}{{ health.last_verify.finished_at|date:"d/m/Y H:i" }} · {% if health.last_verify.status == 'SUCCESS' %}<span class="font-medium text-emerald-700">íntegro</span>{% else %}<span class="font-medium text-rose-700">{{ health.last_verify.get_status_display|lower }}</span>{% endif %}
+                {% else %}nunca feita. Recomendado: conferir uma vez por mês.{% endif %}
+            </p>
         </div>
-        <div class="flex justify-between text-xs text-slate-500 mt-2"><span>Há 13 dias</span><span>Hoje</span></div>
-      </div>
-      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4">
-        <h3 class="text-sm font-semibold">Estado atual</h3>
-        <div class="mt-4 rounded-lg p-3 {% if health.level == 'ok' %}bg-emerald-950 text-emerald-300{% elif health.level == 'warning' %}bg-amber-950 text-amber-300{% else %}bg-rose-950 text-rose-300{% endif %}">
-          <p class="font-bold">{{ health.headline }}</p>
-          <p class="text-xs mt-2 leading-relaxed">{{ health.detail }}</p>
-        </div>
-        <p class="text-xs text-slate-400 mt-4">Última verificação remota: {% if health.last_verify %}{{ health.last_verify.finished_at|date:"d/m/Y H:i" }} · {% if health.last_verify.status == 'SUCCESS' %}Íntegro{% else %}{{ health.last_verify.get_status_display }}{% endif %}{% else %}Não realizada{% endif %}</p>
-        {% if health.running %}<p class="text-xs text-indigo-300 mt-2">Backup em andamento desde {{ health.running.started_at|date:"d/m H:i" }}</p>{% endif %}
-      </div>
     </div>
-  </section>
+    <div class="pf-card pf-card-body">
+        <div class="flex items-center justify-between">
+            <span class="pf-eyebrow">Processamento de tarefas</span>
+            {% if worker_health.ok %}<span class="pf-badge-green"><span class="pf-dot"></span>Ativo</span>{% else %}<span class="pf-badge-red"><span class="pf-dot"></span>Parado</span>{% endif %}
+        </div>
+        <p class="mt-3 text-sm font-medium text-slate-900">{% if worker_health.ok %}Sinal recente detectado{% else %}Worker sem sinal recente{% endif %}</p>
+        <p class="mt-1 text-xs text-slate-500">{% if worker_health.ok %}Último sinal em {{ worker_health.last|date:"d/m/Y H:i" }}. O worker está pegando tarefas da fila.{% else %}Pedidos de backup ficam parados na fila. Confira o Celery Worker e o Celery Beat no Coolify.{% endif %}</p>
+    </div>
+</section>
 
-  <div class="rounded-xl bg-indigo-50 border border-indigo-200 p-4 text-sm text-indigo-950">
-    <strong>Escopo global:</strong> cada backup completo contém o banco compartilhado de todas as empresas; não é gerado um backup separado para cada cliente. O acesso a este painel é reservado a superusuários autenticados.
-  </div>
-  <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div class="rounded-2xl bg-white border border-slate-200 p-5"><h3 class="text-xs uppercase tracking-wider font-bold text-slate-500">Armazenamento externo</h3><p class="font-bold mt-2 {% if health.external_enabled %}text-emerald-700{% else %}text-rose-700{% endif %}">{% if health.external_enabled %}{{ cfg.bucket }}{% else %}Não configurado{% endif %}</p><p class="text-xs text-slate-500 mt-2">Configure BACKUP_S3_* no Coolify para proteger contra perda do servidor.</p></div>
-    <div class="rounded-2xl bg-white border border-slate-200 p-5"><h3 class="text-xs uppercase tracking-wider font-bold text-slate-500">Criptografia</h3><p class="font-bold mt-2 {% if health.encryption_enabled %}text-emerald-700{% else %}text-rose-700{% endif %}">{% if health.encryption_enabled %}GPG AES-256 configurado{% else %}Senha não configurada{% endif %}</p><p class="text-xs text-slate-500 mt-2">A senha de recuperação deve ficar guardada fora do servidor.</p></div>
-    <div class="rounded-2xl bg-white border border-slate-200 p-5"><h3 class="text-xs uppercase tracking-wider font-bold text-slate-500">Disco do servidor</h3><p class="font-bold mt-2">{% if disk %}{{ disk.files }} arquivo(s) · {{ disk.used|filesizeformat }}{% else %}Pasta não criada{% endif %}</p><p class="text-xs text-slate-500 mt-2">{% if disk %}Livre: {{ disk.free|filesizeformat }} ({{ disk.free_pct }}%){% endif %} · Retenção local: {{ cfg.local_days }} dias.</p></div>
-  </section>
-  <section class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-    <div class="flex items-center justify-between gap-3 p-5 border-b border-slate-200"><h2 class="font-bold text-slate-900">Histórico de execuções</h2><span class="text-xs text-slate-500">40 registros mais recentes</span></div>
+<!-- Números -->
+<section class="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Últimos 14 dias">
+    <div class="pf-card pf-card-body"><span class="pf-eyebrow">Concluídos (14 dias)</span><div class="pf-kpi mt-1.5">{{ dashboard.success_14d }}</div><p class="text-xs text-slate-500">inclui os só no servidor</p></div>
+    <div class="pf-card pf-card-body"><span class="pf-eyebrow">Falhas (14 dias)</span><div class="pf-kpi mt-1.5 {% if dashboard.failed_14d %}text-rose-600{% endif %}">{{ dashboard.failed_14d }}</div><p class="text-xs text-slate-500">{{ dashboard.last_24h }} execução(ões) em 24 h</p></div>
+    <div class="pf-card pf-card-body"><span class="pf-eyebrow">Taxa de sucesso</span><div class="pf-kpi mt-1.5">{% if dashboard.success_rate is not None %}{{ dashboard.success_rate }}%{% else %}—{% endif %}</div><p class="text-xs text-slate-500">das execuções finalizadas</p></div>
+    <div class="pf-card pf-card-body"><span class="pf-eyebrow">No backup</span><div class="pf-kpi mt-1.5">{{ dashboard.companies }}</div><p class="text-xs text-slate-500">empresas · {{ dashboard.users }} usuários</p></div>
+</section>
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+    <!-- Gráfico -->
+    <section class="pf-card lg:col-span-2 self-start">
+        <div class="pf-card-header">
+            <h2 class="pf-card-title">Execuções por dia</h2>
+            <div class="flex items-center gap-3 text-xs text-slate-500">
+                <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-emerald-500"></span>Concluído</span>
+                <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-rose-500"></span>Falhou</span>
+            </div>
+        </div>
+        <div class="pf-card-body">
+            <div class="flex h-36 items-end gap-1.5 border-b border-slate-200">
+                {% for day in dashboard.daily_activity %}
+                <div class="flex h-full flex-1 flex-col items-center justify-end" title="{{ day.date|date:'d/m' }}: {{ day.success }} concluído(s), {{ day.failed }} falha(s)">
+                    {% if day.failed %}<div class="w-full max-w-[28px] rounded-t-sm bg-rose-500" style="height: {{ day.failed_height }}%"></div>{% endif %}
+                    {% if day.success %}<div class="w-full max-w-[28px] {% if not day.failed %}rounded-t-sm{% endif %} bg-emerald-500" style="height: {{ day.success_height }}%"></div>{% endif %}
+                    {% if not day.success and not day.failed %}<div class="h-px w-full max-w-[28px] bg-slate-200"></div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mt-2 flex justify-between text-xs text-slate-400"><span>{{ dashboard.daily_activity.0.date|date:"d/m" }}</span><span>Hoje</span></div>
+        </div>
+    </section>
+
+    <!-- Configuração -->
+    <section class="pf-card">
+        <div class="pf-card-header"><h2 class="pf-card-title">Configuração</h2></div>
+        <dl class="divide-y divide-slate-100 text-sm">
+            <div class="px-5 py-3">
+                <dt class="flex items-center justify-between"><span class="text-slate-600">Cópia externa</span>{% if health.external_enabled %}<span class="pf-badge-green">Ligada</span>{% else %}<span class="pf-badge-red">Desligada</span>{% endif %}</dt>
+                <dd class="mt-1 break-words text-xs text-slate-500">{% if health.external_enabled %}{{ cfg.bucket }}{% if cfg.prefix %}/{{ cfg.prefix }}{% endif %} · {{ cfg.endpoint }}{% if cfg.remote_days %} · guarda {{ cfg.remote_days }} dias{% endif %}{% else %}Preencha BACKUP_S3_* no Coolify para o backup sobreviver à perda do servidor.{% endif %}</dd>
+            </div>
+            <div class="px-5 py-3">
+                <dt class="flex items-center justify-between"><span class="text-slate-600">Criptografia</span>{% if health.encryption_enabled %}<span class="pf-badge-green">GPG AES-256</span>{% else %}<span class="pf-badge-red">Sem senha</span>{% endif %}</dt>
+                <dd class="mt-1 text-xs text-slate-500">A senha precisa estar guardada fora do servidor.</dd>
+            </div>
+            <div class="px-5 py-3">
+                <dt class="flex items-center justify-between"><span class="text-slate-600">Disco do servidor</span>{% if disk and disk.free_pct < 15 %}<span class="pf-badge-red">{{ disk.free_pct }}% livre</span>{% elif disk %}<span class="pf-badge-gray">{{ disk.free_pct }}% livre</span>{% endif %}</dt>
+                <dd class="mt-1 text-xs text-slate-500">{% if disk %}{{ disk.files }} arquivo(s), {{ disk.used|filesizeformat }} · livre {{ disk.free|filesizeformat }}{% else %}Pasta de backup ainda não criada.{% endif %} · guarda {{ cfg.local_days }} dias</dd>
+            </div>
+            <div class="px-5 py-3">
+                <dt class="text-slate-600">Fotos e XMLs</dt>
+                <dd class="mt-1 text-xs text-slate-500">{% if cfg.include_media %}Incluídos no backup.{% else %}Fora do backup.{% endif %}</dd>
+            </div>
+            <div class="px-5 py-3">
+                <dt class="text-slate-600">Alerta de falha</dt>
+                <dd class="mt-1 break-all text-xs text-slate-500">{{ cfg.alert_email|default:"Nenhum e-mail configurado." }}</dd>
+            </div>
+        </dl>
+    </section>
+</div>
+
+<!-- Histórico -->
+<section class="pf-card overflow-hidden">
+    <div class="pf-card-header"><h2 class="pf-card-title">Histórico</h2><span class="text-xs text-slate-500">últimas 40 execuções</span></div>
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-slate-500 uppercase text-xs"><tr><th class="text-left p-4">Data</th><th class="text-left p-4">Origem</th><th class="text-left p-4">Situação</th><th class="text-right p-4">Banco</th><th class="text-right p-4">Mídia</th><th class="text-left p-4">Detalhes</th></tr></thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for run in runs %}
-          <tr><td class="p-4 whitespace-nowrap">{{ run.started_at|date:"d/m/Y H:i" }}</td><td class="p-4">{% if run.is_verify %}Verificação{% elif run.trigger == 'beat' %}Automático{% else %}Manual{% endif %}</td><td class="p-4"><span class="font-semibold {% if run.status == 'SUCCESS' %}text-emerald-700{% elif run.status == 'LOCAL_ONLY' %}text-amber-700{% elif run.status == 'FAILED' %}text-rose-700{% else %}text-indigo-700{% endif %}">{% if run.is_stale %}Interrompido{% else %}{{ run.get_status_display }}{% endif %}</span></td><td class="p-4 text-right">{% if run.db_size_bytes %}{{ run.db_size_bytes|filesizeformat }}{% else %}—{% endif %}</td><td class="p-4 text-right">{% if run.media_size_bytes %}{{ run.media_size_bytes|filesizeformat }}{% else %}—{% endif %}</td><td class="p-4 text-xs text-slate-500 max-w-md break-words">{{ run.message|truncatechars:250 }}{% if run.remote_keys %}<div class="mt-1 text-slate-400 break-all">{{ run.remote_keys|join:', ' }}</div>{% endif %}</td></tr>
-          {% empty %}<tr><td colspan="6" class="p-10 text-center text-slate-500">Nenhum backup registrado. Confira se o worker e o Celery Beat estão ativos.</td></tr>{% endfor %}
-        </tbody>
-      </table>
+        <table class="pf-table">
+            <thead><tr><th>Início</th><th>Tipo</th><th>Situação</th><th class="text-right">Banco</th><th class="text-right">Arquivos</th><th>Detalhes</th></tr></thead>
+            <tbody>
+                {% for run in runs %}
+                <tr class="align-top">
+                    <td class="whitespace-nowrap tabular-nums text-slate-900">{{ run.started_at|date:"d/m/Y H:i" }}</td>
+                    <td class="whitespace-nowrap text-slate-600">{% if run.is_verify %}Conferência{% elif run.trigger == 'beat' %}Automático{% elif run.trigger == 'painel' %}Pelo painel{% else %}Manual{% endif %}</td>
+                    <td class="whitespace-nowrap">
+                        {% if run.is_stale %}<span class="pf-badge-gray">Interrompido</span>
+                        {% elif run.status == 'SUCCESS' %}<span class="pf-badge-green">{% if run.is_verify %}Íntegro{% else %}Concluído{% endif %}</span>
+                        {% elif run.status == 'LOCAL_ONLY' %}<span class="pf-badge-amber">Só no servidor</span>
+                        {% elif run.status == 'RUNNING' %}<span class="pf-badge-indigo">Em andamento</span>
+                        {% else %}<span class="pf-badge-red">Falhou</span>{% endif %}
+                        {% if run.encrypted %}<i data-lucide="lock" class="ml-1 inline h-3.5 w-3.5 text-slate-400" aria-label="Criptografado"></i>{% endif %}
+                    </td>
+                    <td class="whitespace-nowrap text-right tabular-nums text-slate-600">{% if run.db_size_bytes %}{{ run.db_size_bytes|filesizeformat }}{% else %}—{% endif %}</td>
+                    <td class="whitespace-nowrap text-right tabular-nums text-slate-600">{% if run.media_size_bytes %}{{ run.media_size_bytes|filesizeformat }}{% else %}—{% endif %}</td>
+                    <td class="max-w-md text-xs text-slate-500">
+                        {% if run.message %}<div class="whitespace-pre-line break-words">{{ run.message|truncatechars:300 }}</div>{% endif %}
+                        {% if run.remote_keys %}<div class="mt-1 break-all text-slate-400">{{ run.remote_keys|join:", " }}</div>{% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="py-14 text-center text-sm text-slate-500">Nenhum backup registrado. Confira se o worker e o Celery Beat estão rodando.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-  </section>
-  <p class="text-xs text-slate-500">Não há download de dumps pelo navegador, pois contêm dados de todas as empresas. Para restauração, consulte docs/BACKUP.md. O painel monitora a programação automática, mas não comprova a execução enquanto não houver registros.</p>
+</section>
+
+<div class="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+    <i data-lucide="info" class="mt-0.5 h-4 w-4 shrink-0 text-slate-400"></i>
+    <p><strong class="font-medium text-slate-800">Escopo global:</strong> cada backup tem o banco de todas as empresas, por isso não há download pelo navegador. Para restaurar, siga <code class="rounded bg-slate-100 px-1">docs/BACKUP.md</code>.</p>
 </div>
 {% endblock %}
