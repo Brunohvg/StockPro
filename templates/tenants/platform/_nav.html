@@ -1,7 +1,0 @@
-{# Abas da Central da plataforma. Uso: {% include 'tenants/platform/_nav.html' with tab='home' %} #}
-<nav class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-    <a href="{% url 'tenants:admin_panel' %}" class="px-4 py-2 rounded-xl text-sm font-semibold {% if tab == 'home' %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Visão geral e empresas</a>
-    <a href="{% url 'tenants:platform_plans' %}" class="px-4 py-2 rounded-xl text-sm font-semibold {% if tab == 'plans' %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Planos</a>
-    <a href="{% url 'tenants:admin_backups' %}" class="px-4 py-2 rounded-xl text-sm font-semibold {% if tab == 'backups' %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Backups</a>
-    <a href="{% url 'admin:index' %}" class="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100">Admin do Django</a>
-</nav>
