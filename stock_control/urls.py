@@ -31,6 +31,7 @@ urlpatterns = [
     path('inventory/', include('apps.inventory.urls')),
     path('partners/', include('apps.partners.urls')),
     path('settings/', include('apps.core.urls')),
+    path('etiquetas/', include('apps.labels.urls')),
 
     # Connect Protocol (Plan B - API)
     path('api/v1/', include('stock_control.api_urls')),
