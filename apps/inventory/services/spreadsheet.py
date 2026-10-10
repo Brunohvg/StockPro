@@ -42,7 +42,14 @@ def _read_csv_bytes(raw):
         delimiter = csv.Sniffer().sniff(sample, delimiters=',;\t|').delimiter
     except csv.Error:
         delimiter = ';' if sample.count(';') > sample.count(',') else ','
-    return pd.read_csv(io.StringIO(text), sep=delimiter, dtype=str, keep_default_na=False)
+    df = pd.read_csv(io.StringIO(text), sep=delimiter, dtype=str, keep_default_na=False)
+    # Undo the apostrophe escape used by StockPro CSV exports. Preserve the
+    # literal text in the database; only exported CSV cells receive the prefix.
+    for col in df.columns:
+        df[col] = df[col].map(lambda v: v[1:] if isinstance(v, str) and v.startswith("'")
+                             and (v[1:].lstrip().startswith(('=', '+', '-', '@'))
+                                  or v[1:].startswith(('\t', '\r', '\n'))) else v)
+    return df
 
 
 def _cell_to_text(value):

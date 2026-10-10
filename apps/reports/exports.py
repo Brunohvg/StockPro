@@ -117,6 +117,18 @@ class ProductExporter:
 
     NUMERIC = ('custo', 'preco_venda', 'estoque', 'estoque_minimo')
 
+    @staticmethod
+    def _safe_spreadsheet_text(value):
+        """Never allow catalog data to be evaluated as a spreadsheet formula.
+
+        Prefix dangerous text with an apostrophe for CSV; it must be removed
+        deliberately by importers that support this safety convention.
+        """
+        text = str(value or '')
+        if text.lstrip().startswith(('=', '+', '-', '@')) or text.startswith(('\t', '\r', '\n')):
+            return "'" + text
+        return text
+
     def export_csv(self, include_variants=True, include_inactive=False):
         """CSV com ';' e vírgula decimal (abre direto no Excel em português)."""
         columns = self.columns()
@@ -126,7 +138,7 @@ class ProductExporter:
         writer.writerow(columns)
         for row in self.rows(include_variants, include_inactive):
             writer.writerow([
-                self._number_text(row[c]) if c in self.NUMERIC else row[c]
+                self._number_text(row[c]) if c in self.NUMERIC else self._safe_spreadsheet_text(row[c])
                 for c in columns
             ])
         return output.getvalue()
@@ -162,6 +174,9 @@ class ProductExporter:
                 if name in self.NUMERIC:
                     value = float(value)
                 cell = ws.cell(row=r, column=c, value=value)
+                if name not in self.NUMERIC and isinstance(value, str):
+                    # openpyxl otherwise turns leading '=' into a formula cell.
+                    cell.data_type = 's'
                 if formats[name]:
                     cell.number_format = formats[name]
 

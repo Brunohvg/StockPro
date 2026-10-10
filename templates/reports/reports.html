@@ -24,7 +24,7 @@
     <!-- Indicadores -->
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <div class="pf-card p-4">
-            <p class="pf-eyebrow">Vendas</p>
+            <p class="pf-eyebrow">Valor estimado das saídas</p>
             <p class="pf-kpi mt-1">{{ sales.revenue|brl:0 }}</p>
             <p class="mt-1 text-xs text-slate-500">{{ sales.units|qtd }} un</p>
             <div class="mt-1">{% change_badge changes.revenue %}</div>
@@ -36,7 +36,7 @@
             <div class="mt-1">{% change_badge changes.cogs 'neutral' %}</div>
         </div>
         <div class="pf-card p-4">
-            <p class="pf-eyebrow">Margem bruta</p>
+            <p class="pf-eyebrow">Margem bruta estimada</p>
             <p class="pf-kpi mt-1">{{ sales.margin|brl:0 }}</p>
             <p class="mt-1 text-xs text-slate-500">{% if sales.margin_pct is not None %}{{ sales.margin_pct|pct }} das vendas{% else %}sem vendas com preço{% endif %}</p>
             <div class="mt-1">{% change_badge changes.margin %}</div>
@@ -53,9 +53,13 @@
             {% if stock.value %}<p class="text-xs text-slate-400">de {{ stock.value|brl:0 }} em estoque</p>{% endif %}
         </div>
     </div>
-    {% if sales.unpriced_units %}
-    <p class="-mt-3 text-xs text-slate-500">{{ sales.unpriced_units|qtd }} unidade(s) vendida(s) sem preço de venda cadastrado ficaram fora do faturamento e da margem. O faturamento usa o preço de venda atual.</p>
-    {% endif %}
+    <p class="-mt-3 text-xs text-slate-600" role="note">
+      Valores estimados: todas as saídas de estoque (exceto arquivamento e estorno de NF-e)
+      são contabilizadas; podem incluir perdas, consumo interno e ajustes. O valor em reais usa
+      o preço cadastrado atualmente, não o preço efetivo de cada venda. Não representa faturamento
+      contábil nem lucro realizado.
+      {% if sales.unpriced_units %}{{ sales.unpriced_units|qtd }} unidade(s) sem preço ficaram fora do valor e da margem estimados.{% endif %}
+    </p>
 
     <!-- Leitura do período -->
     <section class="pf-card">
@@ -126,7 +130,7 @@
     <section class="pf-card">
         <div class="pf-card-header">
             <div>
-                <h2 class="pf-card-title">Curva ABC pelo faturamento</h2>
+                <h2 class="pf-card-title">Curva ABC pelo valor estimado</h2>
                 <p class="mt-0.5 text-xs text-slate-500">A = itens que fazem 80% das vendas em R$; B = os próximos 15%; C = os últimos 5%.</p>
             </div>
         </div>
@@ -142,7 +146,7 @@
         </div>
         <div class="overflow-x-auto">
             <table class="pf-table">
-                <thead><tr><th>Itens da classe A</th><th class="!text-right">Vendido</th><th class="!text-right">Faturamento</th></tr></thead>
+                <thead><tr><th>Itens da classe A</th><th class="!text-right">Vendido</th><th class="!text-right">Valor estimado</th></tr></thead>
                 <tbody>
                     {% for r in abc.A.items|slice:":10" %}
                     <tr>

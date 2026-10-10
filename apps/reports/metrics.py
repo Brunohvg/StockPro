@@ -7,7 +7,8 @@ para que a mesma pergunta tenha sempre a mesma resposta. Regras:
 - Saldo e custo vêm só das variações (o ledger). Os campos antigos do produto
   (Product.current_stock / avg_unit_cost) não entram em conta nenhuma.
 - Produto arquivado não conta no estoque.
-- Venda = saída (OUT) que não seja arquivamento nem estorno de NF-e.
+- Saída usada como proxy de venda = OUT exceto arquivamento e estorno de NF-e.
+  Não equivale a uma venda confirmada.
 - Valor em estoque = saldo × custo médio. "Na prateleira" = saldo × preço de venda.
 - Faturamento do período = unidades vendidas × preço de venda atual (o sistema
   não guarda o preço de cada venda). CMV = custo gravado na saída ou, sem ele,
