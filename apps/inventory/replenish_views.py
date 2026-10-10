@@ -1,11 +1,11 @@
 """Tela Repor: o que comprar, de quem e quanto (patch 9)."""
 import csv
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.text import slugify
@@ -69,6 +69,12 @@ def _brl(value):
     return f"R$ {int(inteiro):,}".replace(',', '.') + f',{cent}'
 
 
+def _csv_safe(value):
+    """Neutralize spreadsheet formulas in downloaded supplier orders."""
+    value = str(value if value is not None else '')
+    return "'" + value if value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')) else value
+
+
 def _qty(value):
     value = Decimal(value)
     return f'{value.normalize():f}' if value == value.to_integral() else f'{value:.2f}'.replace('.', ',')
@@ -93,10 +99,13 @@ def purchase_order(request):
         if key.startswith('qty_') and key[4:].isdigit():
             try:
                 qty = Decimal(value.replace(',', '.'))
-            except Exception:
-                continue
-            if qty > 0:
-                wanted[int(key[4:])] = qty
+            except (InvalidOperation, ValueError):
+                return HttpResponseBadRequest('Quantidade inválida.')
+            if not qty.is_finite() or qty <= 0 or qty > 100000 or qty.as_tuple().exponent < -3:
+                return HttpResponseBadRequest('Quantidade fora do intervalo permitido.')
+            wanted[int(key[4:])] = qty
+            if len(wanted) > 200:
+                return HttpResponseBadRequest('Máximo de 200 produtos por pedido.')
     variants = {v.pk: v for v in ProductVariant.objects.filter(tenant=tenant, pk__in=wanted.keys())
                 .select_related('product').prefetch_related('attribute_values')}
 
@@ -108,6 +117,8 @@ def purchase_order(request):
         if not v:
             continue
         info = lines_info.get(pk)
+        if supplier and (not info or not info.supplier or info.supplier.pk != supplier.pk):
+            return HttpResponseBadRequest('Produto não pertence ao fornecedor escolhido.')
         same_supplier = info and supplier and info.supplier and info.supplier.pk == supplier.pk
         cost = (info.unit_cost if info else None) or v.avg_unit_cost or Decimal('0')
         rows.append({
@@ -131,8 +142,8 @@ def purchase_order(request):
         w.writerow(['Código do fornecedor', 'SKU', 'EAN', 'Produto', 'Quantidade', 'Unidade', 'Custo unitário', 'Total'])
         for r in rows:
             v = r['variant']
-            w.writerow([r['supplier_sku'], v.sku, v.barcode or '', v.display_name, _qty(r['qty']), r['uom'],
-                        f"{r['unit_cost']:.2f}".replace('.', ','), f"{r['total']:.2f}".replace('.', ',')])
+            w.writerow([_csv_safe(x) for x in [r['supplier_sku'], v.sku, v.barcode or '', v.display_name, _qty(r['qty']), r['uom'],
+                        f"{r['unit_cost']:.2f}".replace('.', ','), f"{r['total']:.2f}".replace('.', ',')]])
         return response
 
     greet = (supplier.contact_name.split()[0] if supplier and supplier.contact_name else '')
