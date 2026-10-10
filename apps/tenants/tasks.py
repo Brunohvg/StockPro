@@ -54,6 +54,24 @@ def send_expiry_alerts():
 
 
 @shared_task
+def send_low_stock_alerts():
+    """Alerta diário de estoque mínimo (só quando há produto novo no mínimo)."""
+    from apps.inventory.services.stock_alerts import send_low_stock_alerts as _send
+    sent = _send()
+    logger.info(f"CELERY BEAT: alertas de estoque mínimo enviados para {sent} empresa(s).")
+    return f"Low stock alerts sent: {sent}"
+
+
+@shared_task
+def send_weekly_summaries():
+    """Resumo semanal para o dono (segunda de manhã)."""
+    from apps.inventory.services.stock_alerts import send_weekly_summaries as _send
+    sent = _send()
+    logger.info(f"CELERY BEAT: resumos semanais enviados para {sent} empresa(s).")
+    return f"Weekly summaries sent: {sent}"
+
+
+@shared_task
 def platform_heartbeat():
     """Sinal de vida do worker + agendador, mostrado na Central da plataforma."""
     from django.core.cache import cache

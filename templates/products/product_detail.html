@@ -74,6 +74,9 @@
         </div>
 
         <div class="flex items-center gap-3">
+            <a href="{% url 'labels:index' %}?product={{ product.pk }}" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm">
+                <i data-lucide="tags" class="w-4 h-4"></i> Etiquetas
+            </a>
             <a href="{% url 'products:product_edit' product.pk %}" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm">
                 <i data-lucide="edit-3" class="w-4 h-4"></i> Editar
             </a>
@@ -158,6 +161,9 @@
                         </td>
                         <td class="px-6 py-4 text-right">
                             <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="{% url 'labels:index' %}?variant={{ variant.pk }}" title="Imprimir etiqueta" aria-label="Imprimir etiqueta de {{ variant.display_name }}" class="w-8 h-8 bg-white border border-slate-200 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 flex items-center justify-center transition-all">
+                                    <i data-lucide="tag" class="w-3.5 h-3.5 text-slate-500"></i>
+                                </a>
                                 <a href="{% url 'products:variant_edit' variant.pk %}" class="w-8 h-8 bg-white border border-slate-200 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 flex items-center justify-center transition-all">
                                     <i data-lucide="pencil" class="w-3.5 h-3.5 text-slate-500"></i>
                                 </a>

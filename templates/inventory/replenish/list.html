@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% load static humanize l10n %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl space-y-6 py-2">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <p class="pf-eyebrow">Estoque</p>
+            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Repor estoque</h1>
+            <p class="pf-muted mt-1">O que comprar, de quem e quanto, pelo que saiu nos últimos {{ window }} dias.</p>
+        </div>
+        <a href="{% url 'labels:index' %}" class="pf-btn-secondary"><i data-lucide="tags" class="h-4 w-4"></i>Etiquetas</a>
+    </div>
+
+    <section class="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Resumo">
+        <div class="pf-card pf-card-body">
+            <span class="pf-eyebrow">Zerados</span>
+            <div class="pf-kpi mt-2 {% if kpi.zero %}text-rose-600{% endif %}">{{ kpi.zero }}</div>
+            <p class="mt-1 text-xs text-slate-500">Sem saldo e com venda ou mínimo</p>
+        </div>
+        <div class="pf-card pf-card-body">
+            <span class="pf-eyebrow">Abaixo do mínimo</span>
+            <div class="pf-kpi mt-2 {% if kpi.below %}text-amber-600{% endif %}">{{ kpi.below }}</div>
+            <p class="mt-1 text-xs text-slate-500">Saldo igual ou menor que o mínimo</p>
+        </div>
+        <div class="pf-card pf-card-body">
+            <span class="pf-eyebrow">Acabam antes da entrega</span>
+            <div class="pf-kpi mt-2">{{ kpi.soon }}</div>
+            <p class="mt-1 text-xs text-slate-500">Duram menos que o prazo de entrega do fornecedor</p>
+        </div>
+        <div class="pf-card pf-card-body">
+            <span class="pf-eyebrow">Compra sugerida</span>
+            <div class="pf-kpi mt-2">R$ {{ kpi.total|floatformat:2|intcomma }}</div>
+            <p class="mt-1 text-xs text-slate-500">Pelo último custo de cada item</p>
+        </div>
+    </section>
+
+    <form method="get" class="pf-card pf-card-body grid grid-cols-2 gap-3 md:grid-cols-6" data-autosubmit-form>
+        <div class="col-span-2">
+            <label for="rp-q" class="pf-label">Buscar</label>
+            <input id="rp-q" name="q" value="{{ q }}" type="search" class="pf-input" placeholder="Nome, SKU ou código">
+        </div>
+        <div>
+            <label for="rp-janela" class="pf-label">Venda dos últimos</label>
+            <select id="rp-janela" name="janela" class="pf-input" data-autosubmit>
+                {% for w in windows %}<option value="{{ w }}" {% if w == window %}selected{% endif %}>{{ w }} dias</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="rp-cobertura" class="pf-label">Comprar para</label>
+            <select id="rp-cobertura" name="cobertura" class="pf-input" data-autosubmit>
+                {% for c in coverages %}<option value="{{ c }}" {% if c == coverage %}selected{% endif %}>{{ c }} dias</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="rp-fornecedor" class="pf-label">Fornecedor</label>
+            <select id="rp-fornecedor" name="fornecedor" class="pf-input" data-autosubmit>
+                <option value="">Todos</option>
+                {% for s in suppliers %}<option value="{{ s.pk }}" {% if s.pk == supplier_id %}selected{% endif %}>{{ s.trade_name|default:s.company_name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="rp-mostrar" class="pf-label">Mostrar</label>
+            <select id="rp-mostrar" name="mostrar" class="pf-input" data-autosubmit>
+                <option value="">Só o que precisa</option>
+                <option value="todos" {% if only == 'all' %}selected{% endif %}>Tudo com venda ou mínimo</option>
+            </select>
+        </div>
+        <p class="col-span-2 text-xs text-slate-500 md:col-span-6">
+            Sugestão = venda por dia × (prazo de entrega do fornecedor + {{ coverage }} dias), nunca abaixo do estoque mínimo, menos o saldo atual.
+            Arredonda para caixa fechada quando a NF-e ensinou o fator. Prazo sem cadastro conta 7 dias.
+        </p>
+    </form>
+
+    {% for g in groups %}
+    <form method="get" action="{% url 'inventory:purchase_order' %}" class="pf-card" data-order-form>
+        <input type="hidden" name="fornecedor" value="{{ g.key }}">
+        <div class="pf-card-header flex-wrap">
+            <div class="min-w-0">
+                <h2 class="pf-card-title flex items-center gap-2">
+                    <i data-lucide="truck" class="h-4 w-4 text-slate-400"></i>
+                    {% if g.supplier %}{{ g.supplier.trade_name|default:g.supplier.company_name }}{% else %}Sem fornecedor definido{% endif %}
+                </h2>
+                <p class="mt-0.5 text-xs text-slate-500">
+                    {% if g.supplier %}Entrega em {{ g.supplier.lead_time_days|default:7 }} dias{% if g.supplier.minimum_order %} · pedido mínimo R$ {{ g.supplier.minimum_order|floatformat:2|intcomma }}{% endif %}{% if g.supplier.phone %} · {{ g.supplier.phone }}{% endif %}
+                    {% else %}Defina o fornecedor padrão no produto para agrupar aqui.{% endif %}
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                {% if g.below_minimum_order %}<span class="pf-badge-amber">Abaixo do pedido mínimo</span>{% endif %}
+                <span class="text-sm text-slate-500">Total <strong class="tabular-nums text-slate-900" data-group-total>R$ {{ g.total|floatformat:2|intcomma }}</strong></span>
+                <button type="submit" class="pf-btn-primary"><i data-lucide="clipboard-list" class="h-4 w-4"></i>Montar pedido</button>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="pf-table">
+                <thead><tr>
+                    <th>Produto</th>
+                    <th>Situação</th>
+                    <th class="!text-right">Saldo / mín.</th>
+                    <th class="hidden md:table-cell !text-right">Venda/dia</th>
+                    <th class="hidden md:table-cell !text-right">Dura</th>
+                    <th class="!text-right">Comprar</th>
+                    <th class="hidden lg:table-cell !text-right">Custo un.</th>
+                    <th class="hidden lg:table-cell !text-right">Total</th>
+                </tr></thead>
+                <tbody>
+                {% for ln in g.lines %}
+                <tr>
+                    <td class="min-w-[14rem]">
+                        <a href="{% url 'products:product_detail' ln.variant.product_id %}" class="font-medium text-slate-900 hover:text-indigo-600">{{ ln.variant.display_name }}</a>
+                        <div class="text-xs text-slate-500">{{ ln.variant.sku }}{% if ln.supplier_sku %} · cód. fornecedor {{ ln.supplier_sku }}{% endif %}{% if ln.pack > 1 %} · caixa com {{ ln.pack|floatformat:"-2" }}{% endif %}</div>
+                    </td>
+                    <td>{% include 'inventory/replenish/_status.html' %}</td>
+                    <td class="whitespace-nowrap text-right tabular-nums"><span class="font-medium text-slate-900">{{ ln.stock|floatformat:"-2" }}</span> <span class="text-slate-400">/ {{ ln.minimum|floatformat:"-2" }}</span></td>
+                    <td class="hidden md:table-cell text-right tabular-nums text-slate-700">{{ ln.per_day|floatformat:"-2" }}</td>
+                    <td class="hidden md:table-cell whitespace-nowrap text-right tabular-nums {% if ln.days_left is not None and ln.days_left <= ln.lead_days %}text-rose-600 font-medium{% else %}text-slate-700{% endif %}">{% if ln.days_left is None %}<span class="text-slate-400">sem venda</span>{% else %}{{ ln.days_left }} dia{{ ln.days_left|pluralize }}{% endif %}</td>
+                    <td class="text-right">
+                        <input type="number" min="0" step="{% if ln.pack > 1 %}{{ ln.pack|floatformat:0 }}{% else %}1{% endif %}" name="qty_{{ ln.variant.pk }}" value="{{ ln.suggested|unlocalize }}" data-cost="{{ ln.unit_cost|default:0|stringformat:'s' }}" class="pf-input w-20 py-1.5 text-right tabular-nums" aria-label="Quantidade a comprar de {{ ln.variant.display_name }}">
+                    </td>
+                    <td class="hidden lg:table-cell whitespace-nowrap text-right tabular-nums text-slate-700">{% if ln.unit_cost %}R$ {{ ln.unit_cost|floatformat:2|intcomma }}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+                    <td class="hidden lg:table-cell whitespace-nowrap text-right tabular-nums font-medium text-slate-900" data-line-total>R$ {{ ln.total_cost|floatformat:2|intcomma }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+    {% empty %}
+    <div class="pf-card px-6 py-14 text-center">
+        <i data-lucide="check-circle-2" class="mx-auto h-10 w-10 text-emerald-500"></i>
+        <p class="mt-3 text-base font-semibold text-slate-900">Nada para repor agora</p>
+        <p class="pf-muted mx-auto mt-1 max-w-md">Nenhum produto abaixo do mínimo ou acabando antes da próxima entrega. Para o alerta funcionar, defina o <strong>estoque mínimo</strong> nas variações e o <strong>prazo de entrega</strong> nos fornecedores.</p>
+    </div>
+    {% endfor %}
+
+    {% if only == 'all' %}
+    {% with ok_lines=lines %}
+    <section class="pf-card">
+        <div class="pf-card-header"><h2 class="pf-card-title">Em dia</h2><span class="text-xs text-slate-500">Vendem, mas o saldo cobre o período</span></div>
+        <div class="overflow-x-auto">
+            <table class="pf-table">
+                <thead><tr><th>Produto</th><th class="!text-right">Saldo / mín.</th><th class="!text-right">Venda/dia</th><th class="!text-right">Dura</th></tr></thead>
+                <tbody>
+                {% for ln in ok_lines %}{% if ln.suggested == 0 %}
+                <tr>
+                    <td><span class="font-medium text-slate-900">{{ ln.variant.display_name }}</span> <span class="text-xs text-slate-500">{{ ln.variant.sku }}</span></td>
+                    <td class="text-right tabular-nums">{{ ln.stock|floatformat:"-2" }} <span class="text-slate-400">/ {{ ln.minimum|floatformat:"-2" }}</span></td>
+                    <td class="text-right tabular-nums">{{ ln.per_day|floatformat:"-2" }}</td>
+                    <td class="text-right tabular-nums">{% if ln.days_left is None %}—{% else %}{{ ln.days_left }} dias{% endif %}</td>
+                </tr>
+                {% endif %}{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endwith %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/replenish.js' %}"></script>{% endblock %}

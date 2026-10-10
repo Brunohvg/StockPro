@@ -1,0 +1,7 @@
+StockPro · {{ company }}
+
+{{ new_count }} produto(s) chegaram ao estoque mínimo. No total, {{ total }} estão no mínimo ou abaixo ({{ zero }} zerados).
+
+{% for v in new %}- {{ v.display_name }} ({{ v.sku }}): saldo {{ v.current_stock|floatformat:"-2" }}, mínimo {{ v.minimum_stock|floatformat:"-2" }}
+{% endfor %}
+{% if link %}Ver o que comprar: {{ link }}{% endif %}

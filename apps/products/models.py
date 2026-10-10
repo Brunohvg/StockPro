@@ -359,7 +359,14 @@ class ProductVariant(TenantMixin):
         if attrs:
             attr_str = " / ".join([f"{a.value}" for a in attrs])
             return f"{self.product.name} - {attr_str}"
-        return self.name or self.sku
+        # Produto simples nasce com a variação "Padrão": mostra o nome do produto.
+        name = (self.name or '').strip()
+        product_name = self.product.name if self.product_id else ''
+        if not name or name == 'Padrão' or name.lower() == product_name.lower():
+            return product_name or self.sku
+        if product_name and product_name.lower() not in name.lower():
+            return f"{product_name} - {name}"
+        return name
 
     @property
     def can_be_safely_deleted(self):

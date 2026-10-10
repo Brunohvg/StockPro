@@ -12,7 +12,16 @@ def global_settings(request):
         'tenant': getattr(request, 'tenant', None),
         'ai_active': bool(getattr(settings, 'XAI_API_KEY', None)),
         'tenant_has_ai': _tenant_has_ai(getattr(request, 'tenant', None)),
+        # Função: o template só conta (1 consulta) quando mostra o item "Repor estoque" do menu
+        'low_stock_count': lambda: _low_stock_count(getattr(request, 'tenant', None)),
     }
+
+
+def _low_stock_count(tenant):
+    if not tenant:
+        return 0
+    from apps.inventory.services.replenishment import low_stock_qs
+    return low_stock_qs(tenant).count()
 
 
 def _tenant_has_ai(tenant):

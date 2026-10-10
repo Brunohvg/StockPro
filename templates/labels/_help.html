@@ -1,0 +1,29 @@
+<details class="pf-card group">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+        <span class="flex items-center gap-2 text-sm font-semibold text-slate-900"><i data-lucide="plug" class="h-4 w-4 text-slate-400"></i>Como ligar a Zebra</span>
+        <i data-lucide="chevron-down" class="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180"></i>
+    </summary>
+    <div class="space-y-4 border-t border-slate-100 px-5 py-4 text-sm text-slate-600">
+        <div>
+            <p class="font-medium text-slate-900">Impressão direta (recomendado)</p>
+            <ol class="mt-1.5 list-decimal space-y-1 pl-5">
+                <li>No computador onde a Zebra está ligada, instale o <strong>Zebra Browser Print</strong> (gratuito, no site da Zebra, em "Browser Print").</li>
+                <li>Abra o programa e escolha a Zebra como impressora padrão.</li>
+                <li>Na primeira impressão o navegador e o Browser Print pedem permissão para este site. Clique em <strong>Permitir</strong> nos dois.</li>
+            </ol>
+            <p class="pf-help">O ZPL vai direto para a impressora, sem diálogo e na resolução certa. É o jeito mais rápido e nítido.</p>
+        </div>
+        <div>
+            <p class="font-medium text-slate-900">Pelo navegador</p>
+            <p class="mt-1">Funciona com o driver da Zebra (ZDesigner) já instalado no Windows. No diálogo de impressão escolha a Zebra, papel do mesmo tamanho da etiqueta, <strong>margens: nenhuma</strong> e <strong>escala 100%</strong>.</p>
+        </div>
+        <div>
+            <p class="font-medium text-slate-900">Arquivo .zpl</p>
+            <p class="mt-1">Para mandar pelo Zebra Setup Utilities ("Enviar arquivo") ou pela impressora compartilhada no Windows: <code class="rounded bg-slate-100 px-1 text-xs">copy /b etiquetas.zpl \\COMPUTADOR\Zebra</code>.</p>
+        </div>
+        <div>
+            <p class="font-medium text-slate-900">Saiu torto ou pulando etiqueta?</p>
+            <p class="mt-1">Em <em>Modelo de etiqueta</em>, use <strong>Calibrar sensor</strong> e imprima a <strong>etiqueta de teste</strong>. A moldura deve ficar 1 mm para dentro em todos os lados; se não ficar, ajuste o deslocamento horizontal e vertical.</p>
+        </div>
+    </div>
+</details>

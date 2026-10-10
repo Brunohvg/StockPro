@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 /* ─── Central da plataforma (/admin-panel/) ─────────────────────────────────
-   Componentes com prefixo pf-. Usados só nos templates de tenants/platform/
-   e em tenants/admin_backups.html. Classes por extenso, sem montar por partes. */
+   Componentes com prefixo pf-. Usados nos templates de tenants/platform/,
+   tenants/admin_backups.html e nas telas novas do patch 9 (labels/, inventory/replenish/). Classes por extenso, sem montar por partes. */
 @layer components {
   .pf-card { @apply bg-white border border-slate-200 rounded-lg shadow-sm; }
   .pf-card-header { @apply flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100; }

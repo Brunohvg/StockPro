@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Etiquetas ({{ count }})</title>
+<link rel="icon" href="data:,">
+<style>
+  @page { size: {{ page_width_mm|stringformat:".2f" }}mm {{ cfg.height_mm }}mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #e2e8f0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; background: #0f172a; color: #e2e8f0; font-size: 14px; }
+  .bar strong { color: #fff; }
+  .bar button { margin-left: auto; padding: 8px 14px; border: 0; border-radius: 6px; background: #4f46e5; color: #fff; font-weight: 600; cursor: pointer; }
+  .tips { padding: 10px 16px; background: #fff7ed; color: #7c2d12; font-size: 13px; border-bottom: 1px solid #fed7aa; }
+  .sheet { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; }
+  .page { width: {{ page_width_mm|stringformat:".2f" }}mm; height: {{ cfg.height_mm }}mm; background: #fff; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .page svg { display: block; width: 100%; height: 100%; }
+  @media print {
+    html, body { background: #fff; }
+    .bar, .tips { display: none; }
+    .sheet { padding: 0; gap: 0; display: block; }
+    .page { box-shadow: none; break-after: page; page-break-after: always; }
+    .page:last-child { break-after: auto; page-break-after: auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span><strong>{{ count }}</strong> etiqueta{{ count|pluralize }} · {{ cfg.size_label }}</span>
+    <button type="button" id="print-now">Imprimir</button>
+  </div>
+  <div class="tips">No diálogo: escolha a <strong>Zebra</strong>, papel <strong>{{ page_width_mm|floatformat:0 }} × {{ cfg.height_mm }} mm</strong>, margens <strong>nenhuma</strong> e escala <strong>100%</strong> (sem "ajustar à página").{% for w in warnings %}<br>⚠ {{ w }}{% endfor %}</div>
+  <div class="sheet">
+    {% for svg in svgs %}<div class="page">{{ svg|safe }}</div>{% endfor %}
+  </div>
+<script>
+  document.getElementById('print-now').addEventListener('click', function () { window.print(); });
+  window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
+</script>
+</body>
+</html>

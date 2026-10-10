@@ -1,0 +1,126 @@
+"""E-mails de estoque mínimo (diário) e resumo semanal para o dono (patch 9)."""
+import logging
+from datetime import timedelta
+from decimal import Decimal
+
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
+from django.db.models import F, Sum
+from django.template.loader import render_to_string
+from django.utils import timezone
+
+from . import replenishment as rep
+
+logger = logging.getLogger(__name__)
+
+
+def _site(path):
+    base = getattr(settings, 'SITE_URL', '') or ''
+    return f'{base}{path}' if base else ''
+
+
+def _send(cfg, subject, template, context):
+    context = {**context, 'company': cfg.company_name, 'site_url': getattr(settings, 'SITE_URL', '')}
+    html = render_to_string(f'emails/{template}.html', context)
+    text = render_to_string(f'emails/{template}.txt', context)
+    msg = EmailMultiAlternatives(subject, text, settings.DEFAULT_FROM_EMAIL, [cfg.alert_email])
+    msg.attach_alternative(html, 'text/html')
+    msg.send()
+
+
+def _configs(flag):
+    from apps.core.models import SystemSetting
+    return (SystemSetting.objects.select_related('tenant')
+            .filter(tenant__is_active=True, alert_email__isnull=False, **{flag: True})
+            .exclude(alert_email=''))
+
+
+def send_low_stock_alerts():
+    """
+    Diário. Manda e-mail só quando há variação NOVA no mínimo desde o último aviso;
+    quem voltou acima do mínimo sai da lista e, se cair de novo, avisa outra vez.
+    """
+    sent = 0
+    for cfg in _configs('low_stock_alerts_enabled'):
+        low = list(rep.low_stock_qs(cfg.tenant).select_related('product', 'product__default_supplier')
+                   .prefetch_related('attribute_values').order_by('current_stock', 'product__name'))
+        current = sorted(v.pk for v in low)
+        already = set(cfg.low_stock_alerted_ids or [])
+        new = [v for v in low if v.pk not in already]
+        if new:
+            try:
+                _send(cfg, f'[StockPro] {len(new)} produto(s) chegaram ao estoque mínimo', 'low_stock', {
+                    'new': new[:50], 'new_count': len(new), 'total': len(low),
+                    'zero': sum(1 for v in low if v.current_stock <= 0),
+                    'link': _site('/inventory/repor/'),
+                })
+                sent += 1
+            except Exception as exc:  # e-mail fora do ar não pode derrubar a task
+                logger.error('Falha no alerta de estoque mínimo do tenant %s: %s', cfg.tenant_id, exc)
+                continue
+        if current != sorted(already):
+            type(cfg).objects.filter(pk=cfg.pk).update(low_stock_alerted_ids=current)
+    return sent
+
+
+def weekly_summary(tenant, now=None):
+    """Números da semana que terminou (7 dias até agora)."""
+    from apps.inventory.models import StockMovement
+    from apps.inventory.services.expiry import expiring_lots
+    from apps.products.models import ProductVariant
+
+    now = now or timezone.now()
+    start = now - timedelta(days=7)
+    moves = StockMovement.objects.filter(tenant=tenant, created_at__gte=start, created_at__lte=now)
+    outs = moves.filter(type='OUT').exclude(source__in=rep.NOT_SALES)
+    ins = moves.filter(type='IN').exclude(source__in=rep.NOT_SALES)
+    out_qty = outs.aggregate(t=Sum('quantity'))['t'] or Decimal('0')
+    in_qty = ins.aggregate(t=Sum('quantity'))['t'] or Decimal('0')
+    in_value = sum((m.quantity * (m.unit_cost or 0) for m in ins.only('quantity', 'unit_cost')), Decimal('0'))
+
+    top_rows = list(outs.values('variant_id').annotate(qty=Sum('quantity')).order_by('-qty')[:5])
+    names = {v.pk: v for v in ProductVariant.objects.filter(pk__in=[r['variant_id'] for r in top_rows])
+             .select_related('product').prefetch_related('attribute_values')}
+    top = [{'variant': names[r['variant_id']], 'qty': r['qty']} for r in top_rows if r['variant_id'] in names]
+
+    low = list(rep.low_stock_qs(tenant).select_related('product').prefetch_related('attribute_values')
+               .order_by('current_stock', 'product__name')[:10])
+    low_count = rep.low_stock_qs(tenant).count()
+
+    sold_60 = set(StockMovement.objects.filter(tenant=tenant, type='OUT', created_at__gte=now - timedelta(days=60))
+                  .exclude(source__in=rep.NOT_SALES).values_list('variant_id', flat=True))
+    stalled_qs = (ProductVariant.objects.filter(tenant=tenant, is_active=True, product__is_active=True,
+                                                current_stock__gt=0)
+                  .exclude(pk__in=sold_60)
+                  .annotate(value=F('current_stock') * F('avg_unit_cost')))
+    stalled_value = sum((v.value or Decimal('0') for v in stalled_qs), Decimal('0'))
+    stalled = sorted(stalled_qs.select_related('product'), key=lambda v: v.value or 0, reverse=True)[:5]
+
+    expired, soon = expiring_lots(tenant, 30)
+    active = ProductVariant.objects.filter(tenant=tenant, is_active=True, product__is_active=True)
+    stock_value = sum(((v.current_stock or 0) * (v.avg_unit_cost or 0)
+                       for v in active.only('current_stock', 'avg_unit_cost')), Decimal('0'))
+    return {
+        'start': timezone.localtime(start).date(), 'end': timezone.localtime(now).date(),
+        'out_qty': out_qty, 'in_qty': in_qty, 'in_value': in_value, 'top': top,
+        'low': low, 'low_count': low_count,
+        'stalled': stalled, 'stalled_count': stalled_qs.count(), 'stalled_value': stalled_value,
+        'expired': len(expired), 'expiring': soon[:5], 'expiring_count': len(soon),
+        'stock_value': stock_value, 'skus': active.count(),
+    }
+
+
+def send_weekly_summaries():
+    sent = 0
+    for cfg in _configs('weekly_summary_enabled'):
+        try:
+            data = weekly_summary(cfg.tenant)
+            if not data['skus']:
+                continue  # empresa sem produto: nada para resumir
+            _send(cfg, f"[StockPro] Resumo da semana {data['start']:%d/%m} a {data['end']:%d/%m}", 'weekly_summary', {
+                **data, 'link_replenish': _site('/inventory/repor/'), 'link_dashboard': _site('/app/'),
+            })
+            sent += 1
+        except Exception as exc:
+            logger.error('Falha no resumo semanal do tenant %s: %s', cfg.tenant_id, exc)
+    return sent

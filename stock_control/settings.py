@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     'apps.partners',  # V2: Fornecedores e Mapeamento de Produtos
     'apps.reports',
     'apps.core',
+    'apps.labels',  # Etiquetas Zebra (patch 9)
 ]
 
 MIDDLEWARE = [
@@ -261,6 +262,14 @@ if CELERY_BROKER_URL:
         'daily-expiry-alerts': {
             'task': 'apps.tenants.tasks.send_expiry_alerts',
             'schedule': crontab(hour=7, minute=0),
+        },
+        'daily-low-stock-alerts': {
+            'task': 'apps.tenants.tasks.send_low_stock_alerts',
+            'schedule': crontab(hour=7, minute=5),
+        },
+        'weekly-owner-summary': {
+            'task': 'apps.tenants.tasks.send_weekly_summaries',
+            'schedule': crontab(hour=7, minute=30, day_of_week='mon'),
         },
     }
 

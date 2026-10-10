@@ -1,0 +1,18 @@
+{% extends 'emails/_base.html' %}
+{% load humanize %}
+{% block heading %}{{ new_count }} produto{{ new_count|pluralize }} chegou{{ new_count|pluralize:"ram" }} ao estoque mínimo{% endblock %}
+{% block body %}
+<p style="margin:0 0 16px;">No total, <strong>{{ total }}</strong> produto{{ total|pluralize }} est{{ total|pluralize:"á,ão" }} no mínimo ou abaixo{% if zero %}, <strong style="color:#e11d48;">{{ zero }} zerado{{ zero|pluralize }}</strong>{% endif %}. Estes são os novos desde o último aviso:</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+<tr style="color:#64748b;"><td style="padding:6px 0;border-bottom:1px solid #e2e8f0;">Produto</td><td align="right" style="padding:6px 0;border-bottom:1px solid #e2e8f0;">Saldo</td><td align="right" style="padding:6px 0;border-bottom:1px solid #e2e8f0;">Mínimo</td></tr>
+{% for v in new %}
+<tr>
+  <td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">{{ v.display_name }}<br><span style="color:#94a3b8;font-size:12px;">{{ v.sku }}{% if v.product.default_supplier %} · {{ v.product.default_supplier.trade_name|default:v.product.default_supplier.company_name }}{% endif %}</span></td>
+  <td align="right" style="padding:8px 0;border-bottom:1px solid #f1f5f9;font-weight:600;{% if v.current_stock <= 0 %}color:#e11d48;{% else %}color:#b45309;{% endif %}">{{ v.current_stock|floatformat:"-2" }}</td>
+  <td align="right" style="padding:8px 0;border-bottom:1px solid #f1f5f9;color:#64748b;">{{ v.minimum_stock|floatformat:"-2" }}</td>
+</tr>
+{% endfor %}
+</table>
+{% if new_count > new|length %}<p style="color:#64748b;font-size:12px;">A lista mostra os 50 primeiros; veja todos na tela Repor.</p>{% endif %}
+{% if link %}<p style="margin:20px 0 0;"><a href="{{ link }}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600;padding:10px 16px;border-radius:6px;">Ver o que comprar</a></p>{% endif %}
+{% endblock %}

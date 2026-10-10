@@ -69,13 +69,18 @@
                             </div>
                             <div class="flex-1 space-y-4">
                                 <div>
-                                    <label class="text-sm font-bold text-slate-900">Alerta de Estoque Baixo</label>
-                                    <p class="text-xs text-slate-500 mt-1 leading-relaxed">Defina a quantidade mínima global para considerar um produto "Em Alerta". Isso afetará os indicadores do Dashboard.</p>
+                                    <label class="text-sm font-bold text-slate-900">Avisos por e-mail</label>
+                                    <p class="text-xs text-slate-500 mt-1 leading-relaxed">Vão para o e-mail de notificações abaixo. O estoque mínimo é definido em cada produto ou variação; a lista completa fica em <a class="font-bold text-indigo-600 hover:underline" href="{% url 'inventory:replenish' %}">Repor estoque</a>.</p>
                                 </div>
-                                <div class="flex items-center gap-3">
-                                    <input type="number" name="low_stock_alert_threshold" value="{{ settings.low_stock_alert_threshold }}"
-                                        class="w-32 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:border-indigo-500 outline-none">
-                                    <span class="text-sm font-medium text-slate-400">unidades</span>
+                                <div class="space-y-2">
+                                    <label class="flex items-start gap-3 cursor-pointer">
+                                        <input type="checkbox" name="low_stock_alerts_enabled" {% if settings.low_stock_alerts_enabled %}checked{% endif %} class="mt-0.5 w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500">
+                                        <span class="text-sm text-slate-700"><strong class="text-slate-900">Estoque mínimo:</strong> e-mail às 7h quando algum produto chegar ao mínimo (só avisa de novo quando outro produto chegar).</span>
+                                    </label>
+                                    <label class="flex items-start gap-3 cursor-pointer">
+                                        <input type="checkbox" name="weekly_summary_enabled" {% if settings.weekly_summary_enabled %}checked{% endif %} class="mt-0.5 w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500">
+                                        <span class="text-sm text-slate-700"><strong class="text-slate-900">Resumo semanal:</strong> toda segunda às 7h30, o que mais saiu, o que está acabando, parado e vencendo, e o valor do estoque.</span>
+                                    </label>
                                 </div>
                                 <div>
                                     <label class="text-sm font-bold text-slate-900">Aviso de Validade</label>

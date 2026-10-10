@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load static l10n %}
+
+{% block title %}Etiquetas{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl space-y-6 py-2" data-labels-queue
+     data-tenant-id="{{ request.tenant.pk }}" data-user-id="{{ request.user.pk }}"
+     data-search-url="{% url 'labels:search' %}"
+     data-nfe-url="{% url 'labels:nfe_items' '00000000-0000-0000-0000-000000000000' %}"
+     data-preview-url="{% url 'labels:preview' %}"
+     data-generate-url="{% url 'labels:generate' %}"
+     data-columns="{{ cfg.columns|unlocalize }}" data-max="{{ max_labels|unlocalize }}">
+    {% csrf_token %}
+    {{ initial_json|json_script:"labels-initial" }}
+
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <p class="pf-eyebrow">Etiquetas</p>
+            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Imprimir etiquetas</h1>
+            <p class="pf-muted mt-1">Código de barras, nome e preço direto na Zebra.{% if source %} Lista carregada da {{ source }}.{% endif %}</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <span data-printer class="pf-badge-gray">Procurando a Zebra…</span>
+            {% if request.membership.is_admin %}
+            <a href="{% url 'labels:settings' %}" class="pf-btn-secondary"><i data-lucide="ruler" class="h-4 w-4"></i>Modelo: {{ cfg.width_mm }} × {{ cfg.height_mm }} mm{% if cfg.columns > 1 %} · {{ cfg.columns }} col.{% endif %}</a>
+            {% else %}
+            <span class="pf-badge-gray">Modelo {{ cfg.size_label }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <div class="space-y-6 lg:col-span-3">
+            <section class="pf-card">
+                <div class="pf-card-header"><h2 class="pf-card-title">Adicionar produtos</h2></div>
+                <div class="pf-card-body space-y-4">
+                    <div class="relative" data-search-wrap>
+                        <label for="label-search" class="pf-label">Buscar por nome, SKU ou código de barras</label>
+                        <div class="relative">
+                            <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                            <input id="label-search" data-search type="search" autocomplete="off" class="pf-input pl-9" placeholder="Ex.: caneta azul, CAN-G2, 7891234567895">
+                        </div>
+                        <p class="pf-help">Com o leitor de código de barras: bipe o produto e ele entra na lista.</p>
+                        <ul data-results hidden class="absolute z-20 mt-1 max-h-80 w-full divide-y divide-slate-100 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg"></ul>
+                    </div>
+                    {% if recent_nfes %}
+                    <div>
+                        <label for="label-nfe" class="pf-label">Ou tudo o que entrou numa nota fiscal</label>
+                        <div class="flex gap-2">
+                            <select id="label-nfe" data-nfe class="pf-input">
+                                <option value="">Escolha a NF-e</option>
+                                {% for doc in recent_nfes %}
+                                <option value="{{ doc.pk }}">NF-e {{ doc.number }} · {{ doc.supplier_trade_name|default:doc.supplier_name|truncatechars:40 }} · {{ doc.imported_at|date:"d/m" }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" data-nfe-load class="pf-btn-secondary">Carregar</button>
+                        </div>
+                        <p class="pf-help">Uma etiqueta por unidade que entrou no estoque (já com o fator da caixa).</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="pf-card">
+                <div class="pf-card-header">
+                    <div>
+                        <h2 class="pf-card-title">Lista de impressão</h2>
+                        <p class="mt-0.5 text-xs text-slate-500"><span data-total class="font-medium text-slate-900 tabular-nums">0</span> etiqueta(s) <span data-rows></span></p>
+                    </div>
+                    <button type="button" data-clear class="pf-btn-ghost text-xs"><i data-lucide="trash-2" class="h-4 w-4"></i>Limpar</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="pf-table">
+                        <thead><tr>
+                            <th>Produto</th>
+                            <th class="hidden sm:table-cell">Código</th>
+                            <th class="hidden md:table-cell !text-right">Preço</th>
+                            <th class="!text-right">Etiquetas</th>
+                            <th><span class="sr-only">Remover</span></th>
+                        </tr></thead>
+                        <tbody data-queue-body></tbody>
+                    </table>
+                </div>
+                <div data-queue-empty class="px-5 py-10 text-center">
+                    <i data-lucide="tags" class="mx-auto h-8 w-8 text-slate-300"></i>
+                    <p class="mt-2 text-sm font-medium text-slate-700">A lista está vazia</p>
+                    <p class="pf-muted">Busque um produto acima ou use o botão "Etiqueta" na ficha do produto.</p>
+                </div>
+            </section>
+        </div>
+
+        <aside class="space-y-6 lg:col-span-2">
+            <div class="lg:sticky lg:top-6 space-y-6">
+                <section class="pf-card">
+                    <div class="pf-card-header">
+                        <h2 class="pf-card-title">Como vai sair</h2>
+                        <span class="text-xs text-slate-500">{{ cfg.size_label }}</span>
+                    </div>
+                    <div class="pf-card-body space-y-3">
+                        <div class="rounded-md bg-slate-100 p-4">
+                            <div data-preview class="mx-auto" style="max-width: {% widthratio page_width_mm 1 7 as pv %}{{ pv|unlocalize }}px"></div>
+                        </div>
+                        <p data-preview-caption class="text-center text-xs text-slate-500">Carregando prévia…</p>
+                        <ul data-warnings hidden class="list-disc space-y-1 rounded-md border border-amber-200 bg-amber-50 py-2 pl-8 pr-3 text-xs text-amber-900"></ul>
+                        <p class="text-xs text-slate-500">Clique num produto da lista para ver a etiqueta dele. A prévia usa as mesmas medidas enviadas para a Zebra; a fonte da impressora pode variar um pouco.</p>
+                    </div>
+                </section>
+
+                <section class="pf-card">
+                    <div class="pf-card-body space-y-3">
+                        <button type="button" data-print-zebra data-needs-items class="pf-btn-primary w-full py-2.5"><i data-lucide="printer" class="h-4 w-4"></i>Imprimir na Zebra</button>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" data-print-browser data-needs-items class="pf-btn-secondary"><i data-lucide="monitor" class="h-4 w-4"></i>Pelo navegador</button>
+                            <button type="button" data-download data-needs-items class="pf-btn-secondary"><i data-lucide="download" class="h-4 w-4"></i>Arquivo .zpl</button>
+                        </div>
+                        <p data-message hidden role="status"></p>
+                    </div>
+                </section>
+
+                {% include 'labels/_help.html' %}
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/labels.js' %}"></script>{% endblock %}

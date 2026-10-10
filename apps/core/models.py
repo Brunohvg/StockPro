@@ -18,6 +18,14 @@ class SystemSetting(TenantMixin):
     )
     enable_auto_cost_update = models.BooleanField(default=True)
 
+    # Patch 9: avisos por e-mail (vão para alert_email)
+    low_stock_alerts_enabled = models.BooleanField(
+        default=False, verbose_name="Avisar quando produtos chegarem ao estoque mínimo")
+    weekly_summary_enabled = models.BooleanField(
+        default=False, verbose_name="Resumo semanal na segunda de manhã")
+    # Variações já avisadas; só manda e-mail de novo quando outra chega ao mínimo
+    low_stock_alerted_ids = models.JSONField(default=list, blank=True, editable=False)
+
     # AI Staging Settings (V20)
     ai_import_mode = models.CharField(
         max_length=10,

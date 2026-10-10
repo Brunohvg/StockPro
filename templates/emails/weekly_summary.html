@@ -1,0 +1,47 @@
+{% extends 'emails/_base.html' %}
+{% load humanize %}
+{% block heading %}Resumo da semana · {{ start|date:"d/m" }} a {{ end|date:"d/m" }}{% endblock %}
+{% block body %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+<tr>
+  <td width="33%" style="padding:12px;background:#f8fafc;border-radius:8px;"><div style="font-size:12px;color:#64748b;">Saídas</div><div style="font-size:20px;font-weight:600;">{{ out_qty|floatformat:"-2"|intcomma }}</div><div style="font-size:12px;color:#94a3b8;">unidades</div></td>
+  <td width="4"></td>
+  <td width="33%" style="padding:12px;background:#f8fafc;border-radius:8px;"><div style="font-size:12px;color:#64748b;">Entradas</div><div style="font-size:20px;font-weight:600;">{{ in_qty|floatformat:"-2"|intcomma }}</div><div style="font-size:12px;color:#94a3b8;">R$ {{ in_value|floatformat:2|intcomma }}</div></td>
+  <td width="4"></td>
+  <td width="33%" style="padding:12px;background:#f8fafc;border-radius:8px;"><div style="font-size:12px;color:#64748b;">Valor em estoque</div><div style="font-size:20px;font-weight:600;">R$ {{ stock_value|floatformat:0|intcomma }}</div><div style="font-size:12px;color:#94a3b8;">{{ skus }} itens ativos</div></td>
+</tr>
+</table>
+
+<h3 style="font-size:14px;margin:0 0 8px;">O que mais saiu</h3>
+{% if top %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-bottom:20px;">
+{% for t in top %}<tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;">{{ forloop.counter }}. {{ t.variant.display_name }}</td><td align="right" style="padding:6px 0;border-bottom:1px solid #f1f5f9;font-weight:600;">{{ t.qty|floatformat:"-2" }}</td></tr>{% endfor %}
+</table>
+{% else %}<p style="color:#64748b;margin:0 0 20px;">Nenhuma saída registrada na semana.</p>{% endif %}
+
+<h3 style="font-size:14px;margin:0 0 8px;">Acabando {% if low_count %}<span style="color:#b45309;">({{ low_count }} no mínimo){% endif %}</span></h3>
+{% if low %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-bottom:8px;">
+{% for v in low %}<tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;">{{ v.display_name }}</td><td align="right" style="padding:6px 0;border-bottom:1px solid #f1f5f9;{% if v.current_stock <= 0 %}color:#e11d48;{% else %}color:#b45309;{% endif %}font-weight:600;">{{ v.current_stock|floatformat:"-2" }} / {{ v.minimum_stock|floatformat:"-2" }}</td></tr>{% endfor %}
+</table>
+{% if link_replenish %}<p style="margin:0 0 20px;"><a href="{{ link_replenish }}" style="color:#4f46e5;font-weight:600;">Ver sugestão de compra →</a></p>{% endif %}
+{% else %}<p style="color:#64748b;margin:0 0 20px;">Nada abaixo do mínimo.</p>{% endif %}
+
+<h3 style="font-size:14px;margin:0 0 8px;">Parado há 60 dias ou mais</h3>
+{% if stalled_count %}
+<p style="margin:0 0 8px;color:#475569;">{{ stalled_count }} ite{{ stalled_count|pluralize:"m,ns" }} sem saída, somando <strong>R$ {{ stalled_value|floatformat:2|intcomma }}</strong> de custo. Os maiores:</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-bottom:20px;">
+{% for v in stalled %}<tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;">{{ v.display_name }}</td><td align="right" style="padding:6px 0;border-bottom:1px solid #f1f5f9;">{{ v.current_stock|floatformat:"-2" }} un · R$ {{ v.value|default:0|floatformat:2|intcomma }}</td></tr>{% endfor %}
+</table>
+{% else %}<p style="color:#64748b;margin:0 0 20px;">Nenhum item parado.</p>{% endif %}
+
+<h3 style="font-size:14px;margin:0 0 8px;">Validade</h3>
+{% if expired or expiring_count %}
+<p style="margin:0 0 8px;color:#475569;">{% if expired %}<strong style="color:#e11d48;">{{ expired }} lote{{ expired|pluralize }} vencido{{ expired|pluralize }}</strong> com saldo. {% endif %}{{ expiring_count }} vence{{ expiring_count|pluralize:"m" }} em até 30 dias.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+{% for l in expiring %}<tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;">{{ l.variant.display_name }}{% if l.lot_number %} · lote {{ l.lot_number }}{% endif %}</td><td align="right" style="padding:6px 0;border-bottom:1px solid #f1f5f9;">{{ l.expiry_date|date:"d/m/Y" }}</td></tr>{% endfor %}
+</table>
+{% else %}<p style="color:#64748b;margin:0;">Nenhum lote vencendo nos próximos 30 dias.</p>{% endif %}
+
+{% if link_dashboard %}<p style="margin:24px 0 0;"><a href="{{ link_dashboard }}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600;padding:10px 16px;border-radius:6px;">Abrir o StockPro</a></p>{% endif %}
+{% endblock %}
