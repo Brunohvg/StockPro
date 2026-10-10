@@ -59,19 +59,37 @@ def _filtered_tenants(request):
 
 @superuser_required
 def platform_home(request):
-    tenants = _filtered_tenants(request)
-    page = Paginator(tenants, 30).get_page(request.GET.get('page'))
-    params = request.GET.copy()
-    params.pop('page', None)
+    recent_events = (TenantEvent.objects.select_related('tenant', 'actor')
+                     .exclude(kind='NOTE')[:8])
+    recent_signups = Tenant.objects.select_related('plan').order_by('-created_at')[:5]
     return render(request, 'tenants/platform/home.html', {
+        'section': 'home',
         'ov': platform.overview(),
         'health': platform.platform_health(),
+        'recent_events': recent_events,
+        'recent_signups': recent_signups,
+    })
+
+
+@superuser_required
+def tenant_list(request):
+    tenants = _filtered_tenants(request)
+    page = Paginator(tenants, 25).get_page(request.GET.get('page'))
+    params = request.GET.copy()
+    params.pop('page', None)
+    chips = request.GET.copy()
+    chips.pop('page', None)
+    chips.pop('f', None)
+    return render(request, 'tenants/platform/tenants.html', {
+        'section': 'tenants',
         'page': page,
         'plans': Plan.objects.order_by('price'),
         'status_choices': Tenant.SUBSCRIPTION_STATUS,
         'quick_filters': platform.QUICK_FILTERS,
+        'quick': request.GET.get('f', ''),
         'sorts': {k: v[1] for k, v in platform.SORTS.items()},
         'querystring': params.urlencode(),
+        'chips_qs': chips.urlencode(),
         'filtered': any(request.GET.get(k) for k in ('q', 'status', 'plan', 'f')),
     })
 
@@ -117,6 +135,7 @@ def tenant_detail(request, pk):
     if kind in dict(TenantEvent.KINDS):
         events = events.filter(kind=kind)
     return render(request, 'tenants/platform/tenant_detail.html', {
+        'section': 'tenants',
         't': tenant,
         'members': members,
         'usage': platform.tenant_usage(tenant),
@@ -183,7 +202,7 @@ class PlanForm(forms.ModelForm):
             'display_name': "Nome exibido", 'name': "Identificador (interno, único)",
             'price': "Preço mensal (R$)", 'max_products': "Limite de produtos (0 = sem limite)",
             'max_users': "Limite de usuários (0 = sem limite)",
-            'has_ai_matching': "IA: match de produtos", 'has_ai_reconciliation': "IA: conciliação",
+            'has_ai_matching': "Match inteligente de produtos", 'has_ai_reconciliation': "Conciliação automática",
             'features': "Recursos (separados por vírgula, aparecem na página de planos)",
         }
         widgets = {'features': forms.Textarea(attrs={'rows': 3})}
@@ -191,8 +210,10 @@ class PlanForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            if not isinstance(field.widget, forms.CheckboxInput):
-                field.widget.attrs['class'] = 'w-full px-3 py-2 border border-slate-300 rounded-xl text-sm'
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'h-4 w-4 rounded border-slate-300 text-indigo-600'
+            else:
+                field.widget.attrs['class'] = 'pf-input'
 
     def clean_price(self):
         price = self.cleaned_data['price']
@@ -220,7 +241,7 @@ def plan_list(request):
     ).order_by('price')
     for p in plans:
         p.revenue = p.price * p.n_active
-    return render(request, 'tenants/platform/plans.html', {'plans': plans})
+    return render(request, 'tenants/platform/plans.html', {'section': 'plans', 'plans': plans})
 
 
 @superuser_required
@@ -242,6 +263,7 @@ def plan_edit(request, pk=None):
         messages.success(request, f"Plano {saved.display_name} salvo.")
         return redirect('tenants:platform_plans')
     return render(request, 'tenants/platform/plan_form.html', {
+        'section': 'plans',
         'form': form, 'plan': plan,
         'n_tenants': plan.tenants.count() if plan else 0,
     })
@@ -262,4 +284,36 @@ def unlock_login(request, attempt_id):
         platform.record(m.tenant, 'SECURITY', f"Login de {username} desbloqueado (IP {ip})", request.user)
     messages.success(request, f"Login de {username} desbloqueado.")
     nxt = request.POST.get('next', '')
-    return redirect(nxt if nxt.startswith('/admin-panel/') else 'tenants:admin_panel')
+    return redirect(nxt if nxt.startswith('/admin-panel/') else 'tenants:platform_health')
+
+
+# ─── Saúde e atividade ───────────────────────────────────────────────────────
+
+@superuser_required
+def platform_health_view(request):
+    return render(request, 'tenants/platform/health.html', {
+        'section': 'health',
+        'health': platform.platform_health(),
+        'checks': platform.config_checks(),
+    })
+
+
+@superuser_required
+def activity(request):
+    events = TenantEvent.objects.select_related('tenant', 'actor')
+    kind = request.GET.get('kind', '')
+    if kind in dict(TenantEvent.KINDS):
+        events = events.filter(kind=kind)
+    q = request.GET.get('q', '').strip()
+    if q:
+        events = events.filter(Q(tenant__name__icontains=q) | Q(message__icontains=q) | Q(reason__icontains=q))
+    page = Paginator(events, 50).get_page(request.GET.get('page'))
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(request, 'tenants/platform/activity.html', {
+        'section': 'activity',
+        'page': page,
+        'event_kinds': TenantEvent.KINDS,
+        'kind': kind,
+        'querystring': params.urlencode(),
+    })
