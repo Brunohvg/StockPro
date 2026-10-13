@@ -384,3 +384,23 @@ class TestNfeVariacoes:
         doc.refresh_from_db()
         assert doc.status == 'IMPORTED'
         assert Product.objects.filter(tenant=tenant).count() == 2
+
+
+    def test_pai_arquivado_impede_importacao(self):
+        from apps.products.models import ProductType
+        u, tenant = _member()
+        Product.objects.create(tenant=tenant, name='Tinta', sku='TINTA', product_type=ProductType.VARIABLE, is_active=False)
+        c = _client(u)
+        _upload(c, make_xml([LEITE]))
+        doc = NfeDocument.objects.get(tenant=tenant)
+        item = doc.items.first()
+        c.post(f'/inventory/nfe/{doc.pk}/', {
+            'action': 'import',
+            f'item-{item.pk}-decision': 'CREATE',
+            f'item-{item.pk}-name': 'Tinta Azul',
+            f'item-{item.pk}-parent_sku': 'TINTA',
+            f'item-{item.pk}-attributes': 'Cor:Azul',
+        })
+        doc.refresh_from_db()
+        assert doc.status == 'PREVIEW'
+        assert not StockMovement.objects.filter(tenant=tenant).exists()

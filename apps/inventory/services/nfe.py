@@ -406,8 +406,8 @@ def validate_variable_selection(tenant, item):
         return
     parse_variant_attributes(item.new_attributes)
     parent = Product.objects.filter(tenant=tenant, sku__iexact=sku).first()
-    if parent and parent.product_type != ProductType.VARIABLE:
-        raise ValueError('Este SKU pai pertence a produto simples.')
+    if parent and (parent.product_type != ProductType.VARIABLE or not parent.is_active):
+        raise ValueError('O produto pai precisa estar ativo e ser configurável.')
     if not parent and not item.new_parent_name.strip():
         raise ValueError('Informe o nome do novo produto pai.')
 
@@ -431,8 +431,8 @@ def create_grouped_variant(tenant, item, cfg, supplier, location_id, parent_cach
                 uom=(item.unit if item.conversion_factor == 1 and item.unit else 'UN')[:10],
             )
         parent_cache[sku.casefold()] = parent
-    if parent.product_type != ProductType.VARIABLE:
-        raise NfeError('O produto pai não é configurável.')
+    if parent.product_type != ProductType.VARIABLE or not parent.is_active:
+        raise NfeError('O produto pai precisa estar ativo e ser configurável.')
     attrs = parse_variant_attributes(item.new_attributes)
     wanted = {(key.casefold(), value.casefold()) for key, value in attrs}
     for existing in parent.variants.prefetch_related('attribute_values__attribute_type'):
