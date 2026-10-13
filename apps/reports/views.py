@@ -275,6 +275,19 @@ def export_movements_csv(request):
 
 
 @login_required
+def export_lots_csv(request):
+    """Download isolated read-only lot balances; not an import template."""
+    from django.http import HttpResponse
+    from apps.accounts.models import MembershipRole
+    from .exports import ProductExporter
+    if not request.membership or request.membership.role not in (MembershipRole.OWNER, MembershipRole.ADMIN):
+        return HttpResponse(status=403)
+    resp = HttpResponse(ProductExporter(request.tenant).export_lots_csv(), content_type='text/csv; charset=utf-8')
+    resp['Content-Disposition'] = 'attachment; filename="stockpro_lotes.csv"'
+    return resp
+
+
+@login_required
 def export_page(request):
     """Export page with options and history"""
     from apps.inventory.models import ExportBatch
