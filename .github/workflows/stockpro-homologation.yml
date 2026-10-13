@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/nfe-variacoes-seguras
+      - feature/stockpro-estabilizacao-pos-nfe
       - feature/bibelo-coolify-deploy
   workflow_dispatch:
 

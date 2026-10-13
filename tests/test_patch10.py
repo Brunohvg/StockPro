@@ -486,3 +486,20 @@ class TestFiltrosDoCatalogo:
         html = c.get('/products/?stock=low').content.decode()
         assert 'Linha' in html and 'Caneta' not in html  # Linha: 4 com mínimo 5
         assert sem_preco
+
+
+class TestHistoricoCsvSeguro:
+    def test_exportacao_movimentacoes_protege_texto_com_formula(self):
+        u, tenant = _member()
+        product = Product.objects.create(tenant=tenant, name='=HYPERLINK("https://example.invalid")', sku='SEG-001')
+        variant = product.variants.first()
+        StockService.create_movement(
+            tenant=tenant, user=u, variant=variant, movement_type='IN',
+            quantity=3, unit_cost=Decimal('2.00'),
+            reason='=2+2', source='MANUAL',
+        )
+        content = ProductExporter(tenant).export_movements_csv()
+        rows = list(csv.reader(io.StringIO(content)))
+        assert len(rows) == 2
+        assert rows[1][4].startswith("'=HYPERLINK")
+        assert rows[1][9] == "'=2+2"

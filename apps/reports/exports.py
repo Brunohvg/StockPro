@@ -273,13 +273,13 @@ class ProductExporter:
                 mov.created_at.strftime('%Y-%m-%d'),
                 mov.created_at.strftime('%H:%M:%S'),
                 mov.get_type_display(),
-                sku,
-                name,
+                self._safe_spreadsheet_text(sku),
+                self._safe_spreadsheet_text(name),
                 mov.quantity,
                 mov.balance_after,
-                float(mov.unit_cost) if mov.unit_cost else '',
-                mov.user.username if mov.user else 'Sistema',
-                mov.reason or ''
+                float(mov.unit_cost) if mov.unit_cost is not None else '',
+                self._safe_spreadsheet_text(mov.user.username if mov.user else 'Sistema'),
+                self._safe_spreadsheet_text(mov.reason or '')
             ])
 
         return output.getvalue()
