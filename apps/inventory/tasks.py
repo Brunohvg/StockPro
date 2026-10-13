@@ -322,6 +322,20 @@ def process_csv_catalog_direct(batch, dry_run=False):
         return f"Erro crítico: a planilha precisa da coluna 'nome'. Colunas encontradas: {', '.join(df.columns)}"
     get_val = _getter(colmap)
 
+    # Evita duplicar lotes quando uma planilha de cadastro é importada novamente.
+    from apps.inventory.models import StockLot
+    for idx, record in df.iterrows():
+        sku = get_val(record, 'sku')
+        if not sku or not (get_val(record, 'expiry') or get_val(record, 'lot')):
+            continue
+        existing_variant = ProductVariant.objects.filter(tenant=tenant, sku__iexact=sku).first()
+        if existing_variant and (
+            existing_variant.current_stock > 0 or
+            StockLot.objects.filter(tenant=tenant, variant=existing_variant).exists()
+        ):
+            return (f"Erro crítico na linha {idx + 2}, SKU {sku}: o produto já tem saldo ou lotes. "
+                    "Para evitar duplicidade, registre novas entradas por NF-e ou movimentação.")
+
     batch.total_rows = len(df)
     batch.save()
 
