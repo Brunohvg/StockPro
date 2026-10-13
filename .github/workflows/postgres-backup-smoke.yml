@@ -1,0 +1,46 @@
+name: PostgreSQL Backup Restore Smoke
+on:
+  push:
+    branches:
+      - feature/stockpro-lotes-permissoes-homolog
+  workflow_dispatch:
+
+jobs:
+  restore-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stockpro
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: stockpro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stockpro -d stockpro"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DEBUG: "True"
+      SECRET_KEY: "ci-only-not-a-production-key-123456789"
+      DATABASE_URL: "postgres://stockpro:ci-only-password@127.0.0.1:5432/stockpro"
+      PGPASSWORD: "ci-only-password"
+      PGHOST: "127.0.0.1"
+      PGUSER: "stockpro"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Create schema in temporary PostgreSQL
+        run: python manage.py migrate --noinput
+      - name: Backup database and restore into independent copy
+        run: |
+          pg_dump -Fc --no-owner -d stockpro -f "$RUNNER_TEMP/stockpro.dump"
+          psql -d postgres -c "CREATE DATABASE stockpro_restore OWNER stockpro"
+          pg_restore --no-owner -d stockpro_restore "$RUNNER_TEMP/stockpro.dump"
+          psql -d stockpro_restore -tAc "SELECT count(*) > 0 FROM django_migrations" | grep -x t
+          psql -d stockpro_restore -tAc "SELECT to_regclass('public.products_product') IS NOT NULL" | grep -x t
