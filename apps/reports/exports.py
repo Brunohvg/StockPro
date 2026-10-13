@@ -254,8 +254,8 @@ class ProductExporter:
             'variant', 'variant__product'
         ).order_by('variant__sku', 'expiry_date', 'lot_number')
         out = io.StringIO()
-        out.write('\\ufeff')
-        writer = csv.writer(out, delimiter=';', lineterminator='\\r\\n')
+        out.write('\ufeff')
+        writer = csv.writer(out, delimiter=';', lineterminator='\r\n')
         writer.writerow(['sku', 'produto', 'lote', 'validade', 'fabricacao', 'saldo_lote'])
         for lot in rows:
             writer.writerow([
