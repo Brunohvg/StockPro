@@ -566,8 +566,10 @@ def import_document(doc, user, confirm_recipient=False):
     new_products = sum(1 for i in to_create if not i.new_parent_sku) + len(parent_skus)
     if to_create and tenant.plan and tenant.plan.max_products:
         if tenant.products_count + new_products > tenant.plan.max_products:
-            raise NfeError(f"A nota cria {new_products} produto(s) e o plano permite mais 
-                           f"{tenant.products_remaining}. Vincule itens a produtos existentes ou faça upgrade.")
+            raise NfeError(
+                f"A nota cria {new_products} produto(s) e o plano permite mais "
+                f"{tenant.products_remaining}. Vincule itens a produtos existentes ou faça upgrade."
+            )
 
     supplier = None
     if doc.supplier_cnpj:
