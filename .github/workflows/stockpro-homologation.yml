@@ -1,0 +1,37 @@
+name: StockPro Homologation
+on:
+  push:
+    branches:
+      - feature/nfe-variacoes-seguras
+      - feature/bibelo-coolify-deploy
+  workflow_dispatch:
+
+jobs:
+  django-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEBUG: "True"
+      SECRET_KEY: "ci-only-long-django-secret-not-for-production-0123456789"
+      DB_TYPE: "sqlite"
+      AXES_ENABLED: "False"
+      CELERY_TASK_ALWAYS_EAGER: "True"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest pytest-django pytest-cov factory-boy faker
+      - name: Django configuration and migrations
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py migrate --noinput
+      - name: NF-e and Patch 10 regressions
+        run: pytest -o addopts="" tests/test_patch5_nfe.py tests/test_patch10.py -q
+      - name: Full regression suite
+        run: pytest -o addopts="" tests/ -q
