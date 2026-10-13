@@ -491,6 +491,9 @@ class NfeItem(models.Model):
     conversion_factor = models.DecimalField(max_digits=12, decimal_places=4, default=1)
     factor_suggested = models.BooleanField(default=False)
     new_product_name = models.CharField(max_length=255, blank=True)
+    new_parent_sku = models.CharField(max_length=50, blank=True)
+    new_parent_name = models.CharField(max_length=255, blank=True)
+    new_attributes = models.CharField(max_length=255, blank=True)
     new_product_category = models.ForeignKey('products.Category', on_delete=models.SET_NULL, null=True, blank=True)
     movement_ids = models.JSONField(default=list, blank=True)
 

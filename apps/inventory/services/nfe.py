@@ -375,6 +375,84 @@ def create_preview(tenant, user, filename, content):
     return doc
 
 
+
+def parse_variant_attributes(raw):
+    """Parse user-confirmed attributes. Similar product names are never enough to group stock."""
+    attributes = []
+    seen = set()
+    for part in (raw or '').split(';'):
+        if not part.strip():
+            continue
+        if ':' not in part:
+            raise ValueError('Use atributos no formato Cor:Azul; Tamanho:M.')
+        name, value = (x.strip() for x in part.split(':', 1))
+        if not name or not value or len(name) > 50 or len(value) > 100:
+            raise ValueError('Tipo de atributo (até 50) e valor (até 100) são obrigatórios.')
+        if name.casefold() in seen:
+            raise ValueError('Tipo de atributo repetido.')
+        seen.add(name.casefold())
+        attributes.append((name, value))
+    if not attributes:
+        raise ValueError('Informe os atributos da variação (ex.: Cor:Azul).')
+    return attributes
+
+
+def validate_variable_selection(tenant, item):
+    from apps.products.models import Product, ProductType
+    sku = item.new_parent_sku.strip()
+    if not sku:
+        if item.new_attributes or item.new_parent_name:
+            raise ValueError('Informe o SKU do produto pai.')
+        return
+    parse_variant_attributes(item.new_attributes)
+    parent = Product.objects.filter(tenant=tenant, sku__iexact=sku).first()
+    if parent and parent.product_type != ProductType.VARIABLE:
+        raise ValueError('Este SKU pai pertence a produto simples.')
+    if not parent and not item.new_parent_name.strip():
+        raise ValueError('Informe o nome do novo produto pai.')
+
+
+def create_grouped_variant(tenant, item, cfg, supplier, location_id, parent_cache):
+    """One parent, many children. Never merge existing variants by description."""
+    from apps.products.models import (
+        Product, ProductType, ProductVariant, AttributeType, VariantAttributeValue,
+    )
+    sku = item.new_parent_sku.strip()
+    parent = parent_cache.get(sku.casefold())
+    if parent is None:
+        parent = Product.objects.select_for_update().filter(tenant=tenant, sku__iexact=sku).first()
+        if parent is None:
+            parent = Product.objects.create(
+                tenant=tenant, name=item.new_parent_name.strip(),
+                sku=sku, product_type=ProductType.VARIABLE,
+                category=item.new_product_category, default_supplier=supplier,
+                default_location_id=location_id,
+                tracks_expiry=bool(item.lots) and cfg.auto_tracks_expiry,
+                uom=(item.unit if item.conversion_factor == 1 and item.unit else 'UN')[:10],
+            )
+        parent_cache[sku.casefold()] = parent
+    if parent.product_type != ProductType.VARIABLE:
+        raise NfeError('O produto pai não é configurável.')
+    attrs = parse_variant_attributes(item.new_attributes)
+    wanted = {(key.casefold(), value.casefold()) for key, value in attrs}
+    for existing in parent.variants.prefetch_related('attribute_values__attribute_type'):
+        actual = {(a.attribute_type.name.casefold(), a.value.casefold()) for a in existing.attribute_values.all()}
+        if wanted == actual:
+            raise NfeError(f'Variação duplicada: vincule o item ao SKU {existing.sku}.')
+    child_sku = _new_sku(tenant, cfg, item)
+    if item.ean and ProductVariant.objects.filter(tenant=tenant, barcode=item.ean).exists():
+        raise NfeError('EAN já cadastrado. Vincule o item ao produto existente.')
+    variant = ProductVariant.objects.create(
+        tenant=tenant, product=parent, sku=child_sku or '',
+        barcode=item.ean or None, name=item.new_product_name.strip(),
+    )
+    for key, value in attrs:
+        attr, _ = AttributeType.objects.get_or_create(tenant=tenant, name=key)
+        VariantAttributeValue.objects.create(variant=variant, attribute_type=attr, value=value)
+    variant.refresh_auto_name()
+    return variant
+
+
 def apply_decisions(doc, post):
     """Grava as escolhas da tela de revisão. Retorna lista de erros (por item)."""
     from apps.products.models import Category, ProductVariant
@@ -410,6 +488,9 @@ def apply_decisions(doc, post):
                 else:
                     item.variant, item.match_source = variant, 'MANUAL'
         if decision == 'CREATE':
+            item.new_parent_sku = (post.get(prefix + 'parent_sku') or '').strip()[:50]
+            item.new_parent_name = (post.get(prefix + 'parent_name') or '').strip()[:255]
+            item.new_attributes = (post.get(prefix + 'attributes') or '').strip()[:255]
             name = (post.get(prefix + 'name') or '').strip()
             if name:
                 item.new_product_name = name[:255]
@@ -432,8 +513,13 @@ def validate_ready(doc):
             errors.append(f"Item {item.item_number}: informe o produto do sistema.")
         elif item.decision == 'LINK' and not (item.variant.is_active and item.variant.product.is_active):
             errors.append(f"Item {item.item_number}: o produto vinculado está arquivado.")
-        elif item.decision == 'CREATE' and not item.new_product_name.strip():
-            errors.append(f"Item {item.item_number}: informe o nome do produto novo.")
+        elif item.decision == 'CREATE':
+            if not item.new_product_name.strip():
+                errors.append(f"Item {item.item_number}: informe o nome do produto novo.")
+            try:
+                validate_variable_selection(doc.tenant, item)
+            except ValueError as exc:
+                errors.append(f"Item {item.item_number}: {exc}")
     if all(i.decision == 'IGNORE' for i in doc.items.all()):
         errors.append("Todos os itens estão marcados para ignorar.")
     return errors
@@ -475,9 +561,12 @@ def import_document(doc, user, confirm_recipient=False):
     items = list(doc.items.select_related('variant__product', 'new_product_category'))
 
     to_create = [i for i in items if i.decision == 'CREATE']
+    parent_skus = {i.new_parent_sku.casefold() for i in to_create if i.new_parent_sku and not
+                   Product.objects.filter(tenant=tenant, sku__iexact=i.new_parent_sku).exists()}
+    new_products = sum(1 for i in to_create if not i.new_parent_sku) + len(parent_skus)
     if to_create and tenant.plan and tenant.plan.max_products:
-        if tenant.products_count + len(to_create) > tenant.plan.max_products:
-            raise NfeError(f"A nota cria {len(to_create)} produto(s) e o plano permite mais "
+        if tenant.products_count + new_products > tenant.plan.max_products:
+            raise NfeError(f"A nota cria {new_products} produto(s) e o plano permite mais 
                            f"{tenant.products_remaining}. Vincule itens a produtos existentes ou faça upgrade.")
 
     supplier = None
@@ -494,10 +583,13 @@ def import_document(doc, user, confirm_recipient=False):
                 supplier = None  # CNPJ inválido no XML: segue sem fornecedor
     location_id = cfg.default_location_id if cfg.default_location and cfg.default_location.is_active else None
 
+    parent_cache = {}
     for item in items:
         if item.decision == 'IGNORE':
             continue
-        if item.decision == 'CREATE':
+        if item.decision == 'CREATE' and item.new_parent_sku:
+            item.variant = create_grouped_variant(tenant, item, cfg, supplier, location_id, parent_cache)
+        elif item.decision == 'CREATE':
             barcode = item.ean if item.ean and not ProductVariant.objects.filter(
                 tenant=tenant, barcode=item.ean).exists() else None
             product = Product(
