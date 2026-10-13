@@ -85,6 +85,7 @@ def nfe_items(request, pk):
 
 
 @login_required
+@admin_required
 @require_POST
 def save_text(request, pk):
     """Grava o nome e o código impressos na etiqueta deste produto (vazio = padrão do cadastro)."""

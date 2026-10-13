@@ -294,7 +294,7 @@ class TestEtiquetaCodigoNome:
 
 class TestTextoDaEtiqueta:
     def _setup(self):
-        u, t = _member('OPERATOR')
+        u, t = _member('ADMIN')
         p = Product.objects.create(tenant=t, name='Aplique flor prensada - PCT 50 UN', sku='APL-FL')
         v = p.variants.first()
         v.barcode = '7890000139557'
@@ -503,3 +503,13 @@ class TestHistoricoCsvSeguro:
         assert len(rows) == 2
         assert rows[1][4].startswith("'=HYPERLINK")
         assert rows[1][9] == "'=2+2"
+
+
+class TestPermissaoTextoEtiqueta:
+    def test_operador_nao_pode_alterar_texto_permanente(self):
+        u, t = _member('OPERATOR')
+        product = Product.objects.create(tenant=t, name='Etiqueta protegida', sku='ETQ-TEST')
+        variant = product.variants.first()
+        result = _client(u).post(reverse('labels:save_text', args=[variant.pk]), {'name': 'Alteração indevida', 'code': 'X'})
+        assert result.status_code in (302, 403)
+        assert not VariantLabel.objects.filter(variant=variant).exists()

@@ -242,6 +242,32 @@ class ProductExporter:
             return variant.avg_unit_cost
         return product.avg_unit_cost
 
+    def export_lots_csv(self, include_inactive=False):
+        """Backup informativo de saldos por lote; não usar na importação de catálogo."""
+        from apps.inventory.models import StockLot
+        from apps.products.models import ProductVariant
+
+        qs = ProductVariant.objects.filter(tenant=self.tenant).select_related('product')
+        if not include_inactive:
+            qs = qs.filter(is_active=True, product__is_active=True)
+        rows = StockLot.objects.filter(tenant=self.tenant, variant__in=qs).select_related(
+            'variant', 'variant__product'
+        ).order_by('variant__sku', 'expiry_date', 'lot_number')
+        out = io.StringIO()
+        out.write('\\ufeff')
+        writer = csv.writer(out, delimiter=';', lineterminator='\\r\\n')
+        writer.writerow(['sku', 'produto', 'lote', 'validade', 'fabricacao', 'saldo_lote'])
+        for lot in rows:
+            writer.writerow([
+                self._safe_spreadsheet_text(lot.variant.sku),
+                self._safe_spreadsheet_text(lot.variant.display_name),
+                self._safe_spreadsheet_text(lot.lot_number),
+                lot.expiry_date.strftime('%d/%m/%Y') if lot.expiry_date else '',
+                lot.manufacture_date.strftime('%d/%m/%Y') if lot.manufacture_date else '',
+                self._number_text(lot.quantity),
+            ])
+        return out.getvalue()
+
     def export_movements_csv(self, days=30):
         """Export stock movements to CSV"""
         from django.utils import timezone
