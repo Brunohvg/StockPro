@@ -299,3 +299,88 @@ class TestFluxo:
         assert _client(outro).get(f'/inventory/nfe/{doc.pk}/').status_code == 404
         assert _client(outro).get(f'/inventory/nfe/{doc.pk}/xml/').status_code == 404
 
+
+
+@pytest.mark.django_db
+class TestNfeVariacoes:
+    def test_duas_cores_agrupam_em_um_pai_com_saldos_independentes(self):
+        from apps.products.models import ProductType
+        u, tenant = _member()
+        c = _client(u)
+        azul = _item(1, 'AZ-001', 'SEM GTIN', 'TINTA TECIDO AZUL', 'UN', '3', '5.00', '15.00')
+        rosa = _item(2, 'RS-001', 'SEM GTIN', 'TINTA TECIDO ROSA', 'UN', '4', '5.00', '20.00')
+        response = _upload(c, make_xml([azul, rosa]))
+        assert response.status_code == 302
+        doc = NfeDocument.objects.get(tenant=tenant)
+        children = list(doc.items.order_by('item_number'))
+        payload = {'action': 'import'}
+        for item, color in zip(children, ('Azul', 'Rosa')):
+            key = f'item-{item.pk}-'
+            payload[key + 'decision'] = 'CREATE'
+            payload[key + 'name'] = f'Tinta Tecido {color}'
+            payload[key + 'parent_sku'] = 'TINTA-TECIDO'
+            payload[key + 'parent_name'] = 'Tinta Tecido'
+            payload[key + 'attributes'] = f'Cor:{color}'
+        c.post(f'/inventory/nfe/{doc.pk}/', payload)
+        doc.refresh_from_db()
+        assert doc.status == 'IMPORTED'
+        parent = Product.objects.get(tenant=tenant, sku='TINTA-TECIDO')
+        assert parent.product_type == ProductType.VARIABLE
+        assert parent.variants.count() == 2
+        assert sorted(parent.variants.values_list('current_stock', flat=True)) == [Decimal('3'), Decimal('4')]
+        assert StockMovement.objects.filter(tenant=tenant, source='NFE').count() == 2
+
+    def test_grupo_sem_atributos_nao_importa(self):
+        u, tenant = _member()
+        c = _client(u)
+        _upload(c, make_xml([LEITE]))
+        doc = NfeDocument.objects.get(tenant=tenant)
+        item = doc.items.first()
+        c.post(f'/inventory/nfe/{doc.pk}/', {
+            'action': 'import',
+            f'item-{item.pk}-decision': 'CREATE',
+            f'item-{item.pk}-name': 'Leite Rosa',
+            f'item-{item.pk}-parent_sku': 'LEITE',
+            f'item-{item.pk}-parent_name': 'Leite',
+        })
+        doc.refresh_from_db()
+        assert doc.status == 'PREVIEW'
+        assert not Product.objects.filter(tenant=tenant, sku='LEITE').exists()
+        assert not StockMovement.objects.filter(tenant=tenant).exists()
+
+    def test_importacao_de_pai_existente_mantem_variantes(self):
+        from apps.products.models import ProductType
+        u, tenant = _member()
+        parent = Product.objects.create(tenant=tenant, name='Linha', sku='LINHA', product_type=ProductType.VARIABLE)
+        c = _client(u)
+        _upload(c, make_xml([LEITE]))
+        doc = NfeDocument.objects.get(tenant=tenant)
+        item = doc.items.first()
+        c.post(f'/inventory/nfe/{doc.pk}/', {
+            'action': 'import',
+            f'item-{item.pk}-decision': 'CREATE',
+            f'item-{item.pk}-name': 'Linha Amarela',
+            f'item-{item.pk}-parent_sku': 'LINHA',
+            f'item-{item.pk}-attributes': 'Cor:Amarela',
+        })
+        doc.refresh_from_db()
+        assert doc.status == 'IMPORTED'
+        assert Product.objects.filter(tenant=tenant, sku='LINHA').count() == 1
+        assert parent.variants.count() == 1
+
+    def test_nome_parecido_nao_agrupa_automaticamente(self):
+        u, tenant = _member()
+        c = _client(u)
+        a = _item(1, 'A1', 'SEM GTIN', 'TINTA AZUL', 'UN', '1', '2.00', '2.00')
+        b = _item(2, 'A2', 'SEM GTIN', 'TINTA ROSA', 'UN', '1', '2.00', '2.00')
+        _upload(c, make_xml([a, b]))
+        doc = NfeDocument.objects.get(tenant=tenant)
+        items = list(doc.items.order_by('item_number'))
+        payload = {'action': 'import'}
+        for item in items:
+            payload[f'item-{item.pk}-decision'] = 'CREATE'
+            payload[f'item-{item.pk}-name'] = item.description
+        c.post(f'/inventory/nfe/{doc.pk}/', payload)
+        doc.refresh_from_db()
+        assert doc.status == 'IMPORTED'
+        assert Product.objects.filter(tenant=tenant).count() == 2
