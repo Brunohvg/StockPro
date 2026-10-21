@@ -120,6 +120,26 @@ Não foram validados nesta intervenção: login autenticado do StockPro, operaç
 | 502 no domínio | Saúde web e roteamento Traefik para porta 8000 |
 | Arquivos somem após deploy | Identidade e mounts dos volumes persistentes |
 
+## Cache e duração do build
+
+O Dockerfile separa o download do scanner QR do build do Tailwind e usa caches
+BuildKit para npm e uv. Assim, alterações em templates/código Python ainda
+regeram o CSS, mas reutilizam o download do vendor e as dependências quando o
+builder mantém seu cache. Dependências de produção são instaladas antes do
+`COPY . /app`, então mudanças apenas no código não invalidam essa camada.
+
+O runtime não instala `gcc` nem `libpq-dev`: as dependências Python são
+distribuídas como wheels, `psycopg2-binary` inclui a biblioteca cliente, e o
+`postgresql-client-17` continua disponível para os backups. Essa hipótese deve
+ser revista se uma dependência passar a exigir compilação nativa.
+
+O último tempo documentado antes da otimização foi **03m29s** em 09/10/2026.
+Ainda não há uma medição posterior: confirmar a melhora no próximo deploy
+manual e comparar duração total e etapas `assets`, instalação Python e apt nos
+logs de build. O ganho depende de o builder do Coolify preservar o cache
+BuildKit; cache frio ainda baixa e instala tudo. Não habilitar limpeza automática
+de cache como parte deste fluxo.
+
 ## Healthchecks dos serviços Celery
 
 Após a validação inicial, o painel ficou Degraded embora web e Celery estivessem executando. O Dockerfile define um healthcheck HTTP; worker/Beat herdam a mesma imagem, mas não servem HTTP na porta 8000. Para evitar esse falso negativo, os dois Compose definem checagens próprias: worker responde a ping direcionado ao seu hostname via Celery, e Beat verifica seu processo PID 1 e conexão ao Redis. Preserve essas checagens em atualizações. A checagem do Beat comprova processo/broker disponíveis, não execução bem-sucedida de cada tarefa agendada.

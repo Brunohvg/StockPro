@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # ===========================================
 # StockPro / Bibelo - Production Dockerfile
 # Padrao de deploy inspirado no VidalysFlow/Coolify
@@ -6,13 +7,18 @@
 # (substitui o cdn.tailwindcss.com; ver tailwind.config.js)
 FROM node:22-bookworm-slim AS assets
 WORKDIR /build
-COPY package.json package-lock.json tailwind.config.js ./
-RUN npm ci --no-audit --no-fund
+COPY scripts/fetch_vendor.mjs ./scripts/fetch_vendor.mjs
+# Keep the QR scanner download in its own cached layer. Template/Python changes
+# should rebuild Tailwind, but should not download this pinned vendor file again.
+RUN node scripts/fetch_vendor.mjs
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY tailwind.config.js ./
 COPY templates ./templates
 COPY apps ./apps
-COPY static ./static
-COPY scripts/fetch_vendor.mjs ./scripts/fetch_vendor.mjs
-RUN node scripts/fetch_vendor.mjs && npm run build:css
+COPY static/js ./static/js
+COPY static/src ./static/src
+RUN npm run build:css
 
 # ---- Etapa 2: aplicação ----
 FROM python:3.11-slim-bookworm
@@ -24,8 +30,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev \
-    gcc \
     libjpeg62-turbo \
     zlib1g \
     libxml2 \
@@ -46,7 +50,7 @@ WORKDIR /app
 
 # Mantem cache de dependencias entre builds quando o codigo muda.
 COPY pyproject.toml requirements.txt ./
-RUN uv pip install -r requirements.txt --no-cache
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install -r requirements.txt
 
 # Entrypoint de producao: aguarda banco, migra e coleta static.
 COPY docker/entrypoint.prod.sh /usr/local/bin/entrypoint.prod.sh
