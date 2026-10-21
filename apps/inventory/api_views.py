@@ -195,10 +195,13 @@ class OrderConsumptionView(views.APIView):
         if not created:
             if order.consumption_hash == request_hash and order.consumption_response is not None:
                 return Response(order.consumption_response, status=status.HTTP_200_OK)
-            return Response({
-                "error": "Este pedido já foi recebido com outro conteúdo ou foi processado antes da proteção contra duplicidade.",
-                "order_id": external_order_id,
-            }, status=status.HTTP_409_CONFLICT)
+            # Existing orders with movements predate this idempotency key; never
+            # risk applying them again. A pre-created but untouched order is safe.
+            if order.consumption_hash or order.movements.exists():
+                return Response({
+                    "error": "Este pedido já foi recebido com outro conteúdo ou foi processado antes da proteção contra duplicidade.",
+                    "order_id": external_order_id,
+                }, status=status.HTTP_409_CONFLICT)
 
         results = []
         errors = []

@@ -93,6 +93,24 @@ class TestAPIOrders:
         assert conflict.status_code == status.HTTP_409_CONFLICT
         assert product.total_stock == 17
 
+    def test_precreated_unconsumed_external_order_can_be_consumed(self, client, tenant, user, member):
+        self.authenticate(client, user)
+        product = ProductFactory(tenant=tenant, sku="SKU-ORDER-PRECREATED")
+        stock_in(product, 5, user=user)
+        ExternalOrder.objects.create(
+            tenant=tenant, platform="NUVEMSHOP", external_order_id="precreated-1"
+        )
+
+        response = client.post(reverse('api-order-consume'), {
+            "platform": "NUVEMSHOP",
+            "external_order_id": "precreated-1",
+            "items": [{"sku": "SKU-ORDER-PRECREATED", "quantity": 1}],
+        }, format='json')
+
+        product.refresh_from_db()
+        assert response.status_code == status.HTTP_200_OK
+        assert product.total_stock == 4
+
     def test_order_failure_rolls_back_every_line_and_can_be_retried(self, client, tenant, user, member):
         self.authenticate(client, user)
         first_product = ProductFactory(tenant=tenant, sku="SKU-ORDER-ATOMIC-1")
