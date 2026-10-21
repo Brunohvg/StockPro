@@ -50,7 +50,7 @@ O `unit_cost` é opcional e, quando informado, atualiza o custo médio ponderado
 {"external_order_id": "PED-123", "platform": "NUVEMSHOP", "items": [{"sku": "CAN-AZ", "quantity": 2}]}
 ```
 
-Nas duas rotas a resposta é 200 se todos os itens foram processados, ou 207 com `errors` por item (SKU inexistente, saldo insuficiente, quantidade ≤ 0). Cada item é independente: os que deram certo ficam gravados.
+Na rota de consumo, o pedido é processado como uma única transação: a resposta é 200 se todos os itens foram processados; se qualquer item falhar, a resposta é 207 com `errors`, `processed_items: []` e `rolled_back: true`, e nenhum saldo é alterado. Reenviar o mesmo pedido com o mesmo conteúdo retorna a resposta original sem repetir os movimentos; reenviar o mesmo identificador com conteúdo diferente retorna 409. Na rota de entrada, erros são informados por item.
 
 ## Catálogo
 

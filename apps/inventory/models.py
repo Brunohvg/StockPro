@@ -330,6 +330,8 @@ class ExternalOrder(TenantMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     platform = models.CharField(max_length=50) # 'NUVEMSHOP', 'TRAY'
     external_order_id = models.CharField(max_length=100, db_index=True)
+    consumption_hash = models.CharField(max_length=64, blank=True, default="")
+    consumption_response = models.JSONField(null=True, blank=True)
 
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=50, blank=True) # 'PAID', 'SHIPPED', etc.

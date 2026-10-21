@@ -10,6 +10,9 @@ Autenticação: JWT Bearer Token
   POST /api/v1/auth/token/         — Obter token (email + senha)
   POST /api/v1/auth/token/refresh/ — Renovar token
 """
+import hashlib
+import json
+
 from django.db import transaction
 from django.db.models import Q
 from rest_framework import status, views
@@ -18,6 +21,7 @@ from rest_framework.response import Response
 
 from apps.core.api.tenant import HasActiveTenant, resolve_api_tenant
 from apps.core.services import StockService
+from apps.inventory.models import ExternalOrder
 from apps.products.models import ProductVariant
 
 
@@ -131,11 +135,12 @@ class OrderConsumptionView(views.APIView):
         "errors": []
     }
 
-    Resposta 207 (parcial — alguns itens com erro):
+    Resposta 207 (pedido rejeitado — nenhum item é aplicado se algum falhar):
     {
         "order_id": "PEDIDO-001",
-        "processed_items": [...],
-        "errors": [{"sku": "SKU-999", "error": "Produto não encontrado."}]
+        "processed_items": [],
+        "errors": [{"sku": "SKU-999", "error": "Produto não encontrado."}],
+        "rolled_back": true
     }
     """
     permission_classes = [IsAuthenticated, HasActiveTenant]
@@ -147,21 +152,53 @@ class OrderConsumptionView(views.APIView):
             return Response({"error": "Tenant não identificado."}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data
+        if not isinstance(data, dict):
+            return Response({"error": "O corpo deve ser um objeto JSON."}, status=status.HTTP_400_BAD_REQUEST)
+
         items = data.get('items', [])
         platform = data.get('platform', 'APP_MOBILE')
         external_order_id = data.get('external_order_id')
 
-        if not external_order_id:
+        if not isinstance(external_order_id, (str, int)) or not str(external_order_id).strip():
             return Response(
                 {"error": "external_order_id é obrigatório."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        external_order_id = str(external_order_id).strip()
+        if len(external_order_id) > 100:
+            return Response({"error": "external_order_id excede 100 caracteres."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not items:
+        if not isinstance(platform, str) or not platform.strip() or len(platform.strip()) > 50:
+            return Response({"error": "platform deve conter de 1 a 50 caracteres."}, status=status.HTTP_400_BAD_REQUEST)
+        platform = platform.strip()
+
+        if not isinstance(items, list) or not items:
             return Response(
-                {"error": "Lista de itens está vazia."},
+                {"error": "items deve ser uma lista não vazia."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        if any(not isinstance(item, dict) for item in items):
+            return Response({"error": "Cada item deve ser um objeto."}, status=status.HTTP_400_BAD_REQUEST)
+
+        request_hash = hashlib.sha256(json.dumps(
+            {"platform": platform, "items": items}, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")).hexdigest()
+
+        # Serialize concurrent deliveries by the database's unique order key.
+        order, created = ExternalOrder.objects.get_or_create(
+            tenant=tenant,
+            platform=platform,
+            external_order_id=external_order_id,
+        )
+        order = ExternalOrder.objects.select_for_update().get(pk=order.pk)
+        if not created:
+            if order.consumption_hash == request_hash and order.consumption_response is not None:
+                return Response(order.consumption_response, status=status.HTTP_200_OK)
+            return Response({
+                "error": "Este pedido já foi recebido com outro conteúdo ou foi processado antes da proteção contra duplicidade.",
+                "order_id": external_order_id,
+            }, status=status.HTTP_409_CONFLICT)
 
         results = []
         errors = []
@@ -183,7 +220,7 @@ class OrderConsumptionView(views.APIView):
                     product_sku=sku,
                     reason=f"Saída via App — {platform} #{external_order_id}",
                     source=platform,
-                    external_order_id=external_order_id,
+                    external_order=order,
                     lot_id=item.get('lot_id'),
                 )
                 results.append({
@@ -196,12 +233,25 @@ class OrderConsumptionView(views.APIView):
             except Exception as e:
                 errors.append({"sku": sku, "error": str(e)})
 
-        http_status = status.HTTP_207_MULTI_STATUS if errors else status.HTTP_200_OK
-        return Response({
+        if errors:
+            # The order is atomic: a retry must never repeat only part of a sale.
+            transaction.set_rollback(True)
+            return Response({
+                "order_id": external_order_id,
+                "processed_items": [],
+                "errors": errors,
+                "rolled_back": True,
+            }, status=status.HTTP_207_MULTI_STATUS)
+
+        response_data = {
             "order_id": external_order_id,
             "processed_items": results,
             "errors": errors,
-        }, status=http_status)
+        }
+        order.consumption_hash = request_hash
+        order.consumption_response = response_data
+        order.save(update_fields=["consumption_hash", "consumption_response", "updated_at"])
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class StockEntryView(views.APIView):

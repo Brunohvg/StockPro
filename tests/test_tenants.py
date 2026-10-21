@@ -1,6 +1,8 @@
 import pytest
+from django.test import Client
 
 from apps.accounts.models import TenantMembership
+from tests.factories import TenantFactory, TenantMembershipFactory
 
 
 @pytest.mark.django_db
@@ -34,3 +36,28 @@ class TestTenantLogic:
         assert member.is_owner is True
         assert member.can_manage_users is True
         assert member.can_manage_billing is True
+
+    def test_multiple_companies_require_explicit_selection(self, user, member):
+        second_tenant = TenantFactory()
+        TenantMembershipFactory(user=user, tenant=second_tenant, role='ADMIN')
+        client = Client()
+        client.force_login(user)
+
+        response = client.get('/app/')
+
+        assert response.status_code == 302
+        assert response.url == '/select-company/'
+
+    def test_invalid_selected_company_does_not_fall_back_to_another_company(self, user, member):
+        second_tenant = TenantFactory()
+        TenantMembershipFactory(user=user, tenant=second_tenant, role='ADMIN')
+        client = Client()
+        client.force_login(user)
+        session = client.session
+        session['active_tenant_id'] = 999999
+        session.save()
+
+        response = client.get('/app/')
+
+        assert response.status_code == 302
+        assert response.url == '/select-company/'

@@ -73,6 +73,7 @@ class TenantMiddleware:
         # Initialize request attributes
         request.tenant = None
         request.membership = None
+        request.requires_tenant_selection = False
         request.trial_expired = False
         request.tenant_blocked = False
 
@@ -94,6 +95,8 @@ class TenantMiddleware:
         membership = self._get_active_membership(request)
 
         if not membership:
+            if request.requires_tenant_selection:
+                return redirect('accounts:select_company')
             # User has no active company - redirect to "no company" page
             if not request.path.startswith('/no-company/'):
                 messages.warning(request, "Você não está vinculado a nenhuma empresa ativa.")
@@ -148,7 +151,7 @@ class TenantMiddleware:
         Priority:
         1. Session-stored active_tenant_id
         2. Single active membership (auto-select)
-        3. First active membership if multiple exist
+        3. Require an explicit selection if multiple exist
         """
         from apps.accounts.models import TenantMembership
 
@@ -157,7 +160,7 @@ class TenantMiddleware:
             user=request.user,
             is_active=True,
             tenant__is_active=True
-        ).select_related('tenant', 'tenant__plan')
+        ).exclude(tenant__subscription_status='CANCELLED').select_related('tenant', 'tenant__plan')
 
         if not memberships.exists():
             return None
@@ -177,10 +180,9 @@ class TenantMiddleware:
         if memberships.count() == 1:
             return memberships.first()
 
-        # Multiple memberships - need to select
-        # For now, use first one, but ideally should redirect to selection
-        # The SmartLoginView will handle this properly
-        return memberships.first()
+        # Never silently run a request in an arbitrary company.
+        request.requires_tenant_selection = True
+        return None
 
 
 def tenant_required(view_func):
