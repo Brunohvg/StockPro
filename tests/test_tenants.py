@@ -1,5 +1,6 @@
 import pytest
 from django.test import Client
+from django.urls import reverse
 
 from apps.accounts.models import TenantMembership
 from tests.factories import TenantFactory, TenantMembershipFactory
@@ -46,7 +47,7 @@ class TestTenantLogic:
         response = client.get('/app/')
 
         assert response.status_code == 302
-        assert response.url == '/select-company/'
+        assert response.url == reverse('accounts:select_company')
 
     def test_invalid_selected_company_does_not_fall_back_to_another_company(self, user, member):
         second_tenant = TenantFactory()
@@ -60,4 +61,4 @@ class TestTenantLogic:
         response = client.get('/app/')
 
         assert response.status_code == 302
-        assert response.url == '/select-company/'
+        assert response.url == reverse('accounts:select_company')
